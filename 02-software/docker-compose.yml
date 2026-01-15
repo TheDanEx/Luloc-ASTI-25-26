@@ -1,0 +1,10 @@
+services:
+  vision:
+    build: ./01-vision
+    container_name: vision_node
+    devices:
+      - "/dev/video0:/dev/video0"
+    network_mode: "host"
+    restart: unless-stopped
+    environment:
+      - ROS_DOMAIN_ID=0
