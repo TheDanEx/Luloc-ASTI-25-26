@@ -8,3 +8,5 @@ services:
     restart: unless-stopped
     environment:
       - ROS_DOMAIN_ID=0
+    volumes:
+      - ./01-vision/src:/root/vision_node
