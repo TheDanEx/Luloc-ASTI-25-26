@@ -1,6 +1,6 @@
 # ASTI Challenge 2025/26
 
-# UJI Robotics Lurloc Team
+# UJI Robotics Luloc Team
 
 Proyecto universitario de robótica móvil basado en:
 
