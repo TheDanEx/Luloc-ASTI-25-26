@@ -59,7 +59,7 @@ services:
     depends_on:
       - timeseries-db
     volumes:
-      - ./06-telegraf/src/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - ./06-metrics/src/telegraf.conf:/etc/telegraf/telegraf.conf:ro
 
   message-broker:
     image: eclipse-mosquitto
@@ -68,7 +68,7 @@ services:
     ports:
       - "51111:1883"
     volumes:
-      - ./07-mosquitto/src/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./07-mqtt-broker/src/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
 
 volumes:
   influxdb-data:

@@ -3,12 +3,10 @@ FROM node:20-bullseye
 
 WORKDIR /app
 
-# Instala dependencias básicas de desarrollo
-COPY src/package*.json ./
-RUN npm install
-
+# Para desarrollo, no hacemos npm install si no hay package.json
 COPY src/ .
 
 EXPOSE 80
 
-CMD ["npm", "start"]
+# Placeholder: arrancar el contenedor para desarrollo
+CMD ["node", "--version"]
