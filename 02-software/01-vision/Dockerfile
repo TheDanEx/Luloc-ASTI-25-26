@@ -1,3 +1,4 @@
+# 01-vision/Dockerfile
 # Base ROS2 Humble (Debian Jammy)
 FROM ros:humble-ros-base-jammy
 
@@ -28,4 +29,4 @@ SHELL ["/bin/bash", "-c"]
 RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
 
 # Comando por defecto al iniciar el contenedor
-CMD ["bash", "-c", "source /opt/ros/humble/setup.bash && ros2 run usb_cam usb_cam_node_exe & python3 /root/vision_node/vision.py"]
+CMD ["bash", "-c", "source /opt/ros/humble/setup.bash && python3 /root/vision_node/vision.py"]
