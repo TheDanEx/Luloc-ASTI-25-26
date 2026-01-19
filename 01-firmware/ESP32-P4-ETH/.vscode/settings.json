@@ -1,10 +1,8 @@
 {
   "C_Cpp.intelliSenseEngine": "default",
   "idf.espIdfPathWin": "C:\\Users\\DanEx\\esp\\v5.5.2\\esp-idf",
-  "idf.pythonInstallPath": "d:\\ESP32\\TOOLS\\tools\\idf-python\\3.11.2\\python.exe",
-  "idf.openOcdConfigs": [
-    "board/esp32p4-ftdi.cfg"
-  ],
+  "idf.pythonInstallPath": "/usr/bin/python3",
+  "idf.openOcdConfigs": ["board/esp32p4-ftdi.cfg"],
   "idf.toolsPathWin": "d:\\ESP32\\TOOLS",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32p4"
@@ -14,5 +12,7 @@
     "--background-index",
     "--query-driver=**",
     "--compile-commands-dir=d:\\Bibliotecas\\Repos\\UJI-Robotics\\Lurloc-ASTI-25-26\\01-firmware\\ESP32-P4-ETH\\build"
-  ]
+  ],
+  "idf.flashType": "UART",
+  "idf.port": "/dev/ttyACM0"
 }

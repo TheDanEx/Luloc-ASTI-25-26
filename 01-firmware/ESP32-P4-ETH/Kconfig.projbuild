@@ -1,0 +1,27 @@
+menu "Robot Configuration"
+
+config ROBOT_CONTROL_PERIOD_MS
+    int "Control loop period (ms)"
+    default 10
+
+config ROBOT_USE_ETHERNET
+    bool "Enable Ethernet"
+    default y
+
+endmenu
+
+menu "Ethernet config"
+
+config ETH_STATIC_IP
+    string "Static IP"
+    default "192.168.1.10"
+
+config ETH_NETMASK
+    string "Netmask"
+    default "255.255.255.0"
+
+config ETH_GATEWAY
+    string "Gateway"
+    default "192.168.1.1"
+
+endmenu

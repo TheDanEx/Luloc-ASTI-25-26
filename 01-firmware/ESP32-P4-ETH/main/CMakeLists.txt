@@ -1,2 +1,11 @@
-idf_component_register(SRCS "main.c"
-                    INCLUDE_DIRS ".")
+idf_component_register(
+    SRCS
+        "app_main.c"
+        "system_init.c"
+        "tasks/task_control.c"
+        "tasks/task_comms.c"
+        "tasks/task_monitor.c"
+    INCLUDE_DIRS
+        "."
+        "tasks"
+)
