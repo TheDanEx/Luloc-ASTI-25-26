@@ -10,18 +10,13 @@ config ROBOT_USE_ETHERNET
 
 endmenu
 
-menu "Ethernet config"
-
-config ETH_STATIC_IP
-    string "Static IP"
-    default "192.168.1.10"
-
-config ETH_NETMASK
-    string "Netmask"
-    default "255.255.255.0"
-
-config ETH_GATEWAY
-    string "Gateway"
-    default "192.168.1.1"
-
+menu "Example Configuration"
+    config EXAMPLE_ETH_DEINIT_AFTER_S
+        int "Stop and deinit Ethernet after elapsing number of secs"
+        range -1 300
+        default -1
+        help
+            This option is for demonstration purposes only to demonstrate deinitialization of the Ethernet driver.
+            Set to -1 to not deinitialize.
 endmenu
+

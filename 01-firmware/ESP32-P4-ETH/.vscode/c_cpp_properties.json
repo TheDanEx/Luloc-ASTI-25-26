@@ -1,21 +1,14 @@
 {
   "configurations": [
     {
-      "name": "ESP32-Linux",
-      "compilerPath": "/home/danex/.espressif/tools/xtensa-esp32-elf/esp-14.2.0_20251107/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc",
+      "name": "ESP32",
       "compileCommands": "${workspaceFolder}/build/compile_commands.json",
       "cStandard": "c11",
       "cppStandard": "c++17",
       "intelliSenseMode": "gcc-x64",
-      "includePath": [
-        "${workspaceFolder}/**",
-        "/home/danex/esp/v5.5.2/esp-idf/components/**"
-      ],
+      "includePath": ["${workspaceFolder}/**", "${env:IDF_PATH}/components/**"],
       "browse": {
-        "path": [
-          "${workspaceFolder}",
-          "/home/danex/esp/v5.5.2/esp-idf/components"
-        ],
+        "path": ["${workspaceFolder}", "${env:IDF_PATH}/components"],
         "limitSymbolsToIncludedHeaders": true
       }
     }

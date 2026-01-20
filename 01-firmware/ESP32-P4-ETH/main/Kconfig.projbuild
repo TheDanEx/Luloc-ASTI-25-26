@@ -1,0 +1,61 @@
+menu "Robot Configuration"
+
+config ROBOT_CONTROL_PERIOD_MS
+    int "Control loop period (ms)"
+    default 10
+
+config ROBOT_USE_ETHERNET
+    bool "Enable Ethernet"
+    default y
+
+    if ROBOT_USE_ETHERNET
+        choice ROBOT_ETH_IP_MODE
+            prompt "Ethernet IP Configuration"
+            default ROBOT_ETH_DHCP
+            help
+                Select whether to use DHCP or static IP address
+
+            config ROBOT_ETH_DHCP
+                bool "DHCP (automatic IP)"
+                help
+                    Use DHCP to automatically obtain IP address
+
+            config ROBOT_ETH_STATIC_IP
+                bool "Static IP address"
+                help
+                    Use fixed static IP address
+        endchoice
+
+        if ROBOT_ETH_STATIC_IP
+            config ROBOT_ETH_STATIC_IP_ADDR
+                string "Static IP address"
+                default "192.168.42.151"
+                help
+                    Static IP address (e.g., 192.168.42.151)
+
+            config ROBOT_ETH_STATIC_NETMASK
+                string "Netmask"
+                default "255.255.255.0"
+                help
+                    Netmask (e.g., 255.255.255.0)
+
+            config ROBOT_ETH_STATIC_GATEWAY
+                string "Gateway"
+                default "192.168.42.1"
+                help
+                    Default gateway (e.g., 192.168.42.1)
+        endif
+    endif
+
+endmenu
+
+menu "Example Configuration"
+    config EXAMPLE_ETH_DEINIT_AFTER_S
+        int "Stop and deinit Ethernet after elapsing number of secs"
+        range -1 300
+        default -1
+        help
+            This option is for demonstration purposes only to demonstrate deinitialization of the Ethernet driver.
+            Set to -1 to not deinitialize.
+endmenu
+
