@@ -4,4 +4,4 @@ FROM telegraf:latest
 # Copia configuración
 COPY src/telegraf.conf /etc/telegraf/telegraf.conf:ro
 
-EXPOSE 8092  # si usas UDP inputs, opcional
+EXPOSE 8092
