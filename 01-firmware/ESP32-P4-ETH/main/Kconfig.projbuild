@@ -59,3 +59,17 @@ menu "Example Configuration"
             Set to -1 to not deinitialize.
 endmenu
 
+menu "MQTT Configuration"
+    config BROKER_URL
+        string "Broker URL"
+        default "mqtt://192.168.42.15:51111"
+        help
+            URL of the mqtt broker to which the esp32 will connect
+    
+    config BROKER_URL_FROM_STDIN
+        bool "Read Broker URL from stdin"
+        default n
+        help
+            If this option is enabled, the broker URL can be input via stdin
+endmenu
+

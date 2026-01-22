@@ -1,54 +1,45 @@
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "system_init.h"
-#include "tasks/task_control.h"
-#include "tasks/task_comms.h"
-#include "tasks/task_monitor.h"
-#include "ethernet_init.h"
-#include "logger.h"
-#include "driver/uart.h"
-#include "sdkconfig.h"
+/* ESP32-P4 Robot Controller with Ethernet and MQTT
+
+   Combines Ethernet connectivity with MQTT for remote control
+*/
+
 #include <stdio.h>
+#include <inttypes.h>
+#include "esp_system.h"
+#include "nvs_flash.h"
+#include "esp_event.h"
+#include "esp_netif.h"
 #include "esp_log.h"
+#include "ethernet_init.h"
+#include "system_init.h"
+#include "shared_memory.h"
+#include "task_rtcontrol_cpu0.h"
+#include "task_comms_cpu1.h"
+#include "task_monitor_lowpower_cpu1.h"
 
 static const char *TAG = "app_main";
 
-static void task_print(void *arg)
-{
-    while (1) {
-        logger_send(LOG_INFO, "Prueba de vida");
-        vTaskDelay(pdMS_TO_TICKS(5000));
-    }
-}
-
 void app_main(void)
 {
-    system_init();
-    logger_init();
-    printf("UART por defecto, 115200 baudios\n");
+    // ========== BASIC INITIALIZATION ==========
+    ESP_LOGI(TAG, "[APP] Startup - Free memory: %" PRIu32 " bytes", esp_get_free_heap_size());
+    esp_log_level_set("*", ESP_LOG_INFO);
 
-    xTaskCreate(
-        task_print,        // función
-        "task_print",      // nombre
-        2048,              // stack (suficiente para printf)
-        NULL,              // argumento
-        5,                 // prioridad
-        NULL               // handle
-    );
+    // Initialize core subsystems
+    ESP_ERROR_CHECK(nvs_flash_init());
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(ethernet_init());
 
-    // Lanzamos las tasks ancladas a cores
-    task_control_start();   // Core 0
-    task_comms_start();     // Core 1
-    task_monitor_start();   // opcional
+    // ========== SYSTEM INITIALIZATION ==========
+    shared_memory_init();  // Inter-core communication
 
-#ifdef CONFIG_ROBOT_USE_ETHERNET
-    // Initialize Ethernet stack
-    if (ethernet_init() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize Ethernet");
-    } else {
-        ESP_LOGI(TAG, "Ethernet initialized successfully");
-    }
-#else
-    ESP_LOGI(TAG, "Ethernet disabled in configuration");
-#endif
+    // ========== START TASKS ==========
+    // Start communications task FIRST (will initialize MQTT in CPU1 context)
+    task_comms_cpu1_start();
+    vTaskDelay(pdMS_TO_TICKS(500));  // Wait for comms task to initialize MQTT
+    
+    // Then start other tasks
+    task_rtcontrol_cpu0_start();
+    task_monitor_lowpower_cpu1_start();
+    ESP_LOGI(TAG, "[APP] System running on dual cores (HIGH-SPEED TELEMETRY MODE)");
 }

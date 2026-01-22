@@ -2,10 +2,19 @@ idf_component_register(
     SRCS
         "app_main.c"
         "system_init.c"
-        "tasks/task_control.c"
-        "tasks/task_comms.c"
-        "tasks/task_monitor.c"
+        "tasks/task_rtcontrol_cpu0.c"
+        "tasks/task_comms_cpu1.c"
+        "tasks/task_monitor_lowpower_cpu1.c"
     INCLUDE_DIRS
         "."
         "tasks"
+    REQUIRES
+        ethernet_init
+        mqtt_custom_client
+        test_sensor
+        shared_memory
+    PRIV_REQUIRES
+        nvs_flash
+        esp_event
+        esp_netif
 )
