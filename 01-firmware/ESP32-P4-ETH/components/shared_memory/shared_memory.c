@@ -126,6 +126,33 @@ void shared_memory_heartbeat_cpu1(void)
     }
 }
 
+void shared_memory_set_mqtt_connected(bool connected)
+{
+    if (!g_initialized) {
+        return;
+    }
+
+    if (xSemaphoreTake(g_shared_memory.mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        g_shared_memory.mqtt_connected = connected;
+        xSemaphoreGive(g_shared_memory.mutex);
+    }
+}
+
+bool shared_memory_get_mqtt_connected(void)
+{
+    if (!g_initialized) {
+        return false;
+    }
+
+    if (xSemaphoreTake(g_shared_memory.mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        bool status = g_shared_memory.mqtt_connected;
+        xSemaphoreGive(g_shared_memory.mutex);
+        return status;
+    }
+    
+    return false;
+}
+
 shared_memory_t* shared_memory_get(void)
 {
     return g_initialized ? &g_shared_memory : NULL;

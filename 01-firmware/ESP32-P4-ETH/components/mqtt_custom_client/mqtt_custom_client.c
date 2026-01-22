@@ -19,6 +19,15 @@ static const char *TAG = "mqtt_custom_client";
 static esp_mqtt_client_handle_t mqtt_client_handle = NULL;
 static bool mqtt_connected = false;
 
+// Callback storage for incoming messages
+#define MQTT_CALLBACK_MAX 4
+typedef struct {
+    char topic[64];
+    mqtt_message_callback_t callback;
+} mqtt_topic_callback_t;
+
+static mqtt_topic_callback_t g_topic_callbacks[MQTT_CALLBACK_MAX] = {0};
+
 /**
  * @brief Internal MQTT event handler
  * 
@@ -54,9 +63,30 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         break;
         
     case MQTT_EVENT_DATA:
-        ESP_LOGI(TAG, "MQTT_EVENT_DATA");
-        printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
-        printf("DATA=%.*s\r\n", event->data_len, event->data);
+        ESP_LOGI(TAG, "MQTT_EVENT_DATA - Topic: %.*s, Data: %.*s", event->topic_len, event->topic, event->data_len, event->data);
+        
+        // Check registered callbacks
+        bool callback_found = false;
+        for (int i = 0; i < MQTT_CALLBACK_MAX; i++) {
+            if (g_topic_callbacks[i].callback != NULL) {
+                ESP_LOGD(TAG, "Checking callback[%d]: registered='%s' (len=%d) vs incoming_topic='%.*s' (len=%d)", 
+                         i, g_topic_callbacks[i].topic, (int)strlen(g_topic_callbacks[i].topic),
+                         event->topic_len, event->topic, event->topic_len);
+                
+                // Check if this message matches the registered topic
+                size_t registered_topic_len = strlen(g_topic_callbacks[i].topic);
+                if (registered_topic_len == event->topic_len && 
+                    strncmp(g_topic_callbacks[i].topic, event->topic, event->topic_len) == 0) {
+                    ESP_LOGI(TAG, "✓ Invoking callback for topic: %s", g_topic_callbacks[i].topic);
+                    g_topic_callbacks[i].callback(event->topic, event->topic_len, 
+                                                   event->data, event->data_len);
+                    callback_found = true;
+                }
+            }
+        }
+        if (!callback_found) {
+            ESP_LOGW(TAG, "No callback found for topic: %.*s", event->topic_len, event->topic);
+        }
         break;
         
     case MQTT_EVENT_ERROR:
@@ -172,4 +202,28 @@ int mqtt_custom_client_unsubscribe(const char *topic)
 bool mqtt_custom_client_is_connected(void)
 {
     return mqtt_connected;
+}
+
+/**
+ * @brief Register callback for specific topic
+ */
+esp_err_t mqtt_custom_client_register_topic_callback(const char *topic, mqtt_message_callback_t callback)
+{
+    if (topic == NULL || callback == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    // Find free slot
+    for (int i = 0; i < MQTT_CALLBACK_MAX; i++) {
+        if (g_topic_callbacks[i].callback == NULL) {
+            strncpy(g_topic_callbacks[i].topic, topic, sizeof(g_topic_callbacks[i].topic) - 1);
+            g_topic_callbacks[i].topic[sizeof(g_topic_callbacks[i].topic) - 1] = '\0';  // Ensure null termination
+            g_topic_callbacks[i].callback = callback;
+            ESP_LOGI(TAG, "Registered callback for topic: %s", topic);
+            return ESP_OK;
+        }
+    }
+    
+    ESP_LOGW(TAG, "No free callback slots (max: %d)", MQTT_CALLBACK_MAX);
+    return ESP_ERR_NO_MEM;
 }

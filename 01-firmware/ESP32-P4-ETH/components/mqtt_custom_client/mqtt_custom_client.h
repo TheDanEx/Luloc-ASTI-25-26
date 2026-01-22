@@ -1,10 +1,22 @@
 #pragma once
 
 #include "esp_err.h"
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/**
+ * @brief Callback function for incoming MQTT messages
+ * 
+ * Called when a message is received on a subscribed topic
+ * @param topic Topic name
+ * @param topic_len Length of topic
+ * @param data Message data
+ * @param data_len Length of message data
+ */
+typedef void (*mqtt_message_callback_t)(const char *topic, int topic_len, const char *data, int data_len);
 
 /**
  * @brief Initialize and start MQTT client
@@ -53,6 +65,15 @@ int mqtt_custom_client_unsubscribe(const char *topic);
  * @return true if connected, false otherwise
  */
 bool mqtt_custom_client_is_connected(void);
+
+/**
+ * @brief Register callback for incoming messages on specific topic
+ * 
+ * @param topic Topic to monitor (e.g., "robot/cmd")
+ * @param callback Function to call when message arrives
+ * @return ESP_OK on success
+ */
+esp_err_t mqtt_custom_client_register_topic_callback(const char *topic, mqtt_message_callback_t callback);
 
 #ifdef __cplusplus
 }

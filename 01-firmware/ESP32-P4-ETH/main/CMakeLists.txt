@@ -13,6 +13,7 @@ idf_component_register(
         mqtt_custom_client
         test_sensor
         shared_memory
+        state_machine
     PRIV_REQUIRES
         nvs_flash
         esp_event

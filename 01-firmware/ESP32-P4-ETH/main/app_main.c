@@ -36,9 +36,29 @@ void app_main(void)
     // ========== START TASKS ==========
     // Start communications task FIRST (will initialize MQTT in CPU1 context)
     task_comms_cpu1_start();
-    vTaskDelay(pdMS_TO_TICKS(500));  // Wait for comms task to initialize MQTT
     
-    // Then start other tasks
+    // Wait up to 2 seconds for MQTT to initialize
+    uint32_t wait_time = 0;
+    while (!task_comms_cpu1_is_ready() && wait_time < 2000) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+        wait_time += 100;
+    }
+    
+    // Check if communications are ready
+    if (!task_comms_cpu1_is_ready()) {
+        ESP_LOGE(TAG, "[APP] FATAL: Communications task failed to initialize MQTT");
+        ESP_LOGE(TAG, "[APP] System halted - real-time tasks NOT started");
+        ESP_LOGE(TAG, "[APP] Check network connectivity and MQTT broker configuration");
+        
+        // Loop indefinitely with watchdog disabled (or implement graceful shutdown)
+        while(1) {
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            ESP_LOGE(TAG, "[APP] Waiting for manual intervention...");
+        }
+    }
+    
+    // Communications OK - start real-time tasks
+    ESP_LOGI(TAG, "[APP] Communications initialized successfully");
     task_rtcontrol_cpu0_start();
     task_monitor_lowpower_cpu1_start();
     ESP_LOGI(TAG, "[APP] System running on dual cores (HIGH-SPEED TELEMETRY MODE)");

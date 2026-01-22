@@ -37,6 +37,7 @@ typedef struct {
     uint32_t heartbeat_cpu1;    // CPU1 heartbeat counter
     bool cpu0_alive;
     bool cpu1_alive;
+    bool mqtt_connected;        // CPU1 reports MQTT connection status to CPU0
     SemaphoreHandle_t mutex;    // Protect concurrent access
 } shared_memory_t;
 
@@ -70,6 +71,12 @@ bool shared_memory_read_command(robot_command_t *cmd, TickType_t timeout);
  */
 void shared_memory_heartbeat_cpu0(void);
 void shared_memory_heartbeat_cpu1(void);
+
+/**
+ * MQTT connection status (CPU1 → CPU0)
+ */
+void shared_memory_set_mqtt_connected(bool connected);
+bool shared_memory_get_mqtt_connected(void);
 
 /**
  * Get reference to shared memory (advanced use)
