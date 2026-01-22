@@ -1,65 +1,65 @@
 services:
   vision:
-    build: ./01-vision
-    container_name: vision_node
-    devices:
-      - "/dev/video0:/dev/video0"
-    network_mode: "host"
-    restart: unless-stopped
-    environment:
-      - ROS_DOMAIN_ID=13
-    volumes:
-      - ./01-vision/src:/root/vision_node
+  #  build: ./01-vision
+  #  container_name: vision_node
+  #  devices:
+  #    - "/dev/video0:/dev/video0"
+  #  network_mode: "host"
+  #  restart: unless-stopped
+  #  environment:
+  #    - ROS_DOMAIN_ID=13
+  #  volumes:
+  #    - ./01-vision/src:/root/vision_node
 
-  navigation:
-    build: ./02-navigation
-    container_name: navigation_node
-    network_mode: host
-    restart: unless-stopped
-    volumes:
-      - ./02-navigation/src:/root/navigation_node
-    environment:
-      - ROS_DOMAIN_ID=13
+  #navigation:
+  #  build: ./02-navigation
+  #  container_name: navigation_node
+  #  network_mode: host
+  #  restart: unless-stopped
+  #  volumes:
+  #    - ./02-navigation/src:/root/navigation_node
+  #  environment:
+  #    - ROS_DOMAIN_ID=13
 
-  backend:
-    build: ./04-backend
-    container_name: backend_node
-    restart: unless-stopped
-    ports:
-      - "51113:51113"
-    volumes:
-      - ./04-backend/src:/app
-    environment:
-      - MQTT_BROKER=localhost
-      - MQTT_PORT=51111
-      - INFLUX_URL=http://localhost:51112
+  # backend:
+  #   build: ./04-backend
+  #   container_name: backend_node
+  #   restart: unless-stopped
+  #   ports:
+  #     - "51113:51113"
+  #   volumes:
+  #     - ./04-backend/src:/app
+  #   environment:
+  #     - MQTT_BROKER=localhost
+  #     - MQTT_PORT=51111
+  #     - INFLUX_URL=http://localhost:51112
 
-  dashboard:
-    build: ./03-dashboard
-    container_name: dashboard_node
-    restart: unless-stopped
-    ports:
-      - "51114:80"
-    depends_on:
-      - backend
+  # dashboard:
+  #   build: ./03-dashboard
+  #   container_name: dashboard_node
+  #   restart: unless-stopped
+  #   ports:
+  #     - "51114:80"
+  #   depends_on:
+  #     - backend
 
-  timeseries-db:
-    image: influxdb:2
-    container_name: influxdb
-    restart: unless-stopped
-    ports:
-      - "51112:8086"
-    volumes:
-      - influxdb-data:/var/lib/influxdb2
+  # timeseries-db:
+  #   image: influxdb:2
+  #   container_name: influxdb
+  #   restart: unless-stopped
+  #   ports:
+  #     - "51112:8086"
+  #   volumes:
+  #     - influxdb-data:/var/lib/influxdb2
 
-  metrics-agent:
-    image: telegraf
-    container_name: telegraf
-    restart: unless-stopped
-    depends_on:
-      - timeseries-db
-    volumes:
-      - ./06-metrics/src/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+  # metrics-agent:
+  #   image: telegraf
+  #   container_name: telegraf
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - timeseries-db
+  #   volumes:
+  #     - ./06-metrics/src/telegraf.conf:/etc/telegraf/telegraf.conf:ro
 
   message-broker:
     image: eclipse-mosquitto
