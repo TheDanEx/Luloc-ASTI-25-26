@@ -112,11 +112,9 @@ static void task_comms_cpu1(void *arg)
         ESP_LOGI(TAG, "✓ Callback registered successfully");
     }
     
-    uint32_t msg_count = 0;
-    TickType_t last_log_time = xTaskGetTickCount();
     
     while(1) {
-        // High-speed telemetry loop: 50 Hz (20ms interval)
+        // High-speed telemetry loop: 100 Hz (10ms interval)
         // Future: Replace with actual telemetry data acquisition and JSON packing
         
         // Check for incoming commands from CPU0 (non-blocking)
@@ -126,19 +124,8 @@ static void task_comms_cpu1(void *arg)
             // Process command here
         }
         
-        msg_count++;
-        
-        // Log statistics every 5 seconds
-        if ((xTaskGetTickCount() - last_log_time) > pdMS_TO_TICKS(5000)) {
-            ESP_LOGI(TAG, "Telemetry stats - Messages: %"PRIu32", Rate: %.1f Hz, Est. throughput: %.1f KB/s",
-                     msg_count, (msg_count * 1000.0f) / 5000.0f, 
-                     (msg_count * 1024.0f) / 5000.0f);  // Assuming ~1KB per message
-            msg_count = 0;
-            last_log_time = xTaskGetTickCount();
-        }
-        
-        // 20ms interval = 50 Hz telemetry rate
-        vTaskDelay(pdMS_TO_TICKS(20));
+        // 20ms interval = 100 Hz telemetry rate
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
