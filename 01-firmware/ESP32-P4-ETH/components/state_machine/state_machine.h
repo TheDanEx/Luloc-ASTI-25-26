@@ -14,22 +14,9 @@
  * - INIT: Starting up
  */
 
-typedef enum {
-    STATE_INIT = 0,              // Starting up
-    STATE_AUTONOMOUS,            // Autonomous operation (no MQTT required)
-    STATE_REMOTE_CONTROLLED,     // Waiting for remote commands (MQTT required)
-    STATE_TELEMETRY_ONLY,        // Autonomous with telemetry (MQTT required)
-    STATE_MQTT_LOST_ERROR,       // MQTT lost during operation - STOP
-    STATE_SHUTDOWN,              // Graceful shutdown
-} robot_state_t;
+#include "state_machine_config.h"
 
-typedef enum {
-    MODE_NONE = 0,
-    MODE_AUTONOMOUS_PATH,        // Follow pre-programmed path
-    MODE_AUTONOMOUS_OBSTACLE,    // Obstacle avoidance
-    MODE_REMOTE_DRIVE,           // Remote joystick control
-    MODE_TELEMETRY_STREAM,       // Send sensor data
-} robot_mode_t;
+// Enums robot_state_t and robot_mode_t are now in state_machine_config.h
 
 /**
  * System state context
@@ -80,6 +67,11 @@ bool state_machine_is_autonomous_safe(void);
  * Check if current mode requires MQTT
  */
 bool state_machine_requires_mqtt(void);
+
+/**
+ * Get mask of active sensors for current mode
+ */
+uint32_t state_machine_get_active_sensors(void);
 
 /**
  * Get readable state name

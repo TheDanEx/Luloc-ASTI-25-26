@@ -3,12 +3,10 @@
 #include "esp_log.h"
 #include "task_rtcontrol_cpu0.h"
 
-static const char *TAG = "task_rtcontrol_cpu0";
+static const char *TAG = "rt_cntrl";
 
 static void task_rtcontrol_cpu0(void *arg)
 {
-    ESP_LOGI(TAG, "Real-time control task started on core %d (high priority)", xPortGetCoreID());
-    
     while(1) {
         // Motor control, sensor reading, real-time algorithms
         ESP_LOGD(TAG, "Control loop running");

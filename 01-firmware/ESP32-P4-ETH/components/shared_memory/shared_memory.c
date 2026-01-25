@@ -1,7 +1,7 @@
 #include "shared_memory.h"
 #include "esp_log.h"
 
-static const char *TAG = "shared_memory";
+static const char *TAG = "shrd_mem";
 
 // Global shared memory instance
 static shared_memory_t g_shared_memory = {0};
