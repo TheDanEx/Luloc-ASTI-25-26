@@ -10,9 +10,6 @@ datasources:
     jsonData:
       version: SQL
       dbName: local_system
-      organization: local_org
-      defaultBucket: local_system
-      tlsSkipVerify: true
-      sqlMode: true
+      insecureGrpc: true
     secureJsonData:
       token: "apiv3_ZdhRQ0ZGIx08N-EHpow_YPw1JChH5HecafD89DCpuWyjrzfanX0YbnPo_ooZZcIJpyLRHaEfChC3KV2GH45COA"
