@@ -5,11 +5,11 @@ datasources:
     type: influxdb
     access: proxy
     url: http://influx-db:8181
-    database: local_system
     isDefault: true
     editable: true
     jsonData:
       version: SQL
+      dbName: local_system
       organization: local_org
       defaultBucket: local_system
       tlsSkipVerify: true
