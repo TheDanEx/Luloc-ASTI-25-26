@@ -1,0 +1,21 @@
+{
+  "id": null,
+  "title": "Dashboard de prueba",
+  "tags": ["test"],
+  "timezone": "browser",
+  "schemaVersion": 37,
+  "version": 1,
+  "panels": [
+    {
+      "type": "graph",
+      "title": "Panel de prueba",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 9 },
+      "datasource": "InfluxDB",
+      "targets": [
+        {
+          "query": "from(bucket: \"${INFLUXDB_BUCKET}\") |> range(start: -1h)"
+        }
+      ]
+    }
+  ]
+}

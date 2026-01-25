@@ -50,13 +50,18 @@ services:
       - --node-id=${INFLUXDB_NODE_ID}
       - --object-store=file
       - --data-dir=/var/lib/influxdb3
+      - --without-auth
     volumes:
       - influxdb-data:/var/lib/influxdb3
     healthcheck:
-      test: ["CMD-SHELL", "curl -f -H 'Authorization: Bearer ${INFLUXDB_TOKEN}' http://localhost:8181/health || exit 1"]
-      interval: 20s
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f -H 'Authorization: Bearer ${INFLUXDB_TOKEN}' http://localhost:8181/health || exit 1",
+        ]
+      interval: 5s
       timeout: 5s
-      retries: 6
+      retries: 10
     restart: unless-stopped
 
   # ===============================
@@ -90,7 +95,8 @@ services:
     ports:
       - "${GRAFANA_PORT}:3000"
     volumes:
-      - grafana-data:/var/lib/grafana
+      - ./05-telemetry/grafana/provisioning:/etc/grafana/provisioning
+      - ./05-telemetry/grafana/dashboards:/var/lib/grafana/dashboards
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
