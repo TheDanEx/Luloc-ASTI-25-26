@@ -1,4 +1,4 @@
-# Lurloc ASTI 25/26 – Software Stack
+# Luloc ASTI 25/26 – Software Stack
 
 Este repositorio contiene el software del sistema robótico, organizado en
 módulos independientes y desplegado mediante **Docker Compose**.
