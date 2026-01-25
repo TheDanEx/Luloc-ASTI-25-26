@@ -1,7 +1,7 @@
 apiVersion: 1
 
 datasources:
-  - name: InfluxDB_SQL
+  - name: InfluxDB
     type: influxdb
     access: proxy
     url: http://${INFLUXDB_HOST}:${INFLUXDB_HTTP_PORT}
@@ -9,8 +9,10 @@ datasources:
     editable: true
     jsonData:
       version: SQL
-      dbName: ${INFLUXDB_BUCKET}
-      httpMode: POST
+      organization: ${INFLUXDB_ORG}
+      defaultBucket: ${INFLUXDB_BUCKET}
+      tlsSkipVerify: true
+      sqlMode: true
       insecureGrpc: true
     secureJsonData:
       token: ${INFLUXDB_TOKEN}
