@@ -69,6 +69,14 @@ esp_err_t ethernet_init(void);
  */
 esp_err_t ethernet_deinit(void);
 
+/**
+ * @brief Check if Ethernet is connected and IP is obtained
+ * 
+ * @return true if Ethernet is linked up and has valid IP
+ * @return false otherwise
+ */
+bool ethernet_is_connected(void);
+
 #ifdef __cplusplus
 }
 #endif

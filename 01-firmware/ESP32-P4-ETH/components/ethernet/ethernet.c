@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
-#include "ethernet_init.h"
+#include "ethernet.h"
 #include "esp_log.h"
 #include "esp_check.h"
 #include "esp_mac.h"
@@ -47,7 +47,7 @@ typedef struct {
     uint8_t *mac_addr;
 }spi_eth_module_config_t;
 
-static const char *TAG = "ethernet_init";
+static const char *TAG = "ethernet";
 #if CONFIG_EXAMPLE_USE_SPI_ETHERNET
 static bool gpio_isr_svc_init_by_eth = false; // indicates that we initialized the GPIO ISR service
 #endif // CONFIG_EXAMPLE_USE_SPI_ETHERNET
@@ -57,6 +57,7 @@ static esp_eth_handle_t *s_eth_handles = NULL;
 static uint8_t s_eth_cnt = 0;
 static esp_netif_t **s_eth_netifs = NULL;
 static esp_eth_netif_glue_handle_t *s_eth_netif_glues = NULL;
+static bool s_got_ip = false;
 
 
 /**
@@ -72,18 +73,20 @@ static void eth_event_handler(void *arg, esp_event_base_t event_base,
     switch (event_id) {
     case ETHERNET_EVENT_CONNECTED:
         esp_eth_ioctl(eth_handle, ETH_CMD_G_MAC_ADDR, mac_addr);
-        ESP_LOGI(TAG, "Ethernet Link Up");
-        ESP_LOGI(TAG, "Ethernet HW Addr %02x:%02x:%02x:%02x:%02x:%02x",
+        ESP_LOGD(TAG, "Ethernet Link Up");
+        ESP_LOGD(TAG, "Ethernet HW Addr %02x:%02x:%02x:%02x:%02x:%02x",
                  mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
         break;
     case ETHERNET_EVENT_DISCONNECTED:
-        ESP_LOGI(TAG, "Ethernet Link Down");
+        ESP_LOGW(TAG, "Ethernet Link Down");
+        s_got_ip = false;
         break;
     case ETHERNET_EVENT_START:
-        ESP_LOGI(TAG, "Ethernet Started");
+        ESP_LOGD(TAG, "Ethernet Started");
         break;
     case ETHERNET_EVENT_STOP:
-        ESP_LOGI(TAG, "Ethernet Stopped");
+        ESP_LOGW(TAG, "Ethernet Stopped");
+        s_got_ip = false;
         break;
     default:
         break;
@@ -99,12 +102,13 @@ static void got_ip_event_handler(void *arg, esp_event_base_t event_base,
     ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
     const esp_netif_ip_info_t *ip_info = &event->ip_info;
 
-    ESP_LOGI(TAG, "Ethernet Got IP Address");
-    ESP_LOGI(TAG, "~~~~~~~~~~~");
-    ESP_LOGI(TAG, "ETHIP:" IPSTR, IP2STR(&ip_info->ip));
-    ESP_LOGI(TAG, "ETHMASK:" IPSTR, IP2STR(&ip_info->netmask));
-    ESP_LOGI(TAG, "ETHGW:" IPSTR, IP2STR(&ip_info->gw));
-    ESP_LOGI(TAG, "~~~~~~~~~~~");
+    ESP_LOGI(TAG, "Ethernet Link Up - IP Obtained");
+    ESP_LOGI(TAG, "--------------------------------------------------");
+    ESP_LOGI(TAG, "IP Address:  " IPSTR, IP2STR(&ip_info->ip));
+    ESP_LOGI(TAG, "Subnet Mask: " IPSTR, IP2STR(&ip_info->netmask));
+    ESP_LOGI(TAG, "Gateway:     " IPSTR, IP2STR(&ip_info->gw));
+    ESP_LOGI(TAG, "--------------------------------------------------");
+    s_got_ip = true;
 }
 
 
@@ -509,7 +513,7 @@ esp_err_t ethernet_init(void)
     // Configure IP mode (DHCP or Static)
 #ifdef CONFIG_ROBOT_ETH_STATIC_IP
     // Static IP configuration
-    ESP_LOGI(TAG, "Configuring static IP address");
+    ESP_LOGD(TAG, "Configuring static IP address");
     ret = esp_netif_dhcpc_stop(s_eth_netifs[0]);
     if (ret != ESP_OK && ret != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED) {
         ESP_LOGW(TAG, "Failed to stop DHCP: %s", esp_err_to_name(ret));
@@ -532,11 +536,11 @@ esp_err_t ethernet_init(void)
         ESP_LOGE(TAG, "Failed to set static IP: %s", esp_err_to_name(ret));
         goto cleanup_glues_mem;
     }
-    ESP_LOGI(TAG, "Static IP set: " IPSTR ", Netmask: " IPSTR ", Gateway: " IPSTR,
+    ESP_LOGD(TAG, "Static IP set: " IPSTR ", Netmask: " IPSTR ", Gateway: " IPSTR,
              IP2STR(&ip_addr), IP2STR(&netmask), IP2STR(&gateway));
 #else
     // DHCP mode (default)
-    ESP_LOGI(TAG, "DHCP mode - waiting for IP address");
+    // ESP_LOGI(TAG, "DHCP mode - waiting for IP address");
 #endif
 
     // Register event handlers
@@ -564,7 +568,6 @@ esp_err_t ethernet_init(void)
         }
     }
 
-    ESP_LOGI(TAG, "Ethernet stack initialized successfully");
     return ESP_OK;
 
 cleanup_glues_mem:
@@ -640,4 +643,9 @@ esp_err_t ethernet_deinit(void)
 
     ESP_LOGI(TAG, "Ethernet stack deinitialized");
     return ret;
+}
+
+bool ethernet_is_connected(void)
+{
+    return s_got_ip;
 }
