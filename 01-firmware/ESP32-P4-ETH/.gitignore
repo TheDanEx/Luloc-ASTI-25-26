@@ -32,6 +32,14 @@ flasher_args.json # Generated in build directory
 sdkconfig.old
 sdkconfig
 
+# VS Code files for those working on multiple tools
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
 # ESP-IDF dependencies
 # For older versions or manual component management
 /components/.idf/
