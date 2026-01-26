@@ -1,0 +1,15 @@
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB
+    type: influxdb
+    access: proxy
+    url: http://influx-db:8181
+    isDefault: true
+    editable: true
+    jsonData:
+      version: SQL
+      dbName: local_system
+      insecureGrpc: true
+    secureJsonData:
+      token: "apiv3_ZdhRQ0ZGIx08N-EHpow_YPw1JChH5HecafD89DCpuWyjrzfanX0YbnPo_ooZZcIJpyLRHaEfChC3KV2GH45COA"

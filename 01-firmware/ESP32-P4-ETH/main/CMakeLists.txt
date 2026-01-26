@@ -9,11 +9,14 @@ idf_component_register(
         "."
         "tasks"
     REQUIRES
-        ethernet_init
+        ethernet
         mqtt_custom_client
         test_sensor
         shared_memory
         state_machine
+        audio_player
+        esp_timer
+        performance_monitor
     PRIV_REQUIRES
         nvs_flash
         esp_event

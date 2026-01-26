@@ -40,44 +40,40 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     switch ((esp_mqtt_event_id_t)event_id) {
     case MQTT_EVENT_CONNECTED:
         mqtt_connected = true;
-        ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
+        ESP_LOGD(TAG, "MQTT Connected to broker %s", CONFIG_BROKER_URL);
         // Publish startup event when connected
-        esp_mqtt_client_publish(mqtt_client_handle, "robot/events", "ESP32 MQTT connection started", 0, 1, 0);
+        esp_mqtt_client_publish(mqtt_client_handle, "robot/events", "{\"event\":\"connected\",\"msg\":\"ESP32 MQTT connection started\"}", 0, 1, 0);
         break;
         
     case MQTT_EVENT_DISCONNECTED:
         mqtt_connected = false;
-        ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
+        // Only print if we were previously connected or if it's a distinct event
+        ESP_LOGW(TAG, "MQTT Disconnected - retrying...");
         break;
 
     case MQTT_EVENT_SUBSCRIBED:
-        ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
+        ESP_LOGD(TAG, "Subscribed, msg_id=%d", event->msg_id);
         break;
         
     case MQTT_EVENT_UNSUBSCRIBED:
-        ESP_LOGI(TAG, "MQTT_EVENT_UNSUBSCRIBED, msg_id=%d", event->msg_id);
+        ESP_LOGD(TAG, "Unsubscribed, msg_id=%d", event->msg_id);
         break;
         
     case MQTT_EVENT_PUBLISHED:
-        ESP_LOGI(TAG, "MQTT_EVENT_PUBLISHED, msg_id=%d", event->msg_id);
+        ESP_LOGD(TAG, "Published, msg_id=%d", event->msg_id);
         break;
         
     case MQTT_EVENT_DATA:
-        ESP_LOGI(TAG, "MQTT_EVENT_DATA - Topic: %.*s, Data: %.*s", event->topic_len, event->topic, event->data_len, event->data);
+        ESP_LOGD(TAG, "Data - Topic: %.*s", event->topic_len, event->topic);
         
         // Check registered callbacks
         bool callback_found = false;
         for (int i = 0; i < MQTT_CALLBACK_MAX; i++) {
             if (g_topic_callbacks[i].callback != NULL) {
-                ESP_LOGD(TAG, "Checking callback[%d]: registered='%s' (len=%d) vs incoming_topic='%.*s' (len=%d)", 
-                         i, g_topic_callbacks[i].topic, (int)strlen(g_topic_callbacks[i].topic),
-                         event->topic_len, event->topic, event->topic_len);
-                
                 // Check if this message matches the registered topic
                 size_t registered_topic_len = strlen(g_topic_callbacks[i].topic);
                 if (registered_topic_len == event->topic_len && 
                     strncmp(g_topic_callbacks[i].topic, event->topic, event->topic_len) == 0) {
-                    ESP_LOGI(TAG, "✓ Invoking callback for topic: %s", g_topic_callbacks[i].topic);
                     g_topic_callbacks[i].callback(event->topic, event->topic_len, 
                                                    event->data, event->data_len);
                     callback_found = true;
@@ -85,19 +81,19 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             }
         }
         if (!callback_found) {
-            ESP_LOGW(TAG, "No callback found for topic: %.*s", event->topic_len, event->topic);
+            ESP_LOGD(TAG, "No callback found for topic: %.*s", event->topic_len, event->topic);
         }
         break;
         
     case MQTT_EVENT_ERROR:
-        ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
         if (event->error_handle->error_type == MQTT_ERROR_TYPE_TCP_TRANSPORT) {
-            ESP_LOGI(TAG, "Last errno string (%s)", strerror(event->error_handle->esp_transport_sock_errno));
+            ESP_LOGW(TAG, "MQTT Connection Failed: %s", strerror(event->error_handle->esp_transport_sock_errno));
+        } else {
+             ESP_LOGD(TAG, "MQTT Error event");
         }
         break;
         
     default:
-        ESP_LOGI(TAG, "Other event id:%d", event->event_id);
         break;
     }
 }
@@ -122,6 +118,13 @@ esp_err_t mqtt_custom_client_init(void)
         return ESP_FAIL;
     }
 
+    // Suppress verbose logs from underlying MQTT components
+    esp_log_level_set("mqtt_client", ESP_LOG_NONE);
+    esp_log_level_set("esp-tls", ESP_LOG_NONE);
+    esp_log_level_set("transport_base", ESP_LOG_NONE);
+    esp_log_level_set("transport", ESP_LOG_NONE);
+    esp_log_level_set("TRANS_TCP", ESP_LOG_NONE);
+
     // Register event handler
     esp_mqtt_client_register_event(mqtt_client_handle, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
 
@@ -132,7 +135,7 @@ esp_err_t mqtt_custom_client_init(void)
         return ret;
     }
 
-    ESP_LOGI(TAG, "MQTT client initialized and started");
+    ESP_LOGD(TAG, "MQTT client initialized and started");
     return ESP_OK;
 }
 
@@ -168,7 +171,12 @@ int mqtt_custom_client_subscribe(const char *topic, int qos)
 
     int msg_id = esp_mqtt_client_subscribe(mqtt_client_handle, topic, qos);
     if (msg_id < 0) {
-        ESP_LOGE(TAG, "Failed to subscribe to topic %s", topic);
+        // Only log warning if not connected, otherwise error 
+        if (!mqtt_custom_client_is_connected()) {
+             // Suppress noise, common during startup before connection
+        } else {
+             ESP_LOGW(TAG, "Failed to subscribe to topic %s", topic);
+        }
         return -1;
     }
 
@@ -219,7 +227,7 @@ esp_err_t mqtt_custom_client_register_topic_callback(const char *topic, mqtt_mes
             strncpy(g_topic_callbacks[i].topic, topic, sizeof(g_topic_callbacks[i].topic) - 1);
             g_topic_callbacks[i].topic[sizeof(g_topic_callbacks[i].topic) - 1] = '\0';  // Ensure null termination
             g_topic_callbacks[i].callback = callback;
-            ESP_LOGI(TAG, "Registered callback for topic: %s", topic);
+            ESP_LOGD(TAG, "Registered callback for topic: %s", topic);
             return ESP_OK;
         }
     }

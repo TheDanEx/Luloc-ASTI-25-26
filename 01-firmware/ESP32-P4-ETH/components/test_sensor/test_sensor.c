@@ -27,7 +27,6 @@ esp_err_t test_sensor_init(void)
     // Get current time as reference point (when ESP booted)
     boot_time_us = esp_timer_get_time();
     
-    ESP_LOGI(TAG, "Test sensor initialized - tracking uptime");
     return ESP_OK;
 }
 
