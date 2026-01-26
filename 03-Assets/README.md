@@ -3,7 +3,7 @@
 Esta carpeta contiene recursos externos y material bruto utilizado durante
 el desarrollo del proyecto.
 
-⚠️ IMPORTANTE  
+ IMPORTANTE  
 Los archivos contenidos aquí **NO se usan directamente en ejecución** ni por
 el software de la Raspberry Pi ni por el firmware del ESP32.
 
