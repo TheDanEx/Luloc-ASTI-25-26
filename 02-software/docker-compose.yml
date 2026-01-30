@@ -40,25 +40,21 @@ services:
   # INFLUXDB 3 CORE
   # ===============================
   influx-db:
-    image: influxdb:3-core
-    container_name: influxdb3-core
+    image: influxdb:2.7
+    container_name: influxdb
     ports:
-      - "8181:8181"
-    command:
-      - influxdb3
-      - serve
-      - --node-id=${INFLUXDB_NODE_ID}
-      - --object-store=file
-      - --data-dir=/var/lib/influxdb3
-      - --without-auth
+      - "8086:8086"
     volumes:
-      - influxdb-data:/var/lib/influxdb3
+      - influxdb-data:/var/lib/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USER}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN}
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -f -H 'Authorization: Bearer ${INFLUXDB_TOKEN}' http://localhost:8181/health || exit 1",
-        ]
+      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -84,6 +80,8 @@ services:
       - HOSTNAME=telegraf
     volumes:
       - ./05-telemetry/telegraf:/etc/telegraf
+      - ./05-telemetry/telegraf/scripts:/etc/telegraf/scripts:ro
+      - /sys/class/thermal:/sys/class/thermal:ro
 
   # ===============================
   # GRAFANA
@@ -100,12 +98,6 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
-      - INFLUXDB_HOST=${INFLUXDB_HOST}
-      - INFLUXDB_PORT=${INFLUXDB_HTTP_PORT}
-      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
-      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
-      - INFLUXDB_ORG=${INFLUXDB_ORG}
-      - INFLUXDB_NODE_ID=${INFLUXDB_NODE_ID}
     depends_on:
       - influx-db
 
