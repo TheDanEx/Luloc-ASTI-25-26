@@ -4,12 +4,11 @@ datasources:
   - name: InfluxDB
     type: influxdb
     access: proxy
-    url: http://influx-db:8181
-    isDefault: true
-    editable: true
+    url: http://influx-db:8086
     jsonData:
-      version: SQL
-      dbName: local_system
-      insecureGrpc: true
+      version: Flux
+      organization: local_org
+      defaultBucket: local_system
+      tlsSkipVerify: true
     secureJsonData:
-      token: "apiv3_ZdhRQ0ZGIx08N-EHpow_YPw1JChH5HecafD89DCpuWyjrzfanX0YbnPo_ooZZcIJpyLRHaEfChC3KV2GH45COA"
+      token: supersecrettoken

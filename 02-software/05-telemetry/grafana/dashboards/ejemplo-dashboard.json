@@ -18,10 +18,268 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 0,
+  "id": 1,
   "links": [],
   "liveNow": true,
   "panels": [
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "displayName": "CPU1",
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 0,
+        "y": 0
+      },
+      "id": 7,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"mqtt_consumer\" and\r\n    r.task == \"CPU0\"\r\n  )\r\n",
+          "refId": "A"
+        }
+      ],
+      "title": "CPU0",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "displayName": "CPU1",
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 5,
+        "y": 0
+      },
+      "id": 8,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"mqtt_consumer\" and\r\n    r.task == \"CPU1\"\r\n  )\r\n",
+          "refId": "A"
+        }
+      ],
+      "title": "CPU1",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "max": 90,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 75
+              }
+            ]
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 10,
+        "y": 0
+      },
+      "id": 15,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto",
+        "text": {
+          "titleSize": 2
+        }
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: -5m)\r\n  |> filter(fn: (r) => r._measurement == \"cpu_temp\")\r\n",
+          "refId": "A"
+        }
+      ],
+      "title": "CPU Pi Temp(Cº)",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "displayName": "${__field.labels[\"cpu\"]}",
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "percentage",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 11,
+        "x": 13,
+        "y": 0
+      },
+      "id": 13,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"cpu\" and\r\n      r._field == \"usage_system\"\r\n  )\r\n  |> mean()\r\n",
+          "refId": "A"
+        }
+      ],
+      "title": "RPI5 CPU",
+      "type": "gauge"
+    },
     {
       "datasource": {
         "type": "influxdb",
@@ -55,18 +313,19 @@
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "auto",
-            "showValues": true,
+            "showPoints": "always",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "dashed"
+              "mode": "off"
             }
           },
           "decimals": 1,
+          "displayName": "CPU0 usage",
           "mappings": [],
           "max": 100,
           "min": 0,
@@ -92,19 +351,19 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 4,
         "w": 5,
         "x": 0,
-        "y": 0
+        "y": 4
       },
+      "hideTimeOverride": true,
       "id": 2,
-      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": false
         },
         "tooltip": {
           "hideZeros": false,
@@ -112,35 +371,15 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.3.1",
+      "pluginVersion": "12.3.2",
       "targets": [
         {
-          "dataset": "iox",
           "datasource": {
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT \"usage\", \"time\" FROM \"mqtt_consumer\" WHERE \"time\" >= $__timeFrom AND \"time\" <= $__timeTo AND \"task\" = 'CPU0' ",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ]
-          }
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"mqtt_consumer\" and\r\n    r.task == \"CPU0\"\r\n  )\r\n",
+          "refId": "A"
         }
       ],
       "timeFrom": "5m",
@@ -175,23 +414,27 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
+            "lineStyle": {
+              "fill": "solid"
+            },
             "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "auto",
-            "showValues": true,
+            "showPoints": "always",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
-              "mode": "dashed"
+              "mode": "off"
             }
           },
           "decimals": 1,
+          "displayName": "Uso CPU1",
           "mappings": [],
           "max": 100,
           "min": 0,
@@ -217,20 +460,19 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 4,
         "w": 5,
         "x": 5,
-        "y": 0
+        "y": 4
       },
-      "hideTimeOverride": false,
+      "hideTimeOverride": true,
       "id": 4,
-      "interval": "5s",
       "options": {
         "legend": {
           "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": false
         },
         "tooltip": {
           "hideZeros": false,
@@ -238,57 +480,15 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.3.1",
+      "pluginVersion": "12.3.2",
       "targets": [
         {
           "dataset": "iox",
           "editorMode": "code",
           "format": "time_series",
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._measurement == \"mqtt_consumer\" and\r\n    r.task == \"CPU1\"\r\n  )\r\n",
           "rawQuery": true,
-          "rawSql": "SELECT \"usage\", \"time\" FROM \"mqtt_consumer\" WHERE \"time\" >= $__timeFrom AND \"time\" <= $__timeTo AND \"task\" = 'CPU1' ",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [
-                  {
-                    "name": "\"usage\"",
-                    "type": "functionParameter"
-                  }
-                ],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "whereJsonTree": {
-              "children1": [
-                {
-                  "id": "bba8aa99-cdef-4012-b456-719bf3248bd6",
-                  "properties": {
-                    "field": "task",
-                    "fieldSrc": "field",
-                    "operator": "equal",
-                    "value": ["CPU1"],
-                    "valueError": [null],
-                    "valueSrc": ["value"],
-                    "valueType": ["text"]
-                  },
-                  "type": "rule"
-                }
-              ],
-              "id": "b88b89b9-0123-4456-b89a-b19bf310b8d6",
-              "type": "group"
-            },
-            "whereString": "task = 'CPU1'"
-          },
-          "table": "mqtt_consumer"
+          "refId": "A"
         }
       ],
       "timeFrom": "5m",
@@ -301,10 +501,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 19,
-        "w": 10,
+        "h": 8,
+        "w": 5,
         "x": 10,
-        "y": 0
+        "y": 4
       },
       "id": 6,
       "options": {
@@ -313,12 +513,75 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "<div style=\"\n  width: 100%;\n  height: 100%;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  background: black;\n\">\n  <img\n    src=\"http://192.168.42.15:5123/video_feed\"\n    style=\"\n      max-width: 100%;\n      max-height: 100%;\n      object-fit: contain;\n    \"\n  />\n</div>\n",
+        "content": "<div style=\"width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:black;\"><img src=\"http://192.168.42.158:8080/stream\" style=\"max-width:100%;max-height:100%;object-fit:contain;\"/></div>",
         "mode": "html"
       },
-      "pluginVersion": "12.3.1",
+      "pluginVersion": "12.3.2",
       "title": "Camara",
       "type": "text"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 5,
+        "x": 15,
+        "y": 4
+      },
+      "id": 12,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "<div style=\"width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:black;\"><img src=\"http://192.168.42.158:8080/stream\" style=\"max-width:100%;max-height:100%;object-fit:contain;\"/></div>",
+        "mode": "html"
+      },
+      "pluginVersion": "12.3.2",
+      "title": "Camara",
+      "type": "text"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 20,
+        "y": 4
+      },
+      "id": 16,
+      "options": {
+        "dedupStrategy": "none",
+        "enableInfiniteScrolling": false,
+        "enableLogDetails": true,
+        "showControls": false,
+        "showTime": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "dataset": "iox",
+          "editorMode": "builder",
+          "format": "table",
+          "refId": "A",
+          "table": "mqtt_consumer"
+        }
+      ],
+      "title": "Settings",
+      "type": "logs"
     },
     {
       "datasource": "InfluxDB",
@@ -327,45 +590,17 @@
           "color": {
             "mode": "thresholds"
           },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineWidth": 1,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
           "decimals": 1,
+          "displayName": "${__field.labels[\"task\"]}",
           "mappings": [],
           "max": 100,
           "min": 0,
           "thresholds": {
-            "mode": "absolute",
+            "mode": "percentage",
             "steps": [
               {
-                "color": "blue",
-                "value": 0
-              },
-              {
                 "color": "green",
-                "value": 20
-              },
-              {
-                "color": "#EAB839",
-                "value": 50
+                "value": 0
               },
               {
                 "color": "red",
@@ -385,53 +620,38 @@
       },
       "id": 3,
       "options": {
-        "barRadius": 0,
-        "barWidth": 0.97,
-        "fullHighlight": false,
-        "groupWidth": 0.7,
+        "displayMode": "basic",
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "right",
-          "showLegend": true
+          "placement": "bottom",
+          "showLegend": false
         },
+        "maxVizHeight": 50,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
         "orientation": "horizontal",
-        "showValue": "always",
-        "stacking": "none",
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 0
+        "showUnfilled": true,
+        "sizing": "manual",
+        "valueMode": "color"
       },
-      "pluginVersion": "12.3.1",
+      "pluginVersion": "12.3.2",
       "targets": [
         {
           "dataset": "iox",
           "editorMode": "code",
           "format": "table",
-          "query": "from(bucket: \"${INFLUXDB_BUCKET}\") |> range(start: -1h)",
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"mqtt_consumer\" and\r\n      r.core == \"0\" and\r\n      r.task != \"CPU0\" and\r\n      r._field == \"usage\"\r\n  )\r\n  |> group(columns: [\"task\"])\r\n  |> last()\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,       // tiempo para que Grafana acepte la fila\r\n      _value: r._value,     // valor del usage\r\n      task: r.task,         // columna string para el eje X / leyenda\r\n      display: r.task       // columna extra opcional para display name\r\n  }))\r\n  |> keep(columns: [\"_time\", \"_value\", \"task\", \"display\"])\r\n",
           "rawQuery": true,
-          "rawSql": "SELECT LAST_VALUE(\"usage\") AS last_usage, \"task\"\r\nFROM \"mqtt_consumer\"\r\nWHERE \"core\" = '0' \r\n  AND time >= $__timeFrom \r\n  AND time <= $__timeTo\r\n  AND \"task\" <> 'CPU0'\r\nGROUP BY \"task\"",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ]
-          }
+          "refId": "A"
         }
       ],
       "title": "Tareas CPU0",
@@ -439,7 +659,6 @@
         {
           "id": "sortBy",
           "options": {
-            "fields": {},
             "sort": [
               {
                 "desc": true,
@@ -449,7 +668,7 @@
           }
         }
       ],
-      "type": "barchart"
+      "type": "bargauge"
     },
     {
       "datasource": "InfluxDB",
@@ -458,45 +677,17 @@
           "color": {
             "mode": "thresholds"
           },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineWidth": 1,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
           "decimals": 1,
+          "displayName": "${__field.labels[\"task\"]}",
           "mappings": [],
           "max": 100,
           "min": 0,
           "thresholds": {
-            "mode": "absolute",
+            "mode": "percentage",
             "steps": [
               {
-                "color": "blue",
-                "value": 0
-              },
-              {
                 "color": "green",
-                "value": 20
-              },
-              {
-                "color": "#EAB839",
-                "value": 50
+                "value": 0
               },
               {
                 "color": "red",
@@ -514,55 +705,40 @@
         "x": 5,
         "y": 8
       },
-      "id": 1,
+      "id": 14,
       "options": {
-        "barRadius": 0,
-        "barWidth": 0.97,
-        "fullHighlight": false,
-        "groupWidth": 0.7,
+        "displayMode": "basic",
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "right",
-          "showLegend": true
+          "placement": "bottom",
+          "showLegend": false
         },
+        "maxVizHeight": 50,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
         "orientation": "horizontal",
-        "showValue": "never",
-        "stacking": "none",
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 0
+        "showUnfilled": true,
+        "sizing": "manual",
+        "valueMode": "color"
       },
-      "pluginVersion": "12.3.1",
+      "pluginVersion": "12.3.2",
       "targets": [
         {
           "dataset": "iox",
           "editorMode": "code",
           "format": "table",
-          "query": "from(bucket: \"${INFLUXDB_BUCKET}\") |> range(start: -1h)",
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"mqtt_consumer\" and\r\n      r.core == \"1\" and\r\n      r.task != \"CPU1\" and\r\n      r._field == \"usage\"\r\n  )\r\n  |> group(columns: [\"task\"])\r\n  |> last()\r\n  |> map(fn: (r) => ({\r\n      _time: r._time,       // tiempo para que Grafana acepte la fila\r\n      _value: r._value,     // valor del usage\r\n      task: r.task,         // columna string para el eje X / leyenda\r\n      display: r.task       // columna extra opcional para display name\r\n  }))\r\n  |> keep(columns: [\"_time\", \"_value\", \"task\", \"display\"])\r\n",
           "rawQuery": true,
-          "rawSql": "SELECT LAST_VALUE(\"usage\") AS last_usage, \"task\"\r\nFROM \"mqtt_consumer\"\r\nWHERE \"core\" = '1' \r\n  AND time >= $__timeFrom \r\n  AND time <= $__timeTo\r\n  AND \"task\" <> 'CPU1'\r\nGROUP BY \"task\"",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ]
-          }
+          "refId": "A"
         }
       ],
       "title": "Tareas CPU1",
@@ -570,7 +746,6 @@
         {
           "id": "sortBy",
           "options": {
-            "fields": {},
             "sort": [
               {
                 "desc": true,
@@ -580,7 +755,7 @@
           }
         }
       ],
-      "type": "barchart"
+      "type": "bargauge"
     },
     {
       "datasource": {
@@ -592,10 +767,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 7,
         "w": 10,
-        "x": 0,
-        "y": 19
+        "x": 10,
+        "y": 12
       },
       "id": 5,
       "options": {
@@ -607,25 +782,64 @@
         "sortOrder": "Descending",
         "wrapLogMessage": false
       },
-      "pluginVersion": "12.3.1",
+      "pluginVersion": "12.3.2",
       "targets": [
         {
           "dataset": "iox",
           "editorMode": "builder",
           "format": "table",
-          "rawSql": "",
           "refId": "A",
           "table": "mqtt_consumer"
         }
       ],
       "title": "Logs",
       "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 4,
+        "x": 20,
+        "y": 12
+      },
+      "id": 17,
+      "options": {
+        "dedupStrategy": "none",
+        "enableInfiniteScrolling": false,
+        "enableLogDetails": true,
+        "showControls": false,
+        "showTime": false,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "dataset": "iox",
+          "editorMode": "builder",
+          "format": "table",
+          "refId": "A",
+          "table": "mqtt_consumer"
+        }
+      ],
+      "title": "Commands",
+      "type": "logs"
     }
   ],
   "preload": false,
   "refresh": "auto",
   "schemaVersion": 42,
-  "tags": ["test"],
+  "tags": [
+    "test"
+  ],
   "templating": {
     "list": []
   },
@@ -635,8 +849,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Dashboard de pruebla",
+  "title": "Dashboard de prueba",
   "uid": "cff0b2e3-3436-4676-a374-90ef04188742",
-  "version": 4,
+  "version": 2,
   "weekStart": "monday"
 }
