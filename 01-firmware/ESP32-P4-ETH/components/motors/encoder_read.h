@@ -8,77 +8,57 @@ extern "C" {
 #endif
 
 /**
- * @brief Encoder data structure
+ * @brief Test sensor data structure
  */
 typedef struct {
-    int16_t count;           // Total encoder count
-    int16_t delta;           // Change since last read
-    int64_t elapsed_us;      // Elapsed time in microseconds since init
-} encoder_data_t;
+    uint32_t uptime_ms;      // Uptime in milliseconds
+    uint32_t uptime_sec;     // Uptime in seconds
+    uint32_t uptime_min;     // Uptime in minutes
+} test_sensor_data_t;
 
 /**
- * @brief Initialize encoder with PCNT
+ * @brief Initialize test sensor
  * 
- * Initializes GPIO, PCNT hardware, and timer reference
+ * Simply tracks ESP32 uptime using esp_timer_get_time()
  * 
  * @return
  *          - ESP_OK on success
- *          - ESP_OK if already initialized
+ *          - ESP_FAIL on failure
  */
-esp_err_t encoder_init(void);
+esp_err_t test_sensor_init(void);
 
 /**
- * @brief Get current encoder reading
+ * @brief Get current sensor reading (uptime)
  * 
- * @param data Pointer to encoder_data_t structure to fill
+ * @param data Pointer to test_sensor_data_t structure to fill
  * @return
  *          - ESP_OK on success
  *          - ESP_ERR_INVALID_ARG if data is NULL
- *          - ESP_FAIL if encoder not initialized
  */
-esp_err_t encoder_read(encoder_data_t *data);
+esp_err_t test_sensor_read(test_sensor_data_t *data);
 
 /**
- * @brief Get encoder count
+ * @brief Get uptime in milliseconds
  * 
- * @return Current total encoder count
+ * @return Uptime in milliseconds since boot
  */
-int16_t encoder_get_count(void);
+uint32_t test_sensor_get_uptime_ms(void);
 
 /**
- * @brief Get encoder delta (change since last read)
+ * @brief Get uptime in seconds
  * 
- * @return Delta count since last update
+ * @return Uptime in seconds since boot
  */
-int16_t encoder_get_delta(void);
+uint32_t test_sensor_get_uptime_sec(void);
 
 /**
- * @brief Get elapsed time in microseconds
+ * @brief Get uptime as formatted string
  * 
- * @return Elapsed time in microseconds since encoder initialization
+ * @param buffer Buffer to store the formatted string
+ * @param buffer_size Size of buffer
+ * @return Pointer to buffer with formatted uptime (e.g., "1h 23m 45s")
  */
-int64_t encoder_get_elapsed_us(void);
-
-/**
- * @brief Get elapsed time in milliseconds
- * 
- * @return Elapsed time in milliseconds since encoder initialization
- */
-uint32_t encoder_get_elapsed_ms(void);
-
-/**
- * @brief Get elapsed time in seconds
- * 
- * @return Elapsed time in seconds since encoder initialization
- */
-uint32_t encoder_get_elapsed_sec(void);
-
-/**
- * @brief Clear encoder count
- * 
- * Resets PCNT counter and internal delta value
- */
-void encoder_clear_count(void);
+const char *test_sensor_get_uptime_str(char *buffer, size_t buffer_size);
 
 #ifdef __cplusplus
 }
