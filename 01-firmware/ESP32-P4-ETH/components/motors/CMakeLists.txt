@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "test_sensor.c"
+    SRCS "motor.c" "encoder_read.c"
     INCLUDE_DIRS "."
-    PRIV_REQUIRES esp_timer
+    PRIV_REQUIRES esp_timer driver
 )
