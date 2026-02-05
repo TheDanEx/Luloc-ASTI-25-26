@@ -12,6 +12,8 @@ idf_component_register(
         ethernet
         mqtt_custom_client
         test_sensor
+        encoder_sensor
+        telemetry_manager
         shared_memory
         state_machine
         audio_player
