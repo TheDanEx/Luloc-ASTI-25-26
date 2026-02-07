@@ -22,6 +22,7 @@
 #include "ethernet.h"
 #include "encoder_sensor.h"
 #include "telemetry_manager.h"
+#include "servo.h"
 #include "driver/gpio.h"
 
 #include "task_comms_cpu1.h"
@@ -48,10 +49,16 @@ static const char *TAG = "comms_c1";
 static QueueHandle_t command_queue = NULL;
 static volatile bool mqtt_initialized = false;
 static encoder_sensor_handle_t encoder_handle = NULL;
+static servo_handle_t servo_handle = NULL;
 
 // Telemetry Handles
 static telemetry_handle_t tel_odometry = NULL;
 static telemetry_handle_t tel_system = NULL;
+
+// Servo animation state
+static float servo_position = 0.5f;          // Current normalized position [0..1]
+static float servo_direction = 0.02f;        // Speed of sweep (positive = right)
+static int64_t servo_last_update_us = 0;    // Timestamp of last servo update
 
 // =============================================================================
 // Helper Function Prototypes
@@ -219,6 +226,28 @@ static void task_comms_cpu1(void *arg)
         ESP_LOGE(TAG, "Failed to init Encoder Sensor");
     }
 
+    // Servo Motor Test (funny sweep animation)
+    servo_config_t servo_cfg = {
+        .gpio_num = 5,                              // GPIO 5 (not used by encoder)
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .timer_num = LEDC_TIMER_1,                  // Different timer from other PWM if any
+        .channel = LEDC_CHANNEL_1,
+        .duty_resolution = LEDC_TIMER_13_BIT,       // 13-bit PWM
+        .freq_hz = 50,                              // 50 Hz standard servo freq
+        .min_pulse_us = 500,                        // 0.5ms (left)
+        .max_pulse_us = 2500,                       // 2.5ms (right)
+    };
+    servo_handle = servo_init(&servo_cfg);
+    if (!servo_handle) {
+        ESP_LOGW(TAG, "Failed to init Servo (non-critical)");
+    } else {
+        // Start sweep from center
+        servo_position = 0.5f;
+        servo_move_normalized(servo_handle, servo_position);
+        servo_last_update_us = esp_timer_get_time();
+        ESP_LOGI(TAG, "Servo initialized and ready for fun!");
+    }
+
     // Performance Monitor
     perf_mon_init();
 
@@ -254,6 +283,29 @@ static void task_comms_cpu1(void *arg)
         if ((now - last_sample_time) >= sample_interval_ticks) {
              collect_sensor_data();
              last_sample_time = now;
+        }
+
+        // Servo Fun Animation: Simple sweep (independent of encoder/wheels)
+        if (servo_handle) {
+            int64_t current_us = esp_timer_get_time();
+            int64_t time_since_last_us = current_us - servo_last_update_us;
+
+            // Update servo every ~50ms (20Hz control rate)
+            if (time_since_last_us >= 50000) {
+                // Simple sweep: oscillate left-right
+                servo_position += servo_direction;
+                if (servo_position >= 1.0f) {
+                    servo_position = 1.0f;
+                    servo_direction = -0.02f;  // Reverse direction
+                } else if (servo_position <= 0.0f) {
+                    servo_position = 0.0f;
+                    servo_direction = 0.02f;   // Reverse direction
+                }
+
+                // Move servo to new position
+                servo_move_normalized(servo_handle, servo_position);
+                servo_last_update_us = current_us;
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));
