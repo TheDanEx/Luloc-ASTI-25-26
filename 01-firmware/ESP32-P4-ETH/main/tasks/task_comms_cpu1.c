@@ -1,48 +1,85 @@
+/*
+ * Task Comms CPU1 - Manages Communications, Telemetry, and Sensor Monitoring
+ * Core: 1
+ * SPDX-License-Identifier: MIT
+ */
+
+#include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+
 #include "esp_log.h"
+#include "esp_timer.h"
+
+// Components
 #include "mqtt_custom_client.h"
 #include "state_machine.h"
 #include "shared_memory.h"
-#include "task_comms_cpu1.h"
-#include <string.h>
 #include "audio_player.h"
-#include "esp_timer.h"
 #include "test_sensor.h"
 #include "performance_monitor.h"
 #include "ethernet.h"
+#include "encoder_sensor.h"
+#include "telemetry_manager.h"
+#include "driver/gpio.h"
 
+#include "task_comms_cpu1.h"
+
+// =============================================================================
+// Constants & Config
+// =============================================================================
 static const char *TAG = "comms_c1";
 
-// Inter-core communication queue for commands from CPU0
-// Queue size: 32 commands, each command up to 256 bytes
+#define CMD_QUEUE_SIZE          32
+#define CMD_QUEUE_ITEM_SIZE     256
+#define POLL_INTERVAL_MS        10
+
+// Encoder Configuration
+#define ENC_PIN_A               GPIO_NUM_18
+#define ENC_PIN_B               GPIO_NUM_19
+#define ENC_PPR_MOTOR           11
+#define ENC_WHEEL_DIA_M         0.063f  // 6.3 cm
+#define ENC_GEAR_RATIO          73.0f   // 73:1 reduction
+
+// =============================================================================
+// Static Variables
+// =============================================================================
 static QueueHandle_t command_queue = NULL;
 static volatile bool mqtt_initialized = false;
+static encoder_sensor_handle_t encoder_handle = NULL;
 
-/**
- * Callback for robot/cmd topic - receives mode change commands
- */
-static void mqtt_cmd_callback(const char *topic, int topic_len, const char *data, int data_len)
+// Telemetry Handles
+static telemetry_handle_t tel_odometry = NULL;
+static telemetry_handle_t tel_system = NULL;
+
+// =============================================================================
+// Helper Function Prototypes
+// =============================================================================
+static void handle_mqtt_command(const char *cmd_str);
+static void mqtt_cmd_callback(const char *topic, int topic_len, const char *data, int data_len);
+static void collect_sensor_data(void);
+
+// =============================================================================
+// MQTT Callbacks & Command Handling
+// =============================================================================
+
+static void handle_mqtt_command(const char *cmd_str)
 {
-    // Parse command: "CMD_MODE:<ID>", "CMD_PLAY_SOUND:<ID>:<VOL>", etc.
-    char cmd_str[64] = {0};
-    strncpy(cmd_str, data, (data_len < sizeof(cmd_str) - 1) ? data_len : sizeof(cmd_str) - 1);
-    cmd_str[(data_len < sizeof(cmd_str) - 1) ? data_len : sizeof(cmd_str) - 1] = '\0';
-    
-    ESP_LOGI(TAG, "Received command: '%s'", cmd_str);
-    
     int mode_id = -1;
+    int sound_id = 0;
+    int volume = -1;
 
+    // 1. Mode Change
     if (strncmp(cmd_str, "CMD_MODE:", 9) == 0) {
         if (sscanf(cmd_str, "CMD_MODE:%d", &mode_id) == 1) {
             if (mode_id >= MODE_NONE && mode_id < MODE_COUNT) {
-                // Request mode change
                 if (state_machine_request_mode((robot_mode_t)mode_id)) {
                     ESP_LOGI(TAG, "Mode changed to: %d", mode_id);
-                    // Send JSON Event
+                    // Events are sporadic, sending manually is fine or could make an event telemetry
                     char event_json[128];
-                    snprintf(event_json, sizeof(event_json), "{\"event\":\"MODE_CHANGE\",\"mode\":%d,\"mode_str\":\"%s\"}", 
+                    snprintf(event_json, sizeof(event_json), 
+                            "{\"event\":\"MODE_CHANGE\",\"mode\":%d,\"mode_str\":\"%s\"}", 
                              mode_id, get_mode_name((robot_mode_t)mode_id));
                     mqtt_custom_client_publish("robot/events", event_json, 0, 1, 0);
                 } else {
@@ -51,20 +88,18 @@ static void mqtt_cmd_callback(const char *topic, int topic_len, const char *data
                 }
             }
         }
-        return;
-    } else if (strncmp(cmd_str, "MODE_AUTONOMOUS", 15) == 0) {
+    } 
+    // 2. Named Modes
+    else if (strncmp(cmd_str, "MODE_AUTONOMOUS", 15) == 0) {
         state_machine_request_mode(MODE_AUTONOMOUS_PATH);
     } else if (strncmp(cmd_str, "MODE_REMOTE_DRIVE", 17) == 0) {
         state_machine_request_mode(MODE_REMOTE_DRIVE);
     } else if (strncmp(cmd_str, "MODE_TELEMETRY_STREAM", 21) == 0) {
         state_machine_request_mode(MODE_TELEMETRY_STREAM);
-    } else if (strncmp(cmd_str, "CMD_PLAY_SOUND", 14) == 0) {
-        // Format: CMD_PLAY_SOUND:ID:[VOLUME]
-        int sound_id = 0;
-        int volume = -1;
-        // Try parsing with volume first
+    } 
+    // 3. Sound
+    else if (strncmp(cmd_str, "CMD_PLAY_SOUND", 14) == 0) {
         if (sscanf(cmd_str, "CMD_PLAY_SOUND:%d:%d", &sound_id, &volume) == 2) {
-             #include "audio_player.h" 
              if (sound_id >= 0 && sound_id < SOUND_MAX) {
                  audio_player_play_vol((audio_sound_t)sound_id, (uint8_t)volume);
                  ESP_LOGI(TAG, "Playing sound %d at vol %d", sound_id, volume);
@@ -75,17 +110,63 @@ static void mqtt_cmd_callback(const char *topic, int topic_len, const char *data
                  ESP_LOGI(TAG, "Playing sound %d", sound_id);
              }
         }
-        return;
     } else {
         ESP_LOGW(TAG, "Unknown command: %s", cmd_str);
-        return;
     }
 }
+
+static void mqtt_cmd_callback(const char *topic, int topic_len, const char *data, int data_len)
+{
+    char cmd_str[64] = {0};
+    int copy_len = (data_len < sizeof(cmd_str) - 1) ? data_len : (sizeof(cmd_str) - 1);
+    
+    strncpy(cmd_str, data, copy_len);
+    cmd_str[copy_len] = '\0';
+    
+    ESP_LOGI(TAG, "MQTT Cmd: '%s'", cmd_str);
+    handle_mqtt_command(cmd_str);
+}
+
+// =============================================================================
+// Data Collection
+// =============================================================================
+
+static void collect_sensor_data(void)
+{
+    // 1. Encoder Data (Odometry)
+    if (encoder_handle) {
+        float speed = encoder_sensor_get_speed(encoder_handle);
+        float distance = encoder_sensor_get_distance(encoder_handle);
+        
+        // Push to telemetry: field=val
+        telemetry_add_float(tel_odometry, "velIZ", speed);
+        telemetry_add_float(tel_odometry, "posIZ", distance);
+    }
+
+    // 2. System Data
+    test_sensor_data_t sensor_data;
+    if (test_sensor_read(&sensor_data) == ESP_OK) {
+        telemetry_add_int(tel_system, "uptime_sec", sensor_data.uptime_sec);
+        telemetry_add_int(tel_system, "uptime_ms", sensor_data.uptime_ms);
+    }
+    
+    // 3. Performance Data
+    // Perf mon generates its own complex report, but we could add summary metrics here
+    // or keep using its internal json reporter if complex nested data is needed.
+    // For Influx, flat fields are better.
+    if (perf_mon_update() == ESP_OK) {
+        // Example: telemetry_add_float(tel_system, "cpu0_usage", perf_val);
+    }
+}
+
+// =============================================================================
+// Public API
+// =============================================================================
 
 void task_comms_cpu1_init_queue(void)
 {
     if (command_queue == NULL) {
-        command_queue = xQueueCreate(32, 256);
+        command_queue = xQueueCreate(CMD_QUEUE_SIZE, CMD_QUEUE_ITEM_SIZE);
         if (command_queue == NULL) {
             ESP_LOGE(TAG, "Failed to create command queue");
         }
@@ -102,100 +183,85 @@ bool task_comms_cpu1_is_ready(void)
     return mqtt_initialized;
 }
 
+// =============================================================================
+// Main Task
+// =============================================================================
+
 static void task_comms_cpu1(void *arg)
 {
-    // Initialize command queue for inter-core communication
+    // 1. Initialization
     task_comms_cpu1_init_queue();
     
-    // Wait for Ethernet connection (IP obtained)
-    // Wait for Ethernet connection (IP obtained)
-    // ESP_LOGI(TAG, "Waiting for Ethernet connection...");
     while (!ethernet_is_connected()) {
         vTaskDelay(pdMS_TO_TICKS(500));
     }
-    ESP_LOGI(TAG, "Ethernet connected - Starting MQTT...");
+    ESP_LOGI(TAG, "Ethernet connected. Initializing subsystems...");
 
-    // All MQTT tasks will inherit this core pinning
+    // MQTT
     if (mqtt_custom_client_init() != ESP_OK) {
-        ESP_LOGE(TAG, "FATAL: Failed to initialize MQTT client - communications disabled");
+        ESP_LOGE(TAG, "FATAL: MQTT Init Failed");
         mqtt_initialized = false;
         vTaskDelete(NULL);
     }
-    
     mqtt_initialized = true;
-    ESP_LOGD(TAG, "MQTT client initialized - running in CPU%d context", xPortGetCoreID());
-    
-    // Wait a bit for MQTT to establish connection
-    // We can rely on auto-reconnect, but a small delay helps
-    vTaskDelay(pdMS_TO_TICKS(500));
-    
-    // Subscribe to robot/cmd
-    mqtt_custom_client_subscribe("robot/cmd", 1);
-    
-    // Wait for subscription to be processed
-    vTaskDelay(pdMS_TO_TICKS(500));
-    
-    // Register callback for subscribed topics
-    esp_err_t cb_err = mqtt_custom_client_register_topic_callback("robot/cmd", mqtt_cmd_callback);
-    if (cb_err != ESP_OK) {
-        ESP_LOGD(TAG, "✓ Callback registered successfully");
+
+    // Encoder
+    encoder_sensor_config_t enc_config = {
+        .pin_a = ENC_PIN_A,
+        .pin_b = ENC_PIN_B,
+        .ppr = ENC_PPR_MOTOR,
+        .wheel_diameter_m = ENC_WHEEL_DIA_M,
+        .gear_ratio = ENC_GEAR_RATIO,
+        .reverse_direction = false
+    };
+    encoder_handle = encoder_sensor_init(&enc_config);
+    if (!encoder_handle) {
+        ESP_LOGE(TAG, "Failed to init Encoder Sensor");
     }
-    
-    // Initialize Performance Monitor
+
+    // Performance Monitor
     perf_mon_init();
+
+    // Setup Telemetries (InfluxDB Line Protocol)
+    // Topic: robot/odometry, Measurement: odometry, Interval: 5000ms
+    tel_odometry = telemetry_create("robot/odometry", "odometry", 5000);
     
-    // Telemetry rate control
-    const TickType_t telemetry_interval = pdMS_TO_TICKS(5000);
-    TickType_t last_telemetry_time = 0;
+    // Topic: robot/telemetry, Measurement: system, Interval: 5000ms
+    tel_system = telemetry_create("robot/telemetry", "system", 5000);
+
+    // Subscriptions
+    vTaskDelay(pdMS_TO_TICKS(1000)); 
+    mqtt_custom_client_subscribe("robot/cmd", 1);
+    mqtt_custom_client_register_topic_callback("robot/cmd", mqtt_cmd_callback);
+
+    ESP_LOGI(TAG, "Comms Task Running on Core %d", xPortGetCoreID());
+
+    // 2. Main Loop
+    TickType_t last_sample_time = 0;
+    const TickType_t sample_interval_ticks = pdMS_TO_TICKS(1000); // 1s sampling rate
 
     while(1) {
-        // High-speed command polling (keep responsive)
-        uint8_t command_buffer[256];
-        if (xQueueReceive(command_queue, command_buffer, 0) == pdTRUE) {
-            ESP_LOGI(TAG, "Command received from CPU0: %s", (char*)command_buffer);
-            // Process command here if needed
-        }
-        
         TickType_t now = xTaskGetTickCount();
-        
-        // Publish telemetry every 5 seconds
-        if ((now - last_telemetry_time) >= telemetry_interval) {
-            test_sensor_data_t sensor_data;
-            if (test_sensor_read(&sensor_data) == ESP_OK) {
-                char json_payload[64];
-                snprintf(json_payload, sizeof(json_payload), "{\"uptime_seconds\":%lu.%03lu}", 
-                         sensor_data.uptime_sec, sensor_data.uptime_ms % 1000);
-                if (mqtt_custom_client_is_connected()) {
-                    mqtt_custom_client_publish("robot/telemetry", json_payload, 0, 0, 0);
-                }
-            }
-            
-            // Update performance stats (calculates usage %)
-            if (perf_mon_update() == ESP_OK) {
-                // Print Performance Report to Console
-                perf_mon_print_report();
 
-                // Publish Performance Stats (JSON Usage %)
-                char *perf_json = malloc(2048);
-                if (perf_json) {
-                    if (perf_mon_get_report_json(perf_json, 2048) == ESP_OK) {
-                       if (mqtt_custom_client_is_connected()) {
-                           mqtt_custom_client_publish("robot/performance", perf_json, 0, 0, 0);
-                       }
-                    }
-                    free(perf_json);
-                }
-            }
-            
-            last_telemetry_time = now;
+        // Process Commands
+        uint8_t command_buffer[CMD_QUEUE_ITEM_SIZE];
+        if (xQueueReceive(command_queue, command_buffer, 0) == pdTRUE) {
+            ESP_LOGI(TAG, "Inter-core msg: %s", (char*)command_buffer);
         }
 
-        // 10ms polling interval for responsiveness
-        vTaskDelay(pdMS_TO_TICKS(10));
+        // Sampling (Push data to telemetry buffers)
+        // Note: Telemetries will flush asynchronously on their own timer
+        if ((now - last_sample_time) >= sample_interval_ticks) {
+             collect_sensor_data();
+             last_sample_time = now;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));
     }
 }
 
 void task_comms_cpu1_start(void)
 {
+    // Core 1, Priority 5
     xTaskCreatePinnedToCore(task_comms_cpu1, "comms_cpu1", 8192, NULL, 5, NULL, 1);
 }
