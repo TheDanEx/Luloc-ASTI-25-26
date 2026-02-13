@@ -30,7 +30,6 @@ build/
 *.map
 flasher_args.json # Generated in build directory
 sdkconfig.old
-sdkconfig
 
 # VS Code files for those working on multiple tools
 .vscode/*
