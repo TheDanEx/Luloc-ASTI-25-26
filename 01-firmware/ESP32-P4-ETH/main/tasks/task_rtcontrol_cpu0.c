@@ -5,12 +5,36 @@
 
 static const char *TAG = "rt_cntrl";
 
+static motor_driver_mcpwm_t motors = {
+    .left  = { .in1 = GPIO_NUM_18, .in2 = GPIO_NUM_19, .unit = MCPWM_UNIT_0, .timer = MCPWM_TIMER_0 },
+    .right = { .in1 = GPIO_NUM_23, .in2 = GPIO_NUM_5,  .unit = MCPWM_UNIT_0, .timer = MCPWM_TIMER_1 },
+
+    .nsleep = GPIO_NUM_NC,   // o un GPIO si lo controlas
+    .pwm_hz = 20000,
+    .deadband = 30,
+    .brake_on_stop = false,
+};
+
 static void task_rtcontrol_cpu0(void *arg)
 {
+    ESP_LOGD(TAG, "Control loop running");
+    motor_mcpwm_init(&motors);
+
     while(1) {
         // Motor control, sensor reading, real-time algorithms
-        ESP_LOGD(TAG, "Control loop running");
-        vTaskDelay(pdMS_TO_TICKS(10));  // 100 Hz
+        ESP_LOGI(TAG, "Turning the motor %s!", "FORWARD");
+        motor_mcpwm_set(&motors, 1000, 1000);   // adelante
+        vTaskDelay(pdMS_TO_TICKS(1500));
+        ESP_LOGI(TAG, "Turning the motor %s!", "STOP");
+        motor_mcpwm_stop(&motors);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        ESP_LOGI(TAG, "Turning the motor %s!", "REVERSE");
+        motor_mcpwm_set(&motors, -1000, -1000); // atrás
+        vTaskDelay(pdMS_TO_TICKS(1500));
+        ESP_LOGI(TAG, "Turning the motor %s!", "STOP");
+        motor_mcpwm_stop(&motors);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(1));  // 100 Hz
     }
 }
 
