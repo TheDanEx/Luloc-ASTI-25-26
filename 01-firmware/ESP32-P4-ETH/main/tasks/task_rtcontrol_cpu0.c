@@ -2,15 +2,18 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "task_rtcontrol_cpu0.h"
+#include "motor.h"
+
 
 static const char *TAG = "rt_cntrl";
 
 static motor_driver_mcpwm_t motors = {
-    .left  = { .in1 = GPIO_NUM_18, .in2 = GPIO_NUM_19, .unit = MCPWM_UNIT_0, .timer = MCPWM_TIMER_0 },
-    .right = { .in1 = GPIO_NUM_23, .in2 = GPIO_NUM_5,  .unit = MCPWM_UNIT_0, .timer = MCPWM_TIMER_1 },
+    .left  = { .in1 = GPIO_NUM_3, .in2 = GPIO_NUM_2 },
+    .right = { .in1 = GPIO_NUM_23, .in2 = GPIO_NUM_5  },
 
-    .nsleep = GPIO_NUM_NC,   // o un GPIO si lo controlas
+    .nsleep = GPIO_NUM_NC,      // o el GPIO real
     .pwm_hz = 20000,
+    .resolution_hz = 10000000,  // 10 MHz
     .deadband = 30,
     .brake_on_stop = false,
 };
@@ -24,12 +27,6 @@ static void task_rtcontrol_cpu0(void *arg)
         // Motor control, sensor reading, real-time algorithms
         ESP_LOGI(TAG, "Turning the motor %s!", "FORWARD");
         motor_mcpwm_set(&motors, 1000, 1000);   // adelante
-        vTaskDelay(pdMS_TO_TICKS(1500));
-        ESP_LOGI(TAG, "Turning the motor %s!", "STOP");
-        motor_mcpwm_stop(&motors);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        ESP_LOGI(TAG, "Turning the motor %s!", "REVERSE");
-        motor_mcpwm_set(&motors, -1000, -1000); // atrás
         vTaskDelay(pdMS_TO_TICKS(1500));
         ESP_LOGI(TAG, "Turning the motor %s!", "STOP");
         motor_mcpwm_stop(&motors);

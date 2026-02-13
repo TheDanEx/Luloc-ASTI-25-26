@@ -9,53 +9,128 @@ static inline int16_t clamp_i16(int16_t v, int16_t lo, int16_t hi) {
     return v;
 }
 
-// MCPWM legacy usa duty en porcentaje (float): 0..100
-static inline float map_1000_to_percent(int16_t v_abs) {
-    // v_abs: 0..1000
-    return (float)v_abs * 100.0f / 1000.0f;
+static inline uint32_t map_1000_to_ticks(uint16_t v_abs, uint32_t period_ticks) {
+    // v_abs: 0..1000  ->  0..period_ticks
+    return (uint32_t)((uint64_t)v_abs * (uint64_t)period_ticks / 1000ULL);
 }
 
-static void set_motor_one(const motor_driver_mcpwm_t *m, const motor_hw_mcpwm_t *hw, int16_t cmd) {
+static esp_err_t setup_one_motor(motor_driver_mcpwm_t *m, motor_hw_mcpwm_t *hw, int group_id)
+{
+    // 1) Crear operador en el grupo (normalmente group 0)
+    mcpwm_operator_config_t oper_cfg = {
+        .group_id = group_id,
+    };
+    ESP_ERROR_CHECK(mcpwm_new_operator(&oper_cfg, &hw->oper));
+
+    // 2) Conectar operador al timer compartido
+    ESP_ERROR_CHECK(mcpwm_operator_connect_timer(hw->oper, m->timer));
+
+    // 3) Crear comparadores (uno por IN1 y otro por IN2)
+    //    update_cmp_on_tez: actualiza el compare cuando el timer llega a 0 (TEZ)
+    mcpwm_comparator_config_t cmp_cfg = {
+        .flags.update_cmp_on_tez = 1,
+    };
+    ESP_ERROR_CHECK(mcpwm_new_comparator(hw->oper, &cmp_cfg, &hw->cmpr_in1));
+    ESP_ERROR_CHECK(mcpwm_new_comparator(hw->oper, &cmp_cfg, &hw->cmpr_in2));
+
+    // 4) Crear generadores (y asignar GPIO físicos)
+    mcpwm_generator_config_t gen_cfg = {0};
+
+    gen_cfg.gen_gpio_num = hw->in1;
+    ESP_ERROR_CHECK(mcpwm_new_generator(hw->oper, &gen_cfg, &hw->gen_in1));
+
+    gen_cfg.gen_gpio_num = hw->in2;
+    ESP_ERROR_CHECK(mcpwm_new_generator(hw->oper, &gen_cfg, &hw->gen_in2));
+
+    // 5) Definir forma de onda PWM:
+    //    - Al inicio del periodo (timer = 0, contando UP): poner HIGH
+    //    - Al llegar al compare: poner LOW
+    //
+    // Esto produce un pulso HIGH de anchura "compare" ticks.
+
+    ESP_ERROR_CHECK(mcpwm_generator_set_action_on_timer_event(
+        hw->gen_in1,
+        MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH)
+    ));
+    ESP_ERROR_CHECK(mcpwm_generator_set_action_on_compare_event(
+        hw->gen_in1,
+        MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, hw->cmpr_in1, MCPWM_GEN_ACTION_LOW)
+    ));
+
+    ESP_ERROR_CHECK(mcpwm_generator_set_action_on_timer_event(
+        hw->gen_in2,
+        MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH)
+    ));
+    ESP_ERROR_CHECK(mcpwm_generator_set_action_on_compare_event(
+        hw->gen_in2,
+        MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, hw->cmpr_in2, MCPWM_GEN_ACTION_LOW)
+    ));
+
+    // Arrancamos “apagado”: fuerza a LOW ambos pines
+    ESP_ERROR_CHECK(mcpwm_generator_set_force_level(hw->gen_in1, 0, true));
+    ESP_ERROR_CHECK(mcpwm_generator_set_force_level(hw->gen_in2, 0, true));
+
+    return ESP_OK;
+}
+
+// Helpers de “force”
+static inline void gen_force_low(mcpwm_gen_handle_t gen)  { (void)mcpwm_generator_set_force_level(gen, 0, true); }
+static inline void gen_force_high(mcpwm_gen_handle_t gen) { (void)mcpwm_generator_set_force_level(gen, 1, true); }
+// Quitar force: -1 (según API / ejemplos de Espressif)
+static inline void gen_release(mcpwm_gen_handle_t gen)    { (void)mcpwm_generator_set_force_level(gen, -1, true); }
+
+static void set_motor_one(motor_driver_mcpwm_t *m, motor_hw_mcpwm_t *hw, int16_t cmd)
+{
     int16_t v = clamp_i16(cmd, -1000, 1000);
 
-    // deadband
     if (m->deadband > 0 && (v < m->deadband && v > -m->deadband)) {
         v = 0;
     }
 
     if (v == 0) {
-        // stop según política
         if (m->brake_on_stop) {
-            // Brake: IN1=IN2=1 (aprox con duty 100%)
-            mcpwm_set_duty(hw->unit, hw->timer, MCPWM_OPR_A, 100.0f);
-            mcpwm_set_duty(hw->unit, hw->timer, MCPWM_OPR_B, 100.0f);
+            // Brake: IN1=IN2=1
+            gen_force_high(hw->gen_in1);
+            gen_force_high(hw->gen_in2);
         } else {
             // Coast: IN1=IN2=0
-            mcpwm_set_duty(hw->unit, hw->timer, MCPWM_OPR_A, 0.0f);
-            mcpwm_set_duty(hw->unit, hw->timer, MCPWM_OPR_B, 0.0f);
+            gen_force_low(hw->gen_in1);
+            gen_force_low(hw->gen_in2);
         }
         return;
     }
 
-    float duty = map_1000_to_percent((int16_t)(v < 0 ? -v : v));
+    uint16_t v_abs = (uint16_t)(v < 0 ? -v : v);
+    uint32_t duty_ticks = map_1000_to_ticks(v_abs, m->period_ticks);
 
-    if (v > 0) {
-        // Forward: IN1 PWM (OPR_A), IN2 = 0 (OPR_B)
-        mcpwm_set_duty(hw->unit, hw->timer, MCPWM_OPR_A, duty);
-        mcpwm_set_duty(hw->unit, hw->timer, MCPWM_OPR_B, 0.0f);
-    } else {
-        // Reverse: IN1 = 0, IN2 PWM
-        mcpwm_set_duty(hw->unit, hw->timer, MCPWM_OPR_A, 0.0f);
-        mcpwm_set_duty(hw->unit, hw->timer, MCPWM_OPR_B, duty);
+    if (duty_ticks == 0) {
+        // equivalente a parado (por si acaso)
+        gen_force_low(hw->gen_in1);
+        gen_force_low(hw->gen_in2);
+        return;
     }
 
-    // Duty mode “normal”
-    mcpwm_set_duty_type(hw->unit, hw->timer, MCPWM_OPR_A, MCPWM_DUTY_MODE_0);
-    mcpwm_set_duty_type(hw->unit, hw->timer, MCPWM_OPR_B, MCPWM_DUTY_MODE_0);
+    if (v > 0) {
+        // Forward: IN1 = PWM, IN2 = 0
+        gen_release(hw->gen_in1);
+        gen_force_low(hw->gen_in2);
+
+        mcpwm_comparator_set_compare_value(hw->cmpr_in1, duty_ticks);
+        // IN2 está forzado a 0, su comparator da igual, pero lo dejamos coherente:
+        mcpwm_comparator_set_compare_value(hw->cmpr_in2, 0);
+    } else {
+        // Reverse: IN1 = 0, IN2 = PWM
+        gen_force_low(hw->gen_in1);
+        gen_release(hw->gen_in2);
+
+        mcpwm_comparator_set_compare_value(hw->cmpr_in1, 0);
+        mcpwm_comparator_set_compare_value(hw->cmpr_in2, duty_ticks);
+    }
 }
 
-bool motor_mcpwm_init(motor_driver_mcpwm_t *m) {
-    if (!m) return false;
+esp_err_t motor_mcpwm_init(motor_driver_mcpwm_t *m)
+{
+    if (!m) return ESP_ERR_INVALID_ARG;
 
     // nSLEEP opcional
     if (m->nsleep != GPIO_NUM_NC) {
@@ -64,88 +139,84 @@ bool motor_mcpwm_init(motor_driver_mcpwm_t *m) {
         gpio_set_level(m->nsleep, 1);
     }
 
-    // LEFT GPIO routing
-    if (m->left.timer == MCPWM_TIMER_0) {
-        mcpwm_gpio_init(m->left.unit, MCPWM0A, m->left.in1);
-        mcpwm_gpio_init(m->left.unit, MCPWM0B, m->left.in2);
-    } else if (m->left.timer == MCPWM_TIMER_1) {
-        mcpwm_gpio_init(m->left.unit, MCPWM1A, m->left.in1);
-        mcpwm_gpio_init(m->left.unit, MCPWM1B, m->left.in2);
-    } else {
-        mcpwm_gpio_init(m->left.unit, MCPWM2A, m->left.in1);
-        mcpwm_gpio_init(m->left.unit, MCPWM2B, m->left.in2);
+    // Defaults razonables si no los has puesto
+    if (m->resolution_hz == 0) m->resolution_hz = 10 * 1000 * 1000; // 10 MHz
+    if (m->pwm_hz == 0)        m->pwm_hz = 20000;                    // 20 kHz
+
+    m->period_ticks = m->resolution_hz / m->pwm_hz;
+    if (m->period_ticks < 10) {
+        ESP_LOGW(TAG, "period_ticks muy bajo (%lu). Sube resolution_hz o baja pwm_hz",
+                 (unsigned long)m->period_ticks);
     }
 
-    // RIGHT GPIO routing
-    if (m->right.timer == MCPWM_TIMER_0) {
-        mcpwm_gpio_init(m->right.unit, MCPWM0A, m->right.in1);
-        mcpwm_gpio_init(m->right.unit, MCPWM0B, m->right.in2);
-    } else if (m->right.timer == MCPWM_TIMER_1) {
-        mcpwm_gpio_init(m->right.unit, MCPWM1A, m->right.in1);
-        mcpwm_gpio_init(m->right.unit, MCPWM1B, m->right.in2);
-    } else {
-        mcpwm_gpio_init(m->right.unit, MCPWM2A, m->right.in1);
-        mcpwm_gpio_init(m->right.unit, MCPWM2B, m->right.in2);
-    }
-
-    // Config común (la aplicas por timer)
-    mcpwm_config_t cfg = {
-        .frequency = (uint32_t)m->pwm_hz,
-        .cmpr_a = 0.0f,                // duty inicial A
-        .cmpr_b = 0.0f,                // duty inicial B
-        .duty_mode = MCPWM_DUTY_MODE_0,
-        .counter_mode = MCPWM_UP_COUNTER,
+    // 1) Crear timer MCPWM
+    mcpwm_timer_config_t tcfg = {
+        .group_id = 0,
+        .clk_src = MCPWM_TIMER_CLK_SRC_DEFAULT,
+        .resolution_hz = m->resolution_hz,
+        .count_mode = MCPWM_TIMER_COUNT_MODE_UP,
+        .period_ticks = m->period_ticks,
     };
+    ESP_ERROR_CHECK(mcpwm_new_timer(&tcfg, &m->timer));
 
-    if (mcpwm_init(m->left.unit, m->left.timer, &cfg) != ESP_OK) {
-        ESP_LOGE(TAG, "mcpwm_init failed (left)");
-        return false;
-    }
+    // 2) Crear recursos para cada motor (operador+gens+comparadores)
+    ESP_ERROR_CHECK(setup_one_motor(m, &m->left,  0));
+    ESP_ERROR_CHECK(setup_one_motor(m, &m->right, 0));
 
-    if (mcpwm_init(m->right.unit, m->right.timer, &cfg) != ESP_OK) {
-        ESP_LOGE(TAG, "mcpwm_init failed (right)");
-        return false;
-    }
+    // 3) Enable + start del timer
+    ESP_ERROR_CHECK(mcpwm_timer_enable(m->timer));
+    ESP_ERROR_CHECK(mcpwm_timer_start_stop(m->timer, MCPWM_TIMER_START_NO_STOP));
 
     motor_mcpwm_stop(m);
-    ESP_LOGI(TAG, "MCPWM init OK (pwm=%lu Hz)", (unsigned long)m->pwm_hz);
-    return true;
+
+    ESP_LOGI(TAG, "MCPWM(prelude) init OK: pwm=%lu Hz, res=%lu Hz, period=%lu ticks",
+             (unsigned long)m->pwm_hz,
+             (unsigned long)m->resolution_hz,
+             (unsigned long)m->period_ticks);
+
+    return ESP_OK;
 }
 
-void motor_mcpwm_set(motor_driver_mcpwm_t *m, int16_t left, int16_t right) {
+void motor_mcpwm_set(motor_driver_mcpwm_t *m, int16_t left, int16_t right)
+{
     if (!m) return;
     set_motor_one(m, &m->left, left);
     set_motor_one(m, &m->right, right);
 }
 
-void motor_mcpwm_stop(motor_driver_mcpwm_t *m) {
+void motor_mcpwm_stop(motor_driver_mcpwm_t *m)
+{
     if (!m) return;
     motor_mcpwm_set(m, 0, 0);
 }
 
-void motor_mcpwm_brake(motor_driver_mcpwm_t *m) {
+void motor_mcpwm_coast(motor_driver_mcpwm_t *m)
+{
     if (!m) return;
-    bool prev = m->brake_on_stop;
-    m->brake_on_stop = true;
-    motor_mcpwm_stop(m);
-    m->brake_on_stop = prev;
+    gen_force_low(m->left.gen_in1);
+    gen_force_low(m->left.gen_in2);
+    gen_force_low(m->right.gen_in1);
+    gen_force_low(m->right.gen_in2);
 }
 
-void motor_mcpwm_coast(motor_driver_mcpwm_t *m) {
+void motor_mcpwm_brake(motor_driver_mcpwm_t *m)
+{
     if (!m) return;
-    // Coast: ambos a 0
-    mcpwm_set_duty(m->left.unit,  m->left.timer,  MCPWM_OPR_A, 0.0f);
-    mcpwm_set_duty(m->left.unit,  m->left.timer,  MCPWM_OPR_B, 0.0f);
-    mcpwm_set_duty(m->right.unit, m->right.timer, MCPWM_OPR_A, 0.0f);
-    mcpwm_set_duty(m->right.unit, m->right.timer, MCPWM_OPR_B, 0.0f);
+    gen_force_high(m->left.gen_in1);
+    gen_force_high(m->left.gen_in2);
+    gen_force_high(m->right.gen_in1);
+    gen_force_high(m->right.gen_in2);
 }
 
-void motor_mcpwm_sleep(motor_driver_mcpwm_t *m, bool sleep) {
+void motor_mcpwm_sleep(motor_driver_mcpwm_t *m, bool sleep)
+{
     if (!m) return;
     if (m->nsleep == GPIO_NUM_NC) return;
 
-    gpio_set_level(m->nsleep, sleep ? 0 : 1);
     if (sleep) {
         motor_mcpwm_coast(m);
+        gpio_set_level(m->nsleep, 0);
+    } else {
+        gpio_set_level(m->nsleep, 1);
     }
 }
