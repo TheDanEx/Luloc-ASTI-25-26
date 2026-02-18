@@ -1,0 +1,170 @@
+//ARDUINO IDE
+//ESTE CODIGO FUNCIONA CON EL IDE DE ARDUINO
+//NO CON ESP IDF
+//COMPILA
+
+
+// Numero de IR sensors
+const int NUM_IR = 8;
+
+
+// Pines de los IR de los sensores, hay 8
+const int ir_pins[NUM_IR] = {
+  4,   // IR1
+  2,   // IR2
+  15,  // IR3
+  13,  // IR4
+  12,  // IR5
+  14,  // IR6
+  27,  // IR7
+  25   // IR8
+};
+
+int white_calibration_values[NUM_IR]; //array de 8 espacios inicializado a 0
+int black_calibration_values[NUM_IR]; //Guarda las medias de blanco y negro de cada sensor
+
+                        // Raw analog values
+int ir_values[NUM_IR]; //guarda los valores de las lecturas de los sensores
+                       //despues se gastan para comprarar si está sobre blanco o negro
+
+                    // Valores "binarizados" de las lecturas: 0 = white, 1 = black
+bool binary[NUM_IR]; //booleano porque solo necesitas 1 o 0
+                    // aqui luego un futuro codigo lee dónde está la línea
+
+
+//la funcion lee los sensores 10 veces 
+//la media se guarda para sacar un valor aproximado
+//comparamos la lectura del sensor a ese valor aproximado
+//Lo hacemos para blanco y negro
+//ACTUALIZAR A -> Lectura continua durante un tiempo x
+//ACTUALIZAR A -> Guardar max y min
+
+void set_average_white(void) { 
+
+  for (int i = 0; i < NUM_IR; i++) {
+    int avrg = 0;
+    for (int x = 0; x < 10; x++) {
+      avrg += analogRead(ir_pins[i]);
+    }
+    
+    avrg = avrg / 10;
+    white_calibration_values[i] = avrg;
+
+    Serial.print(white_calibration_values[i]);
+    Serial.print(", ");
+
+  }
+}
+
+//Lo mismo que con el blanco
+void set_average_black(void) {
+
+  for (int i = 0; i < NUM_IR; i++) {
+    int avrg = 0;
+    for (int x = 0; x < 10; x++) {
+      avrg += analogRead(ir_pins[i]);
+    }
+    
+    avrg = avrg / 10;
+    black_calibration_values[i] = avrg;
+
+    Serial.print(white_calibration_values[i]);
+    Serial.print(", ");
+
+  }
+}
+
+//leer los sensores
+//la función hace que el código sea más legible
+void read_array(void) {
+      Serial.println("***IR RAW DATA***"); //los serial print son solo para debugging
+      Serial.println("");
+      for (int i = 0; i <NUM_IR; i++){
+        ir_values[i] = analogRead(ir_pins[i]);
+        Serial.print(ir_values[i]);
+        Serial.print(" ");
+    } 
+}
+
+
+//ver qué valor del sensor leido está más cerca del valor de calibración
+//detecta blanco o negro con eso
+// En negro el valor del sensor es más alto
+// 4 Mayor valor -> menor luz refleja
+//Ej. si leemos 300 -> media negro = 4000, media blanco = 200
+//la resta es más pequeña cuando se hace con blanco
+//estás sobre blanco
+//HACER LO QUE ME HA DICHO DANI DEL OTRO EQUIPO:
+//Leer umbral entre max y min y avrg. UNA MATRIZ. 
+//LECTURA CONTINUA, NO 10 VECES
+//VER SI SENSOR ENTRE ESE VALOR
+bool binarizar(int sensorValues, int whiteCalibration, int blackCalibration) {
+
+  // If comparar < sensor_values → return 0
+  if (abs(sensorValues-blackCalibration) < abs(sensorValues-whiteCalibration)) { 
+    Serial.print("+");
+    Serial.print("; ");
+    return 1;  // black
+    //cada return rellena el array binarizado
+
+  } else {
+    Serial.print("-");
+    Serial.print("; ");
+    return 0;  // white
+  }
+}
+
+
+void setup() {
+  Serial.begin(115200);
+
+  // Inicializa los pines del sensor
+  for (int i = 0; i < NUM_IR; i++) {
+    pinMode(ir_pins[i], INPUT);
+  }
+
+  pinMode(33, OUTPUT);    //pin enable del sensor, HIGH es encendido
+                          //si no se activa, el sensor no lee
+  analogReadResolution(12); // 0–4092
+  digitalWrite(33, HIGH); 
+
+
+  Serial.println("READING WHITE VALUES IN 4 SECONDS");
+  Serial.println("PUT OVER WHITE SURFACE");
+  delay(4000);
+  set_average_white();
+  Serial.println();
+  Serial.println("WHITE CALIBRATION DONE. PROCEEDING TO BLACK CALIBRATION");
+  Serial.println();
+  delay(1000);
+  
+  Serial.println("READING BLACK VALUES IN 4 SECONDS");
+  Serial.println("PUT OVER BLACK SURFACE");
+  delay(4000);
+  set_average_black();
+  Serial.println();
+  Serial.println("CALIBRATION DONE. PROCEEDING TO READING MODE");
+}
+
+
+void loop() {
+
+
+  // Read sensors
+  read_array();
+
+  Serial.println();
+  //binarize the values
+  for (int i = 0; i < NUM_IR; i++) {
+    binary[i] = binarizar(ir_values[i], white_calibration_values[i], black_calibration_values[i]);
+  }
+  //print binary values
+  Serial.println();
+  for (int i = 0; i< NUM_IR; i++){
+    Serial.print(binary[i]);
+    Serial.print(" ");
+    }
+  Serial.println();
+  Serial.println();
+  delay(2000);
+}
