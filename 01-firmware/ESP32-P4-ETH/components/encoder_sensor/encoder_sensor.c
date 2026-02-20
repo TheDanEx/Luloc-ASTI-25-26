@@ -116,7 +116,7 @@ encoder_sensor_handle_t encoder_sensor_init(const encoder_sensor_config_t *confi
     // ==========================================
     mcpwm_capture_timer_config_t cap_timer_conf = {
         .clk_src = MCPWM_CAPTURE_CLK_SRC_DEFAULT,
-        .group_id = 1, // Automático
+        .group_id = 0, // Automático
         .resolution_hz = 1000000, // 1 MHz = 1 tick por microsegundo
     };
     mcpwm_new_capture_timer(&cap_timer_conf, &ctx->cap_timer);
@@ -142,6 +142,27 @@ encoder_sensor_handle_t encoder_sensor_init(const encoder_sensor_config_t *confi
 
     ctx->initialized = true;
     return (encoder_sensor_handle_t)ctx;
+}
+
+esp_err_t encoder_sensor_deinit(encoder_sensor_handle_t handle)
+{
+    if (handle == NULL) return ESP_ERR_INVALID_ARG;
+    encoder_sensor_context_t *ctx = (encoder_sensor_context_t *)handle;
+
+    mcpwm_capture_timer_stop(ctx->cap_timer);
+    mcpwm_capture_timer_disable(ctx->cap_timer);
+    mcpwm_capture_channel_disable(ctx->cap_chan);
+    mcpwm_del_capture_channel(ctx->cap_chan);
+    mcpwm_del_capture_timer(ctx->cap_timer);
+
+    pcnt_unit_stop(ctx->pcnt_unit);
+    pcnt_unit_disable(ctx->pcnt_unit);
+    pcnt_del_channel(ctx->pcnt_chan_a);
+    pcnt_del_channel(ctx->pcnt_chan_b);
+    pcnt_del_unit(ctx->pcnt_unit);
+    
+    free(ctx);
+    return ESP_OK;
 }
 
 
