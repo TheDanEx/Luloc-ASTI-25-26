@@ -26,7 +26,7 @@ static void task_rtcontrol_cpu0(void *arg)
     while(1) {
         // Motor control, sensor reading, real-time algorithms
         //ESP_LOGI(TAG, "Turning th motor %s!", "FORWARD");
-        motor_mcpwm_set(&motors, 700, 700);   // adelante
+        motor_mcpwm_set(&motors, -1000, -1000);   // adelante
         vTaskDelay(pdMS_TO_TICKS(1500));
         // ESP_LOGI(TAG, "Turning the motor %s!", "STOP");
         // motor_mcpwm_stop(&motors);
