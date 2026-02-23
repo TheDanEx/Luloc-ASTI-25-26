@@ -1,3 +1,6 @@
 {
-  "idf.openOcdConfigs": ["board/esp32p4-ftdi.cfg"]
+  "idf.openOcdConfigs": [
+    "board/esp32p4-ftdi.cfg"
+  ],
+  "cmake.sourceDirectory": "C:/Users/UJA/Desktop/yo(irene)/asti/cosas ya si para el asti/Luloc-ASTI-25-26/01-firmware/ESP32-P4-ETH/components/shared_memory"
 }
