@@ -1,0 +1,167 @@
+  #include <esp_task.h>
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_log.h"
+#include "driver/gpio.h"
+#include "driver/adc.h"
+
+#define ledR 33
+#define ledG 32
+#define ledY 26
+#define readEnable 16
+
+#define STACK_SIZE 1024 * 3
+#define R_delay 1000
+#define G_delay 2000
+#define Y_delay 100
+
+const char *tag = "Main";
+esp_err_t set_adc(void);
+esp_err_t read_adc(void);
+int adc_val[8] = {0}; // Arreglo simplifica el código en lugar de 8 variables sueltas
+
+esp_err_t init_led(void);
+esp_err_t createTasks(void);
+esp_err_t set_adc(void);
+
+void vTaskReadAdc(void *pvParameters);
+void vTaskR(void *pvParameters);
+void vTaskG(void *pvParameters);
+void vTaskY(void *pvParameters);
+
+void app_main(void)
+{
+    
+    init_led();
+    set_adc();
+    createTasks();
+   
+
+}
+
+esp_err_t init_led(void)
+{
+    gpio_reset_pin(ledR);
+    gpio_set_direction(ledR, GPIO_MODE_OUTPUT);
+
+    gpio_reset_pin(ledG);
+    gpio_set_direction(ledG, GPIO_MODE_OUTPUT);
+
+    gpio_reset_pin(ledY);
+    gpio_set_direction(ledY, GPIO_MODE_OUTPUT);
+
+    gpio_reset_pin(readEnable);
+    gpio_set_direction(readEnable, GPIO_MODE_OUTPUT);
+
+    return ESP_OK;
+}
+
+esp_err_t createTasks(void)
+{
+    static uint8_t ucParameterToPass;
+    TaskHandle_t xHandle = NULL;
+
+   /* xTaskCreate(vTaskR,
+                "vTaskR",
+                STACK_SIZE,
+                &ucParameterToPass,
+                2,
+                &xHandle);
+
+    xTaskCreate(vTaskG,
+                "vTaskG",
+                STACK_SIZE,
+                &ucParameterToPass,
+                2,
+                &xHandle);
+
+    xTaskCreate(vTaskY,
+                "vTaskY",
+                STACK_SIZE,
+                &ucParameterToPass,
+                2,
+                &xHandle);
+
+    */
+
+    xTaskCreate(vTaskReadAdc,
+                "vTaskReadAdc",
+                STACK_SIZE,
+                &ucParameterToPass,
+                1,
+                &xHandle);
+
+    return ESP_OK;
+}
+/*
+void vTaskR(void *pvParameters)
+{
+    while (1)
+    {
+        ESP_LOGI(tag, "led R");
+        gpio_set_level(ledR, 1);
+        vTaskDelay(pdMS_TO_TICKS(R_delay));
+        gpio_set_level(ledR, 0);
+        vTaskDelay(pdMS_TO_TICKS(R_delay));
+    }
+}
+
+void vTaskG(void *pvParameters)
+{
+    while (1)
+    {
+        ESP_LOGW(tag, "led G");
+        gpio_set_level(ledG, 1);
+        vTaskDelay(pdMS_TO_TICKS(G_delay));
+        gpio_set_level(ledG, 0);
+        vTaskDelay(pdMS_TO_TICKS(G_delay));
+    }
+}
+
+void vTaskY(void *pvParameters)
+{
+    while (1)
+    {
+        ESP_LOGI(tag, "led Y");
+        gpio_set_level(ledY, 1);
+        vTaskDelay(pdMS_TO_TICKS(ledY));
+        gpio_set_level(ledY, 0);
+        vTaskDelay(pdMS_TO_TICKS(Y_delay));
+    }
+}
+*/
+void vTaskReadAdc(void *pvParameters)
+{
+    while (1)
+    {
+        // Bucle para leer los 8 canales y reducir líneas de código
+        for (int i = 0; i < 8; i++)
+        {
+            // Nota: adc1_get_raw toma el canal como argumento.
+            // ADC1_CHANNEL_0 es 0, ADC1_CHANNEL_1 es 1, etc.
+            adc_val[i] = adc1_get_raw((adc1_channel_t)i);
+            ESP_LOGI(tag, "ADC%d Value: %d", i + 1, adc_val[i]);
+        }
+        ESP_LOGI(tag, "");
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+esp_err_t set_adc(void)
+{
+    // Configuración del ancho de bits (solo se necesita hacer UNA vez para el ADC1)
+    adc1_config_width(ADC_WIDTH_BIT_12);
+
+    // Configuración de atenuación por canal
+    adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11);
+    adc1_config_channel_atten(ADC1_CHANNEL_1, ADC_ATTEN_DB_11);
+    adc1_config_channel_atten(ADC1_CHANNEL_2, ADC_ATTEN_DB_11);
+    adc1_config_channel_atten(ADC1_CHANNEL_3, ADC_ATTEN_DB_11);
+    adc1_config_channel_atten(ADC1_CHANNEL_4, ADC_ATTEN_DB_11);
+    adc1_config_channel_atten(ADC1_CHANNEL_5, ADC_ATTEN_DB_11);
+    adc1_config_channel_atten(ADC1_CHANNEL_6, ADC_ATTEN_DB_11);
+    adc1_config_channel_atten(ADC1_CHANNEL_7, ADC_ATTEN_DB_11);
+    gpio_set_level(readEnable, 1);
+    return ESP_OK;
+}
