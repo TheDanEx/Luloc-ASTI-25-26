@@ -1,0 +1,10 @@
+[0.007s] Invoking command in '/home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/build/algsumo': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/thepkx/turtlebot3_ws/install/turtlebot3_teleop:/home/thepkx/turtlebot3_ws/install/turtlebot3_example:/opt/ros/humble /usr/bin/cmake --build /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/build/algsumo -- -j12 -l12
+[0.039s] [ 50%] [32mBuilding CXX object CMakeFiles/algsumo.dir/src/main.cpp.o[0m
+[0.052s] [100%] [32m[1mLinking CXX executable algsumo[0m
+[0.095s] /usr/bin/ld: /usr/lib/gcc/x86_64-linux-gnu/11/../../../x86_64-linux-gnu/Scrt1.o: en la función `_start':
+[0.095s] (.text+0x1b): referencia a `main' sin definir
+[0.096s] collect2: error: ld returned 1 exit status
+[0.097s] gmake[2]: *** [CMakeFiles/algsumo.dir/build.make:159: algsumo] Error 1
+[0.097s] gmake[1]: *** [CMakeFiles/Makefile2:137: CMakeFiles/algsumo.dir/all] Error 2
+[0.097s] gmake: *** [Makefile:146: all] Error 2
+[0.099s] Invoked command in '/home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/build/algsumo' returned '2': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/thepkx/turtlebot3_ws/install/turtlebot3_teleop:/home/thepkx/turtlebot3_ws/install/turtlebot3_example:/opt/ros/humble /usr/bin/cmake --build /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/build/algsumo -- -j12 -l12

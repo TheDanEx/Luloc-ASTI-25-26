@@ -1,0 +1,23 @@
+[0.008s] Invoking command in '/home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/build/algsumo': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/thepkx/turtlebot3_ws/install/turtlebot3_teleop:/home/thepkx/turtlebot3_ws/install/turtlebot3_example:/opt/ros/humble /usr/bin/cmake --build /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/build/algsumo -- -j12 -l12
+[0.033s] [35m[1mConsolidate compiler generated dependencies of target algsumo[0m
+[0.046s] [100%] Built target algsumo
+[0.055s] Invoked command in '/home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/build/algsumo' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/thepkx/turtlebot3_ws/install/turtlebot3_teleop:/home/thepkx/turtlebot3_ws/install/turtlebot3_example:/opt/ros/humble /usr/bin/cmake --build /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/build/algsumo -- -j12 -l12
+[0.065s] Invoking command in '/home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/build/algsumo': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/thepkx/turtlebot3_ws/install/turtlebot3_teleop:/home/thepkx/turtlebot3_ws/install/turtlebot3_example:/opt/ros/humble /usr/bin/cmake --install /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/build/algsumo
+[0.072s] -- Install configuration: ""
+[0.072s] -- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/lib/algsumo/algsumo
+[0.072s] -- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/ament_index/resource_index/package_run_dependencies/algsumo
+[0.072s] -- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/ament_index/resource_index/parent_prefix_path/algsumo
+[0.072s] -- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/environment/ament_prefix_path.sh
+[0.072s] -- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/environment/ament_prefix_path.dsv
+[0.072s] -- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/environment/path.sh
+[0.072s] -- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/environment/path.dsv
+[0.072s] -- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/local_setup.bash
+[0.072s] -- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/local_setup.sh
+[0.072s] -- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/local_setup.zsh
+[0.072s] -- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/local_setup.dsv
+[0.072s] -- Installing: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/package.dsv
+[0.072s] -- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/ament_index/resource_index/packages/algsumo
+[0.072s] -- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/cmake/algsumoConfig.cmake
+[0.072s] -- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/cmake/algsumoConfig-version.cmake
+[0.072s] -- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/package.xml
+[0.073s] Invoked command in '/home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/build/algsumo' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/thepkx/turtlebot3_ws/install/turtlebot3_teleop:/home/thepkx/turtlebot3_ws/install/turtlebot3_example:/opt/ros/humble /usr/bin/cmake --install /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/build/algsumo

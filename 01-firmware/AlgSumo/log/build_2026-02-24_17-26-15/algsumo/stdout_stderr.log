@@ -1,0 +1,8 @@
+[ 50%] [32mBuilding CXX object CMakeFiles/algsumo.dir/src/main.cpp.o[0m
+[100%] [32m[1mLinking CXX executable algsumo[0m
+/usr/bin/ld: /usr/lib/gcc/x86_64-linux-gnu/11/../../../x86_64-linux-gnu/Scrt1.o: en la función `_start':
+(.text+0x1b): referencia a `main' sin definir
+collect2: error: ld returned 1 exit status
+gmake[2]: *** [CMakeFiles/algsumo.dir/build.make:159: algsumo] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:137: CMakeFiles/algsumo.dir/all] Error 2
+gmake: *** [Makefile:146: all] Error 2

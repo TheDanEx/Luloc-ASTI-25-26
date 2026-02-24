@@ -1,0 +1,19 @@
+[35m[1mConsolidate compiler generated dependencies of target algsumo[0m
+[100%] Built target algsumo
+-- Install configuration: ""
+-- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/lib/algsumo/algsumo
+-- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/ament_index/resource_index/package_run_dependencies/algsumo
+-- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/ament_index/resource_index/parent_prefix_path/algsumo
+-- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/environment/ament_prefix_path.sh
+-- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/environment/ament_prefix_path.dsv
+-- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/environment/path.sh
+-- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/environment/path.dsv
+-- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/local_setup.bash
+-- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/local_setup.sh
+-- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/local_setup.zsh
+-- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/local_setup.dsv
+-- Installing: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/package.dsv
+-- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/ament_index/resource_index/packages/algsumo
+-- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/cmake/algsumoConfig.cmake
+-- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/cmake/algsumoConfig-version.cmake
+-- Up-to-date: /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/algsumo/share/algsumo/package.xml

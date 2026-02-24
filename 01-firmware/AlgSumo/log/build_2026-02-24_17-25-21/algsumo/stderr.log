@@ -1,0 +1,7 @@
+[01m[K/home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/src/main.cpp:1:10:[m[K [01;31m[Kfatal error: [m[Kmicro_ros_arduino.h: No existe el archivo o el directorio
+    1 | #include [01;31m[K<micro_ros_arduino.h>[m[K
+      |          [01;31m[K^~~~~~~~~~~~~~~~~~~~~[m[K
+compilation terminated.
+gmake[2]: *** [CMakeFiles/algsumo.dir/build.make:76: CMakeFiles/algsumo.dir/src/main.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:137: CMakeFiles/algsumo.dir/all] Error 2
+gmake: *** [Makefile:146: all] Error 2

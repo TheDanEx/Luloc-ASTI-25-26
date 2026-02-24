@@ -1,0 +1,24 @@
+[0.007s] Invoking command in '/home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/build/AlgSumo': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/thepkx/turtlebot3_ws/install/turtlebot3_teleop:/home/thepkx/turtlebot3_ws/install/turtlebot3_example:/opt/ros/humble /usr/bin/cmake /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo -DCMAKE_INSTALL_PREFIX=/home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/AlgSumo
+[0.015s] -- Found ament_cmake: 1.3.13 (/opt/ros/humble/share/ament_cmake/cmake)
+[0.097s] -- Found rclcpp: 16.0.18 (/opt/ros/humble/share/rclcpp/cmake)
+[0.116s] -- Found rosidl_generator_c: 3.1.8 (/opt/ros/humble/share/rosidl_generator_c/cmake)
+[0.117s] -- Found rosidl_adapter: 3.1.8 (/opt/ros/humble/share/rosidl_adapter/cmake)
+[0.121s] -- Found rosidl_generator_cpp: 3.1.8 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)
+[0.127s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[0.135s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[0.154s] -- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)
+[0.155s] -- Found rmw_fastrtps_cpp: 6.2.10 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)
+[0.221s] -- Using RMW implementation 'rmw_fastrtps_cpp' as default
+[0.286s] WARNING: Package name "AlgSumo" does not follow the naming conventions. It should start with a lower case letter and only contain lower case letters, digits, underscores, and dashes.
+[0.291s] [31mCMake Error at /opt/ros/humble/share/ament_cmake_core/cmake/core/ament_package_xml.cmake:53 (message):
+[0.291s]   ament_package_xml() package name 'AlgSumo' in '/package.xml' does not match
+[0.291s]   current PROJECT_NAME 'control_sumo'.  You must call project() with the same
+[0.291s]   package name before.
+[0.291s] Call Stack (most recent call first):
+[0.291s]   /opt/ros/humble/share/ament_cmake_core/cmake/core/ament_package.cmake:63 (ament_package_xml)
+[0.291s]   CMakeLists.txt:21 (ament_package)
+[0.291s] 
+[0.291s] [0m
+[0.291s] -- Configuring incomplete, errors occurred!
+[0.291s] See also "/home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/build/AlgSumo/CMakeFiles/CMakeOutput.log".
+[0.297s] Invoked command in '/home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/build/AlgSumo' returned '1': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/thepkx/turtlebot3_ws/install/turtlebot3_teleop:/home/thepkx/turtlebot3_ws/install/turtlebot3_example:/opt/ros/humble /usr/bin/cmake /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo -DCMAKE_INSTALL_PREFIX=/home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/AlgSumo

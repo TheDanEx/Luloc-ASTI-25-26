@@ -1,0 +1,2 @@
+Invoking command in '/home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/build/control_sumo': /usr/bin/cmake /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo -DCMAKE_INSTALL_PREFIX=/home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/control_sumo
+Invoked command in '/home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/build/control_sumo' returned '1': /usr/bin/cmake /home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo -DCMAKE_INSTALL_PREFIX=/home/thepkx/UJIRobotics/Luloc-ASTI2026/01-firmware/AlgSumo/install/control_sumo
