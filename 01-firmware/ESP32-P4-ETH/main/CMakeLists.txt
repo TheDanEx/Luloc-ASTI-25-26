@@ -19,6 +19,8 @@ idf_component_register(
         audio_player
         esp_timer
         performance_monitor
+        log
+        motors
     PRIV_REQUIRES
         nvs_flash
         esp_event
