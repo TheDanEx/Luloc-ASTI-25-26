@@ -39,8 +39,8 @@ static const char *TAG = "comms_c1";
 #define ENC_PIN_A               GPIO_NUM_18
 #define ENC_PIN_B               GPIO_NUM_19
 #define ENC_PPR_MOTOR           11
-#define ENC_WHEEL_DIA_M         0.063f  // 6.3 cm
-#define ENC_GEAR_RATIO          73.0f   // 73:1 reduction
+#define ENC_WHEEL_DIA_M         0.068f  // 6.3 cm
+#define ENC_GEAR_RATIO          21.3f   // 73:1 reduction
 
 // =============================================================================
 // Static Variables
@@ -141,6 +141,9 @@ static void collect_sensor_data(void)
         // Push to telemetry: field=val
         telemetry_add_float(tel_odometry, "velIZ", speed);
         telemetry_add_float(tel_odometry, "posIZ", distance);
+        
+        // Also print to serial for offline debugging
+        ESP_LOGI(TAG, "Encoder: speed=%.3f m/s, distance=%.3f m", speed, distance);
     }
 
     // 2. System Data
@@ -191,19 +194,20 @@ static void task_comms_cpu1(void *arg)
 {
     // 1. Initialization
     task_comms_cpu1_init_queue();
-    
-    while (!ethernet_is_connected()) {
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
+    ESP_LOGI(TAG, "Comms task started, waiting for Ethernet link...");
+
+    // while (!ethernet_is_connected()) {
+    //     vTaskDelay(pdMS_TO_TICKS(500));
+    // }
     ESP_LOGI(TAG, "Ethernet connected. Initializing subsystems...");
 
     // MQTT
-    if (mqtt_custom_client_init() != ESP_OK) {
-        ESP_LOGE(TAG, "FATAL: MQTT Init Failed");
-        mqtt_initialized = false;
-        vTaskDelete(NULL);
-    }
-    mqtt_initialized = true;
+    // if (mqtt_custom_client_init() != ESP_OK) {
+    //     ESP_LOGE(TAG, "FATAL: MQTT Init Failed");
+    //     mqtt_initialized = false;
+    //     vTaskDelete(NULL);
+    // }
+    // mqtt_initialized = true;
 
     // Encoder
     encoder_sensor_config_t enc_config = {
@@ -231,8 +235,8 @@ static void task_comms_cpu1(void *arg)
 
     // Subscriptions
     vTaskDelay(pdMS_TO_TICKS(1000)); 
-    mqtt_custom_client_subscribe("robot/cmd", 1);
-    mqtt_custom_client_register_topic_callback("robot/cmd", mqtt_cmd_callback);
+    // mqtt_custom_client_subscribe("robot/cmd", 1);
+    // mqtt_custom_client_register_topic_callback("robot/cmd", mqtt_cmd_callback);
 
     ESP_LOGI(TAG, "Comms Task Running on Core %d", xPortGetCoreID());
 
@@ -263,5 +267,5 @@ static void task_comms_cpu1(void *arg)
 void task_comms_cpu1_start(void)
 {
     // Core 1, Priority 5
-    xTaskCreatePinnedToCore(task_comms_cpu1, "comms_cpu1", 8192, NULL, 5, NULL, 1);
+    xTaskCreatePinnedToCore(task_comms_cpu1, "comms_cpu1", 8192, NULL, 10, NULL, 1);
 }
