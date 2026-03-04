@@ -15,8 +15,8 @@ RUN apt-get update && apt-get install -y \
     ros-humble-image-tools \
     && rm -rf /var/lib/apt/lists/*
 
-# Instala cv_bridge y Flask
-RUN pip3 install cv_bridge flask
+# Instala dependencias Python de vision y MQTT
+RUN pip3 install cv_bridge flask paho-mqtt
 
 # Carpeta de trabajo dentro del contenedor
 WORKDIR /root/vision_node

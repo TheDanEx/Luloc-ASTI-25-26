@@ -1,3 +1,5 @@
+import os
+
 from flask import Flask, Response
 import numpy as np
 import imageio.v3 as iio
@@ -5,14 +7,25 @@ import cv2
 from skimage.transform import resize,ProjectiveTransform, warp
 from picamera2 import Picamera2
 from PIL import Image, ImageDraw, ImageFont
+import paho.mqtt.client as mqtt
 
 # ---------------- Configuración ----------------
 W, H = 820, 616              # resolución de captura
 OUT_W, OUT_H = 820, 616         # resolución de procesamiento (sube FPS)
 JPEG_QUALITY = 50
 BOUNDARY = b"frame"
+MQTT_BROKER_HOST = os.getenv("MQTT_BROKER_HOST", "127.0.0.1")
+MQTT_BROKER_PORT = int(os.getenv("MQTT_BROKER_PORT", "1883"))
+MQTT_TOPIC_CURVATURA = os.getenv("MQTT_TOPIC_CURVATURA", "robot/curvatura")
 
 app = Flask(__name__)
+
+try:
+    mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="vision_feedforward")
+except AttributeError:
+    mqtt_client = mqtt.Client(client_id="vision_feedforward")
+mqtt_client.connect_async(MQTT_BROKER_HOST, MQTT_BROKER_PORT, keepalive=30)
+mqtt_client.loop_start()
 
 # ---------------- Cámara ----------------
 picam2 = Picamera2()
@@ -121,7 +134,16 @@ def frames():
 
             theta_prev = theta
 
-        text = f"curvatura= {curvatura/len(puntos_linea)}"
+        curvatura_feedforward = curvatura / len(puntos_linea)
+
+        mqtt_client.publish(
+            MQTT_TOPIC_CURVATURA,
+            f"{curvatura_feedforward:.6f}",
+            qos=0,
+            retain=False,
+        )
+
+        text = f"curvatura= {curvatura_feedforward:.6f}"
         draw2.text((20, 50), text, fill=(255, 0, 0),font=font)
 
 

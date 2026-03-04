@@ -4,3 +4,10 @@
 02-software/.vscode/browse.vc.db-wal
 02-software/.vscode/c_cpp_properties.json
 02-software/.vscode/settings.json
+.vscode/browse.vc.db
+.vscode/browse.vc.db-shm
+.vscode/browse.vc.db-wal
+.vscode/c_cpp_properties.json
+.vscode/extensions.json
+.vscode/launch.json
+.vscode/settings.json
