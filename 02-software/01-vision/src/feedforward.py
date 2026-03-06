@@ -8,7 +8,9 @@ from skimage.transform import resize,ProjectiveTransform, warp
 from picamera2 import Picamera2
 from PIL import Image, ImageDraw, ImageFont
 import paho.mqtt.client as mqtt
-
+import matplotlib.pyplot as plt
+from matplotlib.backend_bases import MouseButton
+from pprint import pprint
 # ---------------- Configuración ----------------
 W, H = 820, 616              # resolución de captura
 OUT_W, OUT_H = 820, 616         # resolución de procesamiento (sube FPS)
@@ -35,6 +37,45 @@ picam2.configure(
     )
 )
 picam2.start()
+
+######################################
+# Selección de puntos con el ratón   #
+######################################
+image = picam2.capture_array()
+fig, axs = plt.subplots(1, 1, layout="constrained")
+axs.imshow(image)
+axs.set_axis_off()
+descr_puntos = ["superior izquierdo", "superior derecho", "inferior izquierdo", "inferior derecho"]
+puntos = []
+nPunto = 0
+def on_click(event):
+    global nPunto
+    if event.button is MouseButton.LEFT:
+        x = round(event.xdata)
+        y = round(event.ydata)
+        print(f'Punto seleccionado: [{x}, {y}]')
+        axs.plot(x, y, '.r')
+        puntos.append([x,y])
+        plt.show()
+        nPunto += 1
+        if nPunto==4:
+            plt.disconnect(binding_id)
+            plt.close()
+        else:
+            print(f"Introduzca el punto {descr_puntos[nPunto]}...")
+
+binding_id = plt.connect('button_press_event', on_click)
+print(f"Introduzca el punto {descr_puntos[nPunto]}...")
+plt.show()
+
+print("Puntos leídos:")
+src = np.array(puntos)
+pprint(src)
+plt.close()
+
+######################################
+
+
 
 def frames():
     while True:
@@ -67,10 +108,7 @@ def frames():
         )
         
         #puntos obtenidos mediante el script crearPerspectiva
-        puntos = [[293, 301],
-       [532, 281],
-       [171, 579],
-       [726, 513]]
+        
 
         pts1 = np.float32(puntos)
         pts2 = np.float32([[0,0],[OUT_H,0],[0,OUT_W],[OUT_H,OUT_W]])
