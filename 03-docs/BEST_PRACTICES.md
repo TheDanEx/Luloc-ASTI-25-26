@@ -5,25 +5,31 @@ Este documento establece las normativas estrictas de desarrollo que rigen el eco
 ## 1. Prioridad: Legibilidad y Estructura
 El código se escribe una vez, pero se lee mil veces.
 - **Evite el código denso o sobre-optimizado prematuramente:** A menos que un lazo PID o procesamiento de visión lo exija matemáticamente, opte por construcciones lógicas legibles sobre los "one-liners".
-- **Comentarios Funcionales:** El código describe el *qué*, los comentarios deben describir el *por qué* y el *cómo* detallado de arquitecturas subyacentes. E.g., no comente `// Incrementa variable`, comente `// Se usa ++ para evadir bug conocido en el macro del HAL de Espressif`.
+- **Código Auto-Documentado (Minimismo de Comentarios):** El mejor comentario es un buen código. Evite redundancias lógicas (ej. no comente `// Incrementa variable`). Utilice nombres de variables y funciones suficientemente descriptivos para que la lógica se explique sola.
+- **Uso Estricto y Breve de Comentarios:** LOS COMENTARIOS DEBEN SER POCOS. Únicamente se validarán explicaciones *breves* de 1-2 líneas en bloques altamente complejos generados por IA (ej. matemáticas de cuaterniones, hacks de registros físicos) para explicar el *por qué* de la decisión algorítmica. Jamás sobre-comente el flujo evidente.
 
 ## 2. Nomenclatura (Naming Conventions)
+- **Idioma del Proyecto:** TODO archivo, carpeta secundaria, módulo, variable, y función DEBE estar nombrado enteramente en **Inglés**. A la vez, el contenido de la documentación (los Párrafos) puede redactarse en el idioma del equipo para mayor fluidez, pero la topología del árbol de archivos es intocable y universal (Ej. `components/`, `folder_structure`, no `componentes/` ni `estructura`).
+- **Commits en Git:** Los mensajes de los commits DEBEN estar escritos obligatoriamente en **Inglés**, siguiendo el formato convencional (ej. `feat: add PTP client`, `fix: memory leak in odometry`).
 - **Funciones C/C++:** `snake_case`. Módulos explícitos (ej. `motor_mcpwm_set` en vez de `setMotor`).
 - **Variables de Estado:** Deben insinuar su uso (ej. `is_mqtt_connected`, `last_odometry_update_ms`).
 - **Macros y Constantes:** `UPPER_SNAKE_CASE` (ej. `CMD_QUEUE_SIZE_MAX`).
 
-## 3. Manejo de Errores y Excepciones
+## 3. Mantenimiento Vivo de la Documentación
+- **Sincronización Código-Docs:** CUALQUIER cambio (refactorización, adición de parámetros, nuevos módulos, o modificaciones de puertos/entornos) en el Firmware o el Software **obliga** al desarrollador o IA a actualizar inmediata y silenciosamente los archivos correspondientes en la carpeta `03-docs/`. Un Pull Request o Commit  se considera inválido si el código cambió pero su documentación asociada quedó obsoleta.
+
+## 4. Manejo de Errores y Excepciones
 - **En Firmware (ESP-IDF):** Jamás ignore resultados de APIs. Utilice `ESP_ERROR_CHECK()` sólo durante la inicialización (`system_init` o boot de hilos). Durante ejecución normal (launches iterativos) capture `esp_err_t` y gestione *gracefully* (por ejemplo, publicando un fallo a Logger Central o Telemetría) sin reiniciar el chip abruptamente.
 - **En Software (ROS2/Python):** Tracebacks deben ir acompañados de un log explicativo (ros_logger info/error) antes de capturar el try/except, nunca capture `Exception` genérico sin relanzarlo o actuar al respecto.
 
-## 4. Estructura y Modularidad Espacial
+## 5. Estructura y Modularidad Espacial
 - **Separación de Tareas (RTOS):** No instancie librerías bloqueantes ajenas al flujo real-time dentro de controladores de interrupción (ISR) o bucles de Prioridad 10. Delega por Colas (`xQueueSendFromISR`).
 - **Encapsulación Docker:** Cada nodo en Docker debe ser inmutable y su configuración debe depender estrictamente de variables extraídas del `.env`. No hardcodee URIs locales de la SBC.
 
-## 5. Pruebas y Validación Unitaria
+## 6. Pruebas y Validación Unitaria
 - Cualquier nuevo bloque lógico (PIDs analíticos, procesadores JSON) debe ofrecer una función inactiva de AutoTest en frío que pueda ejecutarse desde un entorno virtual sin la necesidad de montar los periféricos ESP32 en el robot real.
 
-## 6. Estándar de Telemetría Estructurada (MQTT Batching / Influx Line Protocol)
+## 7. Estándar de Telemetría Estructurada (MQTT Batching / Influx Line Protocol)
 Para evitar la saturación de TCP/IP, Mosquitto y el Host (SBC) por ráfagas de datos de alta frecuencia (Ej. control PID a 1KHz), TODO módulo que envíe datos telemétricos o variables observadas al Broker MQTT bajo la rama `robot/telemetry/*` u `odometry/*` DEBE implementarse siguiendo este formato estricto:
 
 ### A. Protocolo de Formato de Salida
