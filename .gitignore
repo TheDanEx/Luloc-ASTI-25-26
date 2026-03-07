@@ -1,17 +1,9 @@
-01-firmware/ESP32-P4-ETH/.vscode/settings.json
-01-firmware/ESP32-P4-ETH/.vscode/c_cpp_properties.json
-02-software/.vscode/browse.vc.db
-02-software/.vscode/browse.vc.db-shm
-02-software/.vscode/browse.vc.db-wal
-02-software/.vscode/c_cpp_properties.json
-02-software/.vscode/settings.json
-.vscode/browse.vc.db
-.vscode/browse.vc.db-shm
-.vscode/browse.vc.db-wal
-.vscode/c_cpp_properties.json
-.vscode/extensions.json
-.vscode/launch.json
-.vscode/settings.json
+# Ignore all local VS Code configurations for any subproject in the repository
+**/.vscode/
+
+# Ignore ESP-IDF generated configurations and locks
 01-firmware/ESP32-P4-ETH/dependencies.lock
-01-firmware/ESP32-P4-ETH/sdkconfig
-02-software/01-vision/src/__pycache__/feedforward.cpython-310.pyc
+
+# Ignore Python compiled files and cache
+**/__pycache__/
+**/*.pyc

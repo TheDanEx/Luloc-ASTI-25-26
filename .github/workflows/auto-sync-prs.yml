@@ -1,0 +1,57 @@
+name: Auto-Sync Main to Secondary Branches
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  create-sync-prs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create PR for Luloc/main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if a PR from main to Luloc/main already exists
+          existing_pr=$(gh pr list --base Luloc/main --head main --state open --json number -q '.[].number')
+          
+          if [ -z "$existing_pr" ]; then
+            echo "No open PR found. Creating a new PR for Luloc/main..."
+            gh pr create \
+              --base Luloc/main \
+              --head main \
+              --title "sync: Update Luloc/main with latest changes from main" \
+              --body "🤖 Automated PR to synchronize \`Luloc/main\` with the latest updates from \`main\`." \
+              --assignee "TheDanEx" || echo "No changes to sync or branch Luloc/main does not exist."
+          else
+            echo "A PR already exists (#$existing_pr). Skipping creation."
+          fi
+
+      - name: Create PR for PabloMotos/main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if a PR from main to PabloMotos/main already exists
+          existing_pr=$(gh pr list --base PabloMotos/main --head main --state open --json number -q '.[].number')
+          
+          if [ -z "$existing_pr" ]; then
+            echo "No open PR found. Creating a new PR for PabloMotos/main..."
+            gh pr create \
+              --base PabloMotos/main \
+              --head main \
+              --title "sync: Update PabloMotos/main with latest changes from main" \
+              --body "🤖 Automated PR to synchronize \`PabloMotos/main\` with the latest updates from \`main\`." \
+              --assignee "TheDanEx" || echo "No changes to sync or branch PabloMotos/main does not exist."
+          else
+            echo "A PR already exists (#$existing_pr). Skipping creation."
+          fi
