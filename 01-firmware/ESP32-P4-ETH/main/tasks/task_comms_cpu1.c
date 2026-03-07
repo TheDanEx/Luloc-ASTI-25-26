@@ -22,6 +22,7 @@
 #include "ethernet.h"
 #include "encoder_sensor.h"
 #include "telemetry_manager.h"
+#include "curvature_feedforward.h"
 #include "driver/gpio.h"
 
 #include "task_comms_cpu1.h"
@@ -152,6 +153,10 @@ static void collect_sensor_data(void)
         telemetry_add_int(tel_system, "uptime_sec", sensor_data.uptime_sec);
         telemetry_add_int(tel_system, "uptime_ms", sensor_data.uptime_ms);
     }
+
+    if (curvature_feedforward_has_value()) {
+        telemetry_add_float(tel_system, "curvatura_ff", curvature_feedforward_get_value());
+    }
     
     // 3. Performance Data
     // Perf mon generates its own complex report, but we could add summary metrics here
@@ -196,18 +201,18 @@ static void task_comms_cpu1(void *arg)
     task_comms_cpu1_init_queue();
     ESP_LOGI(TAG, "Comms task started, waiting for Ethernet link...");
 
-    // while (!ethernet_is_connected()) {
-    //     vTaskDelay(pdMS_TO_TICKS(500));
-    // }
+    while (!ethernet_is_connected()) {
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
     ESP_LOGI(TAG, "Ethernet connected. Initializing subsystems...");
 
     // MQTT
-    // if (mqtt_custom_client_init() != ESP_OK) {
-    //     ESP_LOGE(TAG, "FATAL: MQTT Init Failed");
-    //     mqtt_initialized = false;
-    //     vTaskDelete(NULL);
-    // }
-    // mqtt_initialized = true;
+    if (mqtt_custom_client_init() != ESP_OK) {
+        ESP_LOGE(TAG, "FATAL: MQTT Init Failed");
+        mqtt_initialized = false;
+        vTaskDelete(NULL);
+    }
+    mqtt_initialized = true;
 
     // Encoder
     encoder_sensor_config_t enc_config = {
@@ -235,8 +240,10 @@ static void task_comms_cpu1(void *arg)
 
     // Subscriptions
     vTaskDelay(pdMS_TO_TICKS(1000)); 
-    // mqtt_custom_client_subscribe("robot/cmd", 1);
-    // mqtt_custom_client_register_topic_callback("robot/cmd", mqtt_cmd_callback);
+    mqtt_custom_client_subscribe("robot/cmd", 1);
+    mqtt_custom_client_register_topic_callback("robot/cmd", mqtt_cmd_callback);
+    curvature_feedforward_register_callback();
+    curvature_feedforward_subscribe();
 
     ESP_LOGI(TAG, "Comms Task Running on Core %d", xPortGetCoreID());
 
@@ -256,6 +263,15 @@ static void task_comms_cpu1(void *arg)
         // Sampling (Push data to telemetry buffers)
         // Note: Telemetries will flush asynchronously on their own timer
         if ((now - last_sample_time) >= sample_interval_ticks) {
+             if (mqtt_custom_client_is_connected()) {
+                 shared_memory_set_mqtt_connected(true);
+                 if (curvature_feedforward_subscribe() != ESP_OK) {
+                     // Keep retrying silently while broker/client stabilizes.
+                 }
+             } else {
+                 shared_memory_set_mqtt_connected(false);
+             }
+
              collect_sensor_data();
              last_sample_time = now;
         }

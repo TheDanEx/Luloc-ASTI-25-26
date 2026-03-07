@@ -14,6 +14,7 @@ idf_component_register(
         test_sensor
         encoder_sensor
         telemetry_manager
+        curvature_feedforward
         shared_memory
         state_machine
         audio_player
