@@ -1,1 +1,2 @@
-01-firmware/ESP32-P4-ETH/.vscode/settings.json
+# Ignore all local VS Code configurations for any subproject in the repository
+**/.vscode/
