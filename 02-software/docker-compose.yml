@@ -27,6 +27,22 @@ services:
   #   environment:
   #     - ROS_DOMAIN_ID=13
 
+  # ===============================
+  # PTP GRANDMASTER CLOCK
+  # ===============================
+  ptp_master:
+    image: alpine:latest
+    container_name: ptp_master
+    restart: unless-stopped
+    command: >
+      sh -c "apk add --no-cache linuxptp && 
+             ptp4l -i eth0 -m -H -l 6"
+    network_mode: "host" 
+    privileged: false
+    cap_add:
+      - SYS_TIME
+      - NET_ADMIN
+
   message-broker:
     image: eclipse-mosquitto:2
     container_name: mosquitto
