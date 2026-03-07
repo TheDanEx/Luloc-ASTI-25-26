@@ -1,2 +1,9 @@
 # Ignore all local VS Code configurations for any subproject in the repository
 **/.vscode/
+
+# Ignore ESP-IDF generated configurations and locks
+01-firmware/ESP32-P4-ETH/dependencies.lock
+
+# Ignore Python compiled files and cache
+**/__pycache__/
+**/*.pyc
