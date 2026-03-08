@@ -1,0 +1,31 @@
+menu "[UJI] 1. Control: Motor Velocity"
+
+    config VELOCITY_CTRL_DEFAULT_KP
+        string "Default Proportional Gain (Kp)"
+        default "0.5"
+
+    config VELOCITY_CTRL_DEFAULT_KI
+        string "Default Integral Gain (Ki)"
+        default "0.1"
+
+    config VELOCITY_CTRL_DEFAULT_KD
+        string "Default Derivative Gain (Kd)"
+        default "0.05"
+
+    config VELOCITY_CTRL_MAX_BATTERY_MV
+        string "Reference Max Battery Voltage (mV)"
+        default "16800.0"
+        help
+            Used for feed-forward calculations. For a 4S Lipo this is 16800mV.
+            If the battery drops to 14V, the controller will automatically boost
+            the base PWM to match the performance of a 16.8V battery.
+
+    config VELOCITY_CTRL_MAX_MOTOR_SPEED_MS
+        string "Max Motor Speed (m/s) at Max Battery Voltage"
+        default "1.5"
+        help
+            Theoretical or measured linear speed (m/s) the robot reaches when 
+            exactly Max Battery Voltage (e.g. 16800mV) is applied at 100% PWM.
+            This builds the Feed-Forward map.
+
+endmenu

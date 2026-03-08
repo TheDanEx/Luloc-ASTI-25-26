@@ -23,6 +23,8 @@
 #include "encoder_sensor.h"
 #include "telemetry_manager.h"
 #include "curvature_feedforward.h"
+#include "pid_tuner.h"
+#include "mqtt_api_responder.h"
 #include "driver/gpio.h"
 
 #include "task_comms_cpu1.h"
@@ -242,8 +244,16 @@ static void task_comms_cpu1(void *arg)
     vTaskDelay(pdMS_TO_TICKS(1000)); 
     mqtt_custom_client_subscribe("robot/cmd", 1);
     mqtt_custom_client_register_topic_callback("robot/cmd", mqtt_cmd_callback);
+    
     curvature_feedforward_register_callback();
     curvature_feedforward_subscribe();
+
+    pid_tuner_init();
+    pid_tuner_register_callback();
+    pid_tuner_subscribe();
+
+    mqtt_api_responder_init();
+    mqtt_api_responder_subscribe();
 
     ESP_LOGI(TAG, "Comms Task Running on Core %d", xPortGetCoreID());
 
@@ -267,6 +277,12 @@ static void task_comms_cpu1(void *arg)
                  shared_memory_set_mqtt_connected(true);
                  if (curvature_feedforward_subscribe() != ESP_OK) {
                      // Keep retrying silently while broker/client stabilizes.
+                 }
+                 if (pid_tuner_subscribe() != ESP_OK) {
+                     // Retry logic natively handled
+                 }
+                 if (mqtt_api_responder_subscribe() != ESP_OK) {
+                     // Retry logic natively handled
                  }
              } else {
                  shared_memory_set_mqtt_connected(false);

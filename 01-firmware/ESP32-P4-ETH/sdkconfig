@@ -764,7 +764,6 @@ CONFIG_PARTITION_TABLE_MD5=y
 #
 # Robot Configuration
 #
-CONFIG_ROBOT_CONTROL_PERIOD_MS=10
 CONFIG_ROBOT_USE_ETHERNET=y
 # CONFIG_ROBOT_ETH_DHCP is not set
 CONFIG_ROBOT_ETH_STATIC_IP=y
@@ -774,28 +773,7 @@ CONFIG_ROBOT_ETH_STATIC_GATEWAY="192.168.5.1"
 # end of Robot Configuration
 
 #
-# ETH Configuration
-#
-CONFIG_EXAMPLE_ETH_DEINIT_AFTER_S=-1
-# end of ETH Configuration
-
-#
-# MQTT Configuration
-#
-CONFIG_BROKER_URL="mqtt://192.168.50.53:1883"
-# CONFIG_BROKER_URL_FROM_STDIN is not set
-# end of MQTT Configuration
-
-#
-# Sound Configuration
-#
-CONFIG_EXAMPLE_MODE_MUSIC=y
-CONFIG_EXAMPLE_VOICE_VOLUME=60
-# CONFIG_EXAMPLE_BSP is not set
-# end of Sound Configuration
-
-#
-# Example Ethernet Configuration
+# [UJI] 4. Net: Ethernet MAC/PHY Settings
 #
 CONFIG_ENV_GPIO_RANGE_MIN=0
 CONFIG_ENV_GPIO_RANGE_MAX=54
@@ -812,12 +790,13 @@ CONFIG_EXAMPLE_ETH_MDIO_GPIO=52
 CONFIG_EXAMPLE_ETH_PHY_RST_GPIO=51
 CONFIG_EXAMPLE_ETH_PHY_ADDR=1
 # CONFIG_EXAMPLE_USE_SPI_ETHERNET is not set
-# end of Example Ethernet Configuration
+# end of [UJI] 4. Net: Ethernet MAC/PHY Settings
 
 #
-# MQTT Custom Client Configuration
+# [UJI] 3. Comms: MQTT Client
 #
-# end of MQTT Custom Client Configuration
+CONFIG_BROKER_URL="mqtt://192.168.50.53:1883"
+# end of [UJI] 3. Comms: MQTT Client
 
 #
 # Compiler options
@@ -2469,12 +2448,60 @@ CONFIG_WIFI_PROV_STA_ALL_CHANNEL_SCAN=y
 # end of Wi-Fi Provisioning Manager
 
 #
-# Line Sensor Array Configuration
+# [UJI] 2. Sensors: INA219 Power Monitor
+#
+CONFIG_INA219_I2C_PORT=0
+CONFIG_INA219_I2C_SDA_PIN=21
+CONFIG_INA219_I2C_SCL_PIN=22
+CONFIG_INA219_I2C_CLOCK_SPEED_HZ=400000
+CONFIG_INA219_SHUNT_OHMS="0.01"
+CONFIG_INA219_MAX_EXPECTED_AMPS="3.2"
+CONFIG_INA219_POLLING_RATE_HZ=5
+CONFIG_INA219_TELEMETRY_RATE_MS=1000
+CONFIG_INA219_MQTT_TOPIC="robot/telemetry/power"
+# end of [UJI] 2. Sensors: INA219 Power Monitor
+
+#
+# [UJI] 1. Control: Line Follower
+#
+CONFIG_LINE_FOLLOWER_DEFAULT_KP="1.5"
+CONFIG_LINE_FOLLOWER_DEFAULT_KI="0.0"
+CONFIG_LINE_FOLLOWER_DEFAULT_KD="0.5"
+CONFIG_LINE_FOLLOWER_DEFAULT_BASE_SPEED="50.0"
+CONFIG_LINE_FOLLOWER_DEFAULT_MAX_SPEED="100.0"
+CONFIG_LINE_FOLLOWER_CAMERA_WEIGHT="20.0"
+# end of [UJI] 1. Control: Line Follower
+
+#
+# [UJI] 2. Sensors: ADC Line Array
 #
 CONFIG_LINE_SENSOR_CALIB_THRESHOLD=1500
 CONFIG_LINE_SENSOR_OVERSAMPLING=16
 CONFIG_LINE_SENSOR_DETECTION_THRESHOLD=50
-# end of Line Sensor Array Configuration
+# end of [UJI] 2. Sensors: ADC Line Array
+
+#
+# [UJI] 1. Control: Motor Velocity
+#
+CONFIG_VELOCITY_CTRL_DEFAULT_KP="0.5"
+CONFIG_VELOCITY_CTRL_DEFAULT_KI="0.1"
+CONFIG_VELOCITY_CTRL_DEFAULT_KD="0.05"
+CONFIG_VELOCITY_CTRL_MAX_BATTERY_MV="16800.0"
+CONFIG_VELOCITY_CTRL_MAX_MOTOR_SPEED_MS="1.5"
+# end of [UJI] 1. Control: Motor Velocity
+
+#
+# [UJI] 3. Comms: MQTT API Responder
+#
+CONFIG_MQTT_API_GET_TOPIC="robot/api/get"
+CONFIG_MQTT_API_RESP_TOPIC="robot/api/response"
+# end of [UJI] 3. Comms: MQTT API Responder
+
+#
+# [UJI] 1. Control: Live PID Tuning
+#
+CONFIG_PID_TUNER_MQTT_TOPIC="robot/config/pid_motors"
+# end of [UJI] 1. Control: Live PID Tuning
 # end of Component config
 
 # CONFIG_IDF_EXPERIMENTAL_FEATURES is not set

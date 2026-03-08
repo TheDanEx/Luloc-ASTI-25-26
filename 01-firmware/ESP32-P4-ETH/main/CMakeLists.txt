@@ -22,6 +22,9 @@ idf_component_register(
         performance_monitor
         log
         motors
+        ina219_sensor
+        pid_tuner
+        mqtt_api_responder
     PRIV_REQUIRES
         nvs_flash
         esp_event

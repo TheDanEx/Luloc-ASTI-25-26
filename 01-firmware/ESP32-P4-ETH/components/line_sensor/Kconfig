@@ -1,4 +1,4 @@
-menu "Line Sensor Array Configuration"
+menu "[UJI] 2. Sensors: ADC Line Array"
 
     config LINE_SENSOR_CALIB_THRESHOLD
         int "Calibration Min-Max difference threshold"
