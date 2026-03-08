@@ -27,3 +27,37 @@ Configura en inicio los temporizadores y la frecuencia de ciclo de trabajo (e.g.
 ## Puntos Críticos y Depuración
 - **Transitorios de corriente destructivos:** La librería permite habilitar 'deadband' a nivel algoritmia (zona muerta cercana al valor 0) para evitar picos transitorios. Cuidar de no invertir de 100% adelante a 100% atrás bruscamente y hacer saltar protecciones del DRV.
 - **Inexactitudes del freno:** Depende de si los pines van asimétricos LOW-LOW o HIGH-HIGH. Hay que validar configuraciones de brake contra coasting libres, vital para perfiles trapezoidal en robótica móvil.
+
+## Ejemplo de Uso e Instanciación
+```c
+#include "motors.h"
+#include "driver/gpio.h"
+
+// 1. Declarar la configuración de los pines del DRV8874
+motor_driver_mcpwm_t chasis_control = {
+    .in1 = GPIO_NUM_18, // Pin PWM Directo
+    .in2 = GPIO_NUM_19, // Pin PWM Inverso
+    .pwm_freq_hz = 20000, // 20 kHz por encima del umbral audible
+    .resolution_hz = 10000000, // Resolución interna timer 10MHz
+    .deadband_ns = 50 // Para evitar cortos de puente completo
+};
+
+// 2. Tarea de control
+void control_task(void *pvParameters) {
+    // Inicializar temporizadores MCPWM y amarrar al handle
+    esp_err_t err = motor_mcpwm_init(&chasis_control);
+    
+    // Despertar el chip de potencia si tiene pin SLEEP (Opcional)
+    // motor_mcpwm_sleep(&chasis_control, false);
+
+    while(1) {
+        // Enviar velocidades asimétricas (Ej: -100% izquierda, +50% derecha)
+        motor_mcpwm_set(&chasis_control, -1000, 500);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        
+        // Ejecutar frenado electromagnético forzado (cortocircuito sobre H-Bridge)
+        motor_mcpwm_brake(&chasis_control);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+```

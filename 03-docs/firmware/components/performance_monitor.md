@@ -25,3 +25,31 @@ Tras `perf_mon_init()`, debe ser explícitamente disparado a ritmo conservador l
 
 ## Puntos Críticos y Depuración
 - **Sobrecarga de Scheduler:** Si `perf_mon_update()` es llamado frenéticamente desde un loop menor a 1 segundo, la congelación momentánea del contexto durante el barrido de tareas (si usa `vTaskGetRunTimeStats`) causará latencia errática afectando bucles de control de movimiento u observadores PID. 
+
+## Ejemplo de Uso e Instanciación
+```c
+#include "performance_monitor.h"
+#include "esp_log.h"
+
+// 1. Tarea dedicada a diagnósticos (baja prioridad, ej. Core 0)
+void diagnostics_task(void *pvParameters) {
+    // Inicializa estructuras y timers internos (solo una vez)
+    perf_mon_init();
+
+    char json_buffer[256];
+
+    while(1) {
+        // Bloquear 5 segundos. Nunca hacer polling abusivo.
+        vTaskDelay(pdMS_TO_TICKS(5000));
+
+        // 2. Ejecutar muestreo profundo de RTOS y Memoria
+        perf_mon_update();
+
+        // 3. Imprimir a consola o enviar por MQTT
+        if (perf_mon_get_report_json(json_buffer, sizeof(json_buffer))) {
+            ESP_LOGI("PERF", "Estadísticas Vitales: %s", json_buffer);
+            // Salida típica: {"cpu0": 12.5, "cpu1": 4.1, "heap_free": 185000}
+        }
+    }
+}
+```

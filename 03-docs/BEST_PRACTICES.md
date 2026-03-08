@@ -16,7 +16,16 @@ El código se escribe una vez, pero se lee mil veces.
 - **Macros y Constantes:** `UPPER_SNAKE_CASE` (ej. `CMD_QUEUE_SIZE_MAX`).
 
 ## 3. Mantenimiento Vivo de la Documentación
-- **Sincronización Código-Docs:** CUALQUIER cambio (refactorización, adición de parámetros, nuevos módulos, o modificaciones de puertos/entornos) en el Firmware o el Software **obliga** al desarrollador o IA a actualizar inmediata y silenciosamente los archivos correspondientes en la carpeta `03-docs/`. Un Pull Request o Commit  se considera inválido si el código cambió pero su documentación asociada quedó obsoleta.
+- **Sincronización Código-Docs:** CUALQUIER cambio (refactorización, adición de parámetros, nuevos módulos, o modificaciones de puertos/entornos) en el Firmware o el Software **obliga** al desarrollador o IA a actualizar inmediata y silenciosamente los archivos correspondientes en la carpeta `03-docs/`. Un Pull Request o Commit se considera inválido si el código cambió pero su documentación asociada quedó obsoleta.
+- **Estructura Obligatoria de Componentes:** Todo archivo `.md` que documente un componente o módulo debe mantener estrictamente la siguiente jerarquía de secciones en **Español** (manteniendo los nombres de variables/funciones en Inglés):
+  1. `# [Nombre del Componente]`
+  2. `## Propósito Arquitectónico` (Descripción de alto nivel de qué hace y qué problema resuelve).
+  3. `## Entorno y Dependencias` (Librerías externas, drivers de ESP-IDF u otros módulos requeridos).
+  4. `## Interfaces de E/S (Inputs/Outputs)` (Descripción abstracta de qué consume y qué produce).
+  5. `## Flujo de Ejecución Lógico` (Cómo se comporta en Runtime, si usa hilos, timers o eventos).
+  6. `## Funciones Principales y Parámetros` (Listado técnico de las funciones de la API pública).
+  7. `## Puntos Críticos y Depuración` (Peculiaridades matemáticas, bloqueos, problemas de memoria, race conditions o advertencias para futuros desarrolladores).
+  8. `## Ejemplo de Uso e Instanciación` (Código en C demostrando cómo configurar la estructura base e inicializar el handle desde el `app_main` o tarea superior).
 
 ## 4. Manejo de Errores y Excepciones
 - **En Firmware (ESP-IDF):** Jamás ignore resultados de APIs. Utilice `ESP_ERROR_CHECK()` sólo durante la inicialización (`system_init` o boot de hilos). Durante ejecución normal (launches iterativos) capture `esp_err_t` y gestione *gracefully* (por ejemplo, publicando un fallo a Logger Central o Telemetría) sin reiniciar el chip abruptamente.

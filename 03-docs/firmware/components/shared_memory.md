@@ -25,3 +25,42 @@ Instanciación única en inicio (`shared_memory_init()`). Cada bloque (Control o
 ## Puntos Críticos y Depuración
 - **Deadlocks / Fallo asimétrico:** Si el Timeout de bloqueo fuera infinito (por mala implementación de otra capa o bugs de Mutex), la CPU completa en modo Real-Time quedaría sentenciada al paro incondicional. Asegurar ticks de timeout máximos no superen los ciclos de control esperados (e.g. max 2-5ms).
 - **Lectura Cruda de Puntero Peligrosa:** Ofrece acceso profundo directo a `shared_memory_get()`. Quien acceda y asigne punteros directos sin tomar el lock corromperá temporalmente los arreglos en arquitecturas SMP en momento de contención extrema.
+
+## Ejemplo de Uso e Instanciación
+```c
+#include "shared_memory.h"
+#include "freertos/FreeRTOS.h"
+
+// 1. Core 0: Tarea Crítica de Control PID
+void control_cpu0_task(void *pvParameters) {
+    robot_command_t cmd_buffer;
+    
+    while(1) {
+        // Latido de hardware (Watchdog cruzado)
+        shared_memory_heartbeat_cpu0();
+
+        // Leer Comandos (Enviados por MQTT a través del Core 1)
+        // Timeout de 2 RTOS Ticks (muy rápido, no bloquea PID)
+        if (shared_memory_read_command(&cmd_buffer, 2) == ESP_OK) {
+            set_target_speed(cmd_buffer.velocity_x);
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+// 2. Core 1: Tarea de Networking/MQTT
+void comms_cpu1_task(void *pvParameters) {
+    // Solo un núcleo inicializa la estructura global al principio
+    shared_memory_init();
+
+    robot_command_t new_cmd = { .velocity_x = 1.5f };
+    
+    while(1) {
+        shared_memory_heartbeat_cpu1();
+        
+        // Escribe comando en memoria con timeout seguro de 10 ticks
+        shared_memory_write_command(&new_cmd, 10);
+        vTaskDelay(pdMS_TO_TICKS(100)); // Lazo menos frecuente
+    }
+}
+```

@@ -33,3 +33,36 @@ Lanza hilo subyacente MQTT. Proceso re-activo por eventos (conectado, desconecta
 ## Puntos Críticos y Depuración
 - **Retardo extremo en Callbacks:** Todo callback llamado bloquea al task receptor de MQTT, cualquier delay, print, cálculo pesado allí tumbará el client Keep-Alive, resultando en desconexiones cíclicas. Toda carga ha de delegarse a RTOS Event Groups/Queues.
 - **WatchDog Trigger:** Fallos de hardware paralelos pueden hacer que la red caiga o sature temporalmente.
+
+## Ejemplo de Uso e Instanciación
+```c
+#include "mqtt_custom_client.h"
+
+// 1. Callback extremadamente rápido. NO bloquear aquí.
+void on_cmd_received(const char *topic, int topic_len, const char *data, int data_len) {
+    // Extraer dato e inyectarlo en Tarea RTOS mediante Queue o Flags
+    if (strncmp(data, "START", data_len) == 0) {
+        xEventGroupSetBits(robot_event_group, BIT_START_MISSION);
+    }
+}
+
+// 2. Al recibir confirmación de red LwIP (ej. tras ethernet_init)
+void network_ready_task(void *pvParameters) {
+    // Inicializa motor MQTT (usa IPs de Kconfig) y arranca hilo demonio
+    mqtt_custom_client_init();
+
+    // Registrar observadores lógicos en memoria
+    mqtt_custom_client_register_topic_callback("robot/cmd", on_cmd_received);
+
+    // Obligar la suscripción al broker IoT (QoS 1 = Asegurar llegada)
+    mqtt_custom_client_subscribe("robot/cmd", 1);
+
+    while (1) {
+        // Publicación de latidos por rutina
+        const char* msg = "{\"status\":\"ok\"}";
+        mqtt_custom_client_publish("robot/telemetry", msg, 0, 0, 0); // QoS 0, sin Retain
+        
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+```

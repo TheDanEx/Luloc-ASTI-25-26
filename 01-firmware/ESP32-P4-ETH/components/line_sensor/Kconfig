@@ -1,0 +1,26 @@
+menu "Line Sensor Array Configuration"
+
+    config LINE_SENSOR_CALIB_THRESHOLD
+        int "Calibration Min-Max difference threshold"
+        default 1500
+        help
+            The minimum difference between the maximum (white) and minimum (black) values 
+            read during calibration to consider a sensor successfully calibrated.
+            For a 12-bit ADC (0-4095), 1500 is a safe threshold.
+
+    config LINE_SENSOR_OVERSAMPLING
+        int "ADC Oversampling count"
+        default 16
+        help
+            Number of consecutive ADC reads to average for a single sensor measurement
+            to increase precision and reduce noise. Higher values cost more CPU time.
+
+    config LINE_SENSOR_DETECTION_THRESHOLD
+        int "Digital Detection Threshold (%)"
+        default 50
+        help
+            Percentage threshold (0-100) applied to the normalized analog value.
+            If a sensor's normalized value is above this %, its digital_state becomes true (sees line).
+            Values around 50 usually work best after a correct min-max calibration.
+
+endmenu

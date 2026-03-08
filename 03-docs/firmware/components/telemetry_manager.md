@@ -25,3 +25,31 @@ Al iniciar la comunicación o telemetría, el programa (CPU1) crea instancias de
 ## Puntos Críticos y Depuración
 - **Memory Leaks Ocultos:** Si no se emplea correctamente la macro de destrucción `telemetry_destroy(handle)`, el montón (Heap) de FreeRTOS será agotado aceleradamente causando reinicios por OOM (Out Of Memory) impredecibles.
 - **Saturación del Buffer Interno:** Asumiblemente existe un char buffer alojado detrás del handle. Si un desarrollador intenta incrustar docenas de variables float de precision muy amplia, superará el tamaño del buffer corrompiendo memoria RAM general (Buffer Overflow) a menos que esté estrictamente blindado internamente.
+
+## Ejemplo de Uso e Instanciación
+```c
+#include "telemetry_manager.h"
+#include "mqtt_custom_client.h"
+
+// Tarea Cíclica de Reporte (Core 1) a 10Hz
+void telemetry_sys_task(void *pvParameters) {
+    while(1) {
+        // 1. Iniciar la trama Influx Line Protocol (ILP) o JSON
+        // Esto aloja dinámicamente un buffer en el Heap
+        telemetry_handle_t frame = telemetry_create("robot/metrics", "kinematics", 100);
+
+        if (frame != NULL) {
+            // 2. Inyectar variables de forma transparente (El timestamp lo pone por debajo)
+            telemetry_add_float(frame, "speed_ms", current_speed);
+            telemetry_add_int(frame, "battery_pct", battery_level);
+            telemetry_add_bool(frame, "is_autonomous", mode_auto);
+
+            // 3. Empaquetar y Disparar el envío por red 
+            // CUIDADO: Destruye el buffer OBLIGATORIAMENTE evitando fugas de memoria
+            telemetry_destroy(frame);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(100)); // Esperar 100ms
+    }
+}
+```
