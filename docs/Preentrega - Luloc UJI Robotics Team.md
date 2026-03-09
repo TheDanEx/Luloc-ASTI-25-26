@@ -129,83 +129,79 @@ Experimentado tras trabajar como programador en la empresa GDA (Grupul de Despă
 
    1. ### Arquitectura {#arquitectura}
 
-      El robot utiliza una **arquitectura híbrida de dos procesadores** que separa las funciones de control en tiempo real de las funciones de percepción y estrategia:
+      El robot utiliza una **arquitectura híbrida de dos procesadores** que separa el control en tiempo real de la percepción y la estrategia:
 
-      - **ESP32-P4 (Microcontrolador — "El Cerebelo"):** Se encarga de los "reflejos" del robot. Ejecuta el control de bajo nivel de los motores mediante lazos PID, lee los encoders y sensores críticos (IMU, corriente de batería) y reacciona en tiempo real ante eventos como colisiones o pérdida de tracción. Al ser un microcontrolador **determinista**, garantiza que cada lectura de sensor y cada actualización de PWM se ejecute en intervalos exactos sin interferencias del sistema operativo. Si la Raspberry Pi se cuelga o pierde la conexión, el ESP32 puede frenar el robot de forma segura de manera autónoma.
+      - **ESP32-P4 (microcontrolador):** Control determinista de motores, lectura de encoders y sensores críticos (IMU, corriente). Si la Raspberry Pi falla, el ESP32 puede frenar el robot de forma autónoma.
 
-      - **Raspberry Pi 5 (Microprocesador — "El Lóbulo Frontal"):** Se encarga de la estrategia. Procesa la imagen de la cámara CSI (IMX219) mediante OpenCV, ejecuta algoritmos de navegación autónoma con ROS2 y Nav2, y decide "hacia dónde ir". Envía órdenes de alto nivel al ESP32 a través de MQTT (por ejemplo, "avanza a 1 m/s" o "gira 30 grados"). Además, hospeda el sistema completo de monitorización y telemetría (InfluxDB, Grafana).
+      - **Raspberry Pi 5 (microprocesador):** Procesamiento de cámara con OpenCV, navegación autónoma con ROS2/Nav2, y sistema completo de telemetría y monitorización (InfluxDB, Grafana). Envía órdenes de alto nivel al ESP32.
 
-      - **Comunicación entre ambos:** La conexión se realiza mediante **cable Ethernet directo** entre la RPi5 y el ESP32-P4, utilizando el protocolo **MQTT** sobre TCP/IP. Se eligió Ethernet sobre WiFi para eliminar la latencia variable y garantizar la fiabilidad de las comunicaciones en tiempo real. El broker MQTT (Mosquitto) corre como contenedor Docker en la Raspberry Pi, y tanto el firmware como los servicios de software publican y se suscriben a topics organizados jerárquicamente bajo `robot/`.
+      **Decisión clave — MQTT en lugar de micro-ROS:**
 
-      **Distribución de tareas en los núcleos del ESP32-P4:**
+      Inicialmente queríamos usar **micro-ROS** para integrar el ESP32 directamente con el ecosistema ROS2 de la Raspberry Pi. Sin embargo, **no existe todavía una implementación estable de micro-ROS para el ESP32-P4**, que es un chip muy reciente. Intentar portarlo habría consumido semanas sin garantía de éxito.
 
-      El ESP32-P4 dispone de un sistema de alto rendimiento (HP) con dos núcleos RISC-V a 400 MHz y un sistema de bajo consumo (LP) con un núcleo a 40 MHz. Las tareas FreeRTOS se distribuyen de la siguiente manera:
+      La solución fue usar **MQTT**, un protocolo de mensajería más ligero y probado. Aunque perdemos la integración directa con ROS2, ganamos una comunicación fiable que pudimos poner en marcha en pocos días. La conexión se hace por **cable Ethernet directo** (no WiFi) para eliminar latencia variable.
 
-      | Núcleo | Tarea | Prioridad | Función |
-      | :---- | :---- | :---- | :---- |
-      | **CPU0 (HP)** | `task_rtcontrol_cpu0` | 10 (máxima) | Control de motores en tiempo real, lectura de encoders, PID, reacciones críticas. No realiza ninguna operación de red. |
-      | **CPU1 (HP)** | `task_comms_cpu1` | 10 (máxima) | Gestión MQTT, publicación de telemetría, recepción de comandos, lectura de sensores complejos (IMU, corriente). |
-      | **CPU1 (HP)** | `task_monitor_lowpower` | 1 (mínima) | Watchdog de hambruna: publica un heartbeat cada 5 segundos. Si deja de emitir, indica que el sistema está saturado. |
+      **Distribución de tareas en el ESP32-P4:**
 
-      Esta separación garantiza que el lazo de control de motores en CPU0 **nunca** se vea bloqueado por operaciones de red o parsing de datos, eliminando el jitter en el control PWM.
+      El ESP32-P4 dispone de dos núcleos RISC-V a 400 MHz. Los repartimos así:
+
+      | Núcleo | Función |
+      | :---- | :---- |
+      | **CPU0** | Control de motores en tiempo real y lectura de encoders. No realiza operaciones de red para evitar bloqueos. |
+      | **CPU1** | Comunicaciones MQTT, publicación de telemetría, recepción de comandos y lectura de sensores secundarios (IMU, corriente). |
+
+      Además, una tarea de vigilancia con prioridad mínima envía un heartbeat cada 5 segundos. Si deja de emitir, indica que el sistema está sobrecargado.
 
    2. ### Software {#software}
 
-      El software de la Raspberry Pi 5 se organiza como una pila de **microservicios Docker** orquestados mediante Docker Compose. Cada servicio es independiente, inmutable y configurable exclusivamente a través de variables de entorno definidas en un archivo `.env`. Los servicios se levantan con un único comando: `docker compose up -d --build`.
+      El software de la Raspberry Pi 5 se organiza como **microservicios Docker** orquestados con Docker Compose, lo que permite arrancar todo con un solo comando y aislar cada servicio.
 
-      **Servicios activos:**
+      **Reto: telemetría en tiempo real**
 
-      - **Message Broker (Mosquitto):** Broker MQTT centralizado en el puerto 1883. Gestiona toda la comunicación pub/sub entre el ESP32, los nodos de visión/navegación y el sistema de telemetría. Configurado con acceso anónimo para la red local y persistencia de mensajes activada.
+      Un reto inicial fue cómo almacenar y visualizar los cientos de datos por segundo que genera el robot. Una base de datos convencional no era viable por la frecuencia de escritura. La solución fue montar una cadena especializada en series temporales:
 
-      - **InfluxDB 2.7:** Base de datos de series temporales que almacena todas las métricas del robot. Elegida frente a bases de datos relacionales (MySQL) o archivos planos porque está optimizada para escrituras de alta frecuencia (~100 datos/segundo) y permite consultas temporales eficientes. Almacena los datos en el bucket `local_system` con autenticación por token.
+      1. **Mosquitto (MQTT Broker)** — Recibe los datos del ESP32 y los distribuye a los servicios que los necesiten.
+      2. **Telegraf** — Recoge mensajes MQTT y los ingesta en la base de datos. También monitoriza la salud de la propia Raspberry Pi (temperatura, CPU, memoria).
+      3. **InfluxDB 2.7** — Base de datos de series temporales, optimizada para escrituras de alta frecuencia y consultas como "¿qué velocidad tenía la rueda hace 3 minutos?".
+      4. **Grafana** — Dashboard web con gráficas en tiempo real: uso de CPU por núcleo del ESP32, temperatura, vista embebida de la cámara y logs de comandos.
 
-      - **Telegraf:** Agente de recolección de métricas que actúa como puente entre MQTT e InfluxDB. Se suscribe al topic `robot/performance` y parsea los datos en formato JSON extrayendo tags como `task` y `core` para identificar cada núcleo del ESP32. Además, recolecta métricas del sistema de la Raspberry Pi: CPU, memoria, disco, red y temperatura (leyendo `/sys/class/thermal/thermal_zone0/temp`).
+      Esta cadena nos ha permitido diagnosticar problemas que de otro modo serían invisibles, como picos de uso de CPU al publicar datos MQTT o subidas de temperatura de la RPi5 al procesar vídeo.
 
-      - **Grafana:** Dashboard web (puerto 3000) para visualización en tiempo real de la telemetría. Incluye un dashboard preconfigurado con: gauges de uso de CPU0 y CPU1 del ESP32, temperatura del procesador de la RPi5, gráficas temporales de rendimiento por tarea, vista embebida de la cámara y logs de comandos MQTT. Los dashboards se aprovisionan automáticamente desde archivos JSON versionados en el repositorio.
+      **Servicios en desarrollo (preparados pero desactivados):**
 
-      **Servicios en desarrollo (contenedores preparados pero desactivados):**
+      - **Visión:** Nodo Python con OpenCV que captura la cámara CSI (IMX219), aplica transformada de perspectiva, detecta la línea del suelo y calcula la curvatura del recorrido. Publica el valor al ESP32 vía MQTT para feedforward de dirección. Un problema que encontramos fue que las librerías de la cámara CSI (libcamera/picamera2) no son triviales de configurar dentro de Docker, lo cual nos obligó a probar tanto dentro como fuera del contenedor.
 
-      - **Vision Node:** Nodo ROS2 con OpenCV que captura la cámara CSI (IMX219 8MP) a 820x616 píxeles. Implementa un pipeline de visión artificial para siguelíneas que incluye: umbralización a escala de grises, transformada de perspectiva inversa para obtener una vista cenital (bird's-eye-view) del recorrido, detección de blobs por secciones horizontales (10 secciones) y cálculo de curvatura ponderada. El valor de curvatura se publica en el topic MQTT `robot/curvatura` para que el ESP32 lo utilice como feedforward en el control de dirección. El sistema también ofrece un stream MJPEG por HTTP (puerto 8080) para depuración visual remota.
+      - **Navegación:** Nodo ROS2 Humble con Nav2 que integra el LiDAR D500 para SLAM y planificación de rutas. Contenedor preparado pero pendiente de integración.
 
-      - **Navigation Node:** Nodo ROS2 Humble con Nav2 para navegación autónoma. Integra SLAM (localización y mapeo simultáneo) con el LiDAR D200/D500 y planificación de rutas con costmaps locales y globales. Genera comandos de velocidad (`cmd_vel`) que se envían al ESP32 como órdenes de movimiento.
-
-      - **Main Controller:** Backend en Python con FastAPI que actúa como cerebro lógico del sistema. Implementa la máquina de estados del robot a nivel de misión, el puente bidireccional ROS2↔MQTT y una API REST para el dashboard.
+      - **Controlador principal:** Backend en Python (FastAPI) que implementa la máquina de estados a nivel de misión, el puente ROS2↔MQTT y una API REST para el dashboard.
 
    3. ### Firmware {#firmware}
 
-      El firmware del ESP32-P4 está desarrollado con **ESP-IDF** (el framework oficial de Espressif) y sigue una arquitectura modular estricta donde cada funcionalidad se encapsula en un **componente** independiente con su propio `CMakeLists.txt`, cabeceras públicas e implementación privada. Los componentes se compilan como bibliotecas estáticas que se enlazan al binario final.
+      El firmware del ESP32-P4 está desarrollado con **ESP-IDF** y sigue una arquitectura modular: cada funcionalidad es un componente independiente con su propia carpeta. Al principio del proyecto perdimos tiempo intentando desarrollar todo en un solo archivo y rápidamente nos dimos cuenta de que era inmanejable. La modularidad nos permite trabajar varias personas en paralelo y probar cada pieza por separado.
 
-      **Secuencia de inicialización (`system_init`):**
-      1. Inicialización de NVS Flash (almacenamiento no volátil).
-      2. Configuración de la interfaz de red y driver Ethernet (RMII/SMI, clock 50 MHz).
-      3. Inicialización del códec de audio ES8311 vía I2C y del bus I2S.
-      4. Creación de la memoria compartida inter-core con mutex FreeRTOS.
-      5. Lanzamiento de `task_comms_cpu1` en CPU1 (retardo de 100ms).
-      6. Lanzamiento de `task_rtcontrol_cpu0` en CPU0.
+      **Secuencia de arranque:**
 
-      **Componentes principales del firmware:**
+      El firmware sigue un orden estricto de inicialización: NVS Flash → Ethernet → audio (ES8311) → memoria compartida → tareas FreeRTOS. Este orden importa: si el cliente MQTT arrancaba antes de que Ethernet estuviera listo, el sistema se colgaba. Descubrir este problema nos costó varias sesiones de depuración con el monitor serie.
 
-      - **Motors (MCPWM):** Control de dos motores DC JGA25-370 12V mediante el periférico MCPWM del ESP32-P4. Frecuencia de portadora PWM de 20 kHz con resolución de 10 MHz (500 ticks por periodo). Rango de comandos de -1000 a +1000 mapeados a duty cycle. Implementa deadband de 30 ticks (6%) para evitar cortocircuitos de shoot-through en el puente H. Los drivers DRV8871 reciben las señales PWM en los pines GPIO25/26 (motor izquierdo) y GPIO23/5 (motor derecho). El modo de frenado fuerza ambas entradas a HIGH simultáneamente.
+      **Componentes principales y problemas encontrados:**
 
-      - **Encoder Sensor (PCNT):** Lectura de encoders de cuadratura mediante el periférico hardware PCNT (Pulse Counter), que no consume ciclos de CPU. Configurado en modo X4 (4 cuentas por pulso) con 11 PPR y ratio de reducción 21.3:1 sobre ruedas de 68mm de diámetro. Calcula velocidad lineal (m/s) y distancia acumulada (m) en tiempo real. Resolución aproximada de 0.13 mm por pulso. Los pines de entrada son GPIO18 (canal A) y GPIO19 (canal B). Acumulación en contador software de 64 bits para evitar desbordamiento del contador hardware de 16 bits.
+      - **Control de motores (MCPWM):** Los motores DC JGA25-370 se controlan mediante PWM a 20 kHz a través de drivers DRV8871. Al probar cambios bruscos de dirección, se producían picos de corriente que reiniciaban el ESP32. Lo solucionamos implementando un deadband de 30 ticks (6% del periodo) que inserta una pausa entre cambios de sentido, evitando shoot-through en el puente H.
 
-      - **Telemetry Manager:** Gestor de telemetría que empaqueta los datos de sensores en formato **Influx Line Protocol (ILP)** para su ingestión directa en InfluxDB sin transformación. Sigue un patrón builder: `telemetry_create()` → `telemetry_add_float()/add_int()/add_bool()` → `telemetry_destroy()` (que dispara la publicación MQTT). Cada muestra se estampa con un timestamp de microsegundos obtenido de `esp_timer_get_time()`, independientemente del momento en que se publique el bloque. El intervalo de publicación configurado es de 5000 ms, acumulando múltiples muestras de alta frecuencia en un único payload MQTT para evitar la saturación del broker.
+      - **Encoders (PCNT):** Lectura de encoders de cuadratura mediante el periférico hardware PCNT (sin consumo de CPU). Con 11 PPR, reductora 21.3:1 y ruedas de 68mm, conseguimos ~0.13mm de resolución por pulso. Inicialmente el robot marcaba el doble de distancia real: el error estaba en la configuración del modo de conteo (X4 vs X2). También implementamos un acumulador de 64 bits porque el contador hardware de 16 bits se desbordaba en recorridos largos.
 
-      - **MQTT Custom Client:** Capa de abstracción sobre el cliente MQTT de ESP-IDF. Gestiona la conexión con el broker Mosquitto, la publicación en topics (`robot/odometry`, `robot/telemetry`, `robot/events`) y la suscripción a topics de comandos (`robot/cmd`, `robot/curvatura`). Soporta QoS 0 y QoS 1, con un máximo de 4 callbacks de topic registrados simultáneamente. Los callbacks deben ser no bloqueantes (sub-milisegundo) para no romper el Keep-Alive MQTT.
+      - **Telemetría (Influx Line Protocol):** Enviar cada dato individual por MQTT saturaría la red. La solución fue empaquetar por lotes: el firmware acumula muestras con timestamp de microsegundos y las envía en un solo payload cada 5 segundos. La red recibe pocos mensajes, pero cada dato conserva su instante exacto de medición.
 
-      - **Shared Memory:** Mecanismo de comunicación inter-core protegido por mutex FreeRTOS con timeout de 10 ms. Define dos estructuras compartidas: `robot_sensor_data_t` (velocidad, distancia, corriente, batería, temperatura, contador de encoder) y `robot_command_t` (tipo de comando y parámetros). Incluye contadores de heartbeat por CPU (`heartbeat_cpu0`, `heartbeat_cpu1`) que permiten detectar si un núcleo se ha quedado bloqueado.
+      - **Cliente MQTT:** Gestiona publicación (odometría, telemetría, eventos) y suscripción (comandos, curvatura). Un problema recurrente fue que callbacks lentos rompían el keep-alive MQTT. Aprendimos a mantenerlos por debajo del milisegundo, delegando el trabajo pesado a las tareas principales.
 
-      - **State Machine:** Máquina de estados con 7 estados (INIT, WAITING_ORDERS, AUTONOMOUS, REMOTE_CONTROLLED, TELEMETRY_ONLY, MQTT_LOST_ERROR, SHUTDOWN) y 5 modos de operación (NONE, AUTONOMOUS_PATH, AUTONOMOUS_OBSTACLE, REMOTE_DRIVE, TELEMETRY_STREAM). Las transiciones están condicionadas a la conectividad MQTT: si se pierde la conexión durante un modo que la requiere, el robot pasa automáticamente al estado MQTT_LOST_ERROR y detiene los motores. Tras 5000 ms de timeout, intenta reconectar. Los cambios de estado se publican como eventos JSON retenidos en `robot/events`.
+      - **Memoria compartida inter-core:** Los dos núcleos intercambian datos (sensores y comandos) a través de estructuras protegidas por mutex con timeout de 10 ms. Incluye contadores de heartbeat por CPU para detectar bloqueos del otro núcleo.
 
-      - **Curvature Feedforward:** Módulo que recibe el valor de curvatura calculado por el nodo de visión a través del topic MQTT `robot/curvatura`. Acepta formato texto (ASCII numérico) o binario (4 bytes timestamp + 4 bytes float little-endian). El valor se almacena en una variable global volátil para acceso inmediato desde el lazo de control, permitiendo correcciones anticipadas de dirección antes de que el error sea medido por los encoders.
+      - **Máquina de estados:** 7 estados (INIT, WAITING_ORDERS, AUTONOMOUS, REMOTE_CONTROLLED, TELEMETRY_ONLY, MQTT_LOST_ERROR, SHUTDOWN). Si se pierde la conexión MQTT durante un modo que la requiere, el robot detiene los motores y entra en error seguro. Tras 5 segundos, intenta reconectar. Cada transición se publica como evento JSON retenido.
 
-      - **Audio Player:** Reproductor de sonidos embebidos (PCM 16-bit mono a 16 kHz) a través del códec ES8311 conectado por I2C (GPIO7 SDA, GPIO8 SCL) e I2S (MCLK GPIO13, BCLK GPIO12, WS GPIO10, DOUT GPIO9). Soporta reproducción asíncrona mediante tarea FreeRTOS dedicada con control de volumen (0-100%). Sonidos disponibles: BATTERY_LOW y STARTUP.
+      - **Feedforward de curvatura:** Recibe del nodo de visión el valor de curvatura del camino y lo pone a disposición del lazo de control para anticipar los giros antes de que los encoders detecten la desviación.
 
-      - **Ethernet:** Driver de conectividad Ethernet con soporte para EMAC interno del ESP32-P4 y módulos SPI externos. Gestión de eventos de conexión/desconexión y obtención de IP (DHCP o estática).
+      - **Audio:** Reproducción de sonidos embebidos (arranque, batería baja) vía códec ES8311. Tuvimos fallos intermitentes en la inicialización I2C por resistencias pull-up inadecuadas.
 
-      - **Logger:** Sistema centralizado de logging que unifica los mensajes de diagnóstico del firmware.
-
-      - **Performance Monitor:** Módulo que recopila métricas de rendimiento de las tareas FreeRTOS (uso de CPU por tarea y por núcleo) y las publica en formato JSON al topic `robot/performance` para su visualización en Grafana.
+      - **Monitor de rendimiento:** Mide el uso de CPU por tarea FreeRTOS y lo publica en JSON a Grafana. Fue clave para detectar que la tarea de comunicaciones consumía más recursos de lo esperado al formatear JSON.
 
 4. ## Montaje y construcción {#montaje-y-construcción}
 
@@ -223,43 +219,55 @@ Experimentado tras trabajar como programador en la empresa GDA (Grupul de Despă
 
 5. ## Pruebas, validaciones y mejoras {#pruebas,-validaciones-y-mejoras}
 
-   El proceso de pruebas y validación se ha llevado a cabo de forma incremental, verificando cada subsistema de forma aislada antes de la integración completa.
+   Hemos seguido un enfoque incremental: probar cada subsistema de forma aislada antes de la integración. A continuación describimos las pruebas realizadas y los problemas encontrados.
 
    **Pruebas realizadas:**
 
-   - **Conectividad Ethernet y MQTT:** Se verificó la comunicación bidireccional entre el ESP32-P4 y la Raspberry Pi 5 a través de cable Ethernet directo. Se validó la conexión al broker Mosquitto, la publicación y suscripción a topics, y la reconexión automática tras desconexiones simuladas. Se comprobó que los eventos de conexión/desconexión se registran correctamente en `robot/events`.
+   - **Conectividad Ethernet y MQTT:** La conexión se caía intermitentemente al principio. El problema era que MQTT intentaba conectarse antes de que Ethernet tuviera IP. Se solucionó añadiendo una espera a la obtención de dirección. Se verificó también la reconexión automática tras desconexiones simuladas.
 
-   - **Pipeline de telemetría completo:** Se validó la cadena ESP32 → MQTT (Influx Line Protocol) → Mosquitto → Telegraf → InfluxDB → Grafana. Se verificó que los datos de rendimiento por tarea y por núcleo del ESP32 llegan correctamente al dashboard de Grafana con las etiquetas `task` y `core`. Se comprobó que las métricas del sistema de la RPi5 (CPU, temperatura, memoria, disco) se recolectan cada 5 segundos.
+   - **Pipeline de telemetría:** Se validó la cadena completa ESP32 → Mosquitto → Telegraf → InfluxDB → Grafana. Un problema fue que los datos llegaban a Grafana con timestamp incorrecto: se estaba usando la hora de llegada al servidor en vez de la marca temporal del ESP32. Se corrigió la configuración de Telegraf para respetar los timestamps de origen.
 
-   - **Control de motores (MCPWM):** Se verificó la generación correcta de señales PWM a 20 kHz en los pines de los drivers DRV8871. Se probaron los modos de avance, retroceso y frenado con el patrón de test implementado (-1000 durante 1.5s en bucle). Se comprobó que el deadband de 30 ticks previene transitorios peligrosos al cambiar de dirección.
+   - **Control de motores:** Se verificaron las señales PWM a 20 kHz con osciloscopio. Al cambiar de dirección bruscamente, picos de corriente reiniciaban el ESP32. Se implementó el deadband (6%) que previene shoot-through. Actualmente funcionan con un patrón de prueba fijo; pendiente conectar al PID.
 
-   - **Lectura de encoders (PCNT):** Se validó la lectura de encoders de cuadratura en modo X4 mediante el periférico hardware PCNT. Se verificó que el cálculo de velocidad (m/s) y distancia acumulada (m) es coherente con las especificaciones mecánicas (11 PPR, reducción 21.3:1, rueda de 68mm). Se comprobó la correcta acumulación en el contador software de 64 bits.
+   - **Encoders:** Los valores de distancia iniciales no cuadraban (marcaba el doble). El error estaba en la configuración del modo de conteo X4 vs X2. Tras corregir la fórmula, los cálculos coincidieron con mediciones manuales.
 
-   - **Máquina de estados:** Se verificaron las transiciones entre estados (INIT → WAITING_ORDERS → modos operativos) y la caída automática a MQTT_LOST_ERROR al perder la conexión MQTT. Se comprobó la publicación de eventos JSON retenidos en cada cambio de estado.
+   - **Máquina de estados:** Se simularon pérdidas de conexión desconectando el cable Ethernet. El robot detiene motores automáticamente, entra en error seguro y reconecta tras 5 segundos. Cada transición queda registrada como evento MQTT.
 
-   - **Visión artificial (feedforward de curvatura):** Se probó el pipeline de visión con la cámara IMX219: captura a 820x616, transformada de perspectiva, detección de blobs por secciones y cálculo de curvatura ponderada. Se verificó la publicación del valor de curvatura en `robot/curvatura` y su recepción por el módulo feedforward del firmware.
+   - **Visión artificial:** Se validó el pipeline completo: captura, transformada de perspectiva, detección de línea y cálculo de curvatura. La calibración de perspectiva variaba según posición de la cámara, así que desarrollamos una herramienta interactiva de recalibración. El valor de curvatura llega correctamente al ESP32 vía MQTT.
 
-   - **Sistema de audio:** Se validó la reproducción de sonidos embebidos (STARTUP, BATTERY_LOW) a través del códec ES8311 con control de volumen.
+   - **Audio:** Funcionó tras solucionar fallos intermitentes en la inicialización I2C del códec ES8311 (resistencias pull-up inadecuadas).
+
+   **Problemas transversales del proceso:**
+
+   - **Gestión de compras:** Los tiempos de envío de AliExpress (3-4 semanas) nos obligaron a hacer pedidos antes de tener el diseño cerrado, asumiendo riesgos en la elección de componentes. Componentes de proyectos anteriores aliviaron el presupuesto.
+
+   - **ESP32-P4 como chip nuevo:** Poca documentación y ejemplos en la comunidad. Funcionalidades bien documentadas en otros ESP32 requerían investigación adicional para el P4. Esto ralentizó el desarrollo inicial pero nos obligó a entender el hardware a mayor profundidad.
+
+   - **micro-ROS descartado:** No existe implementación estable para el ESP32-P4, por lo que se optó por MQTT como alternativa viable (ver sección de arquitectura).
 
    **Pruebas pendientes y plan de validación:**
 
-   - **Integración PID de velocidad con encoders:** Cerrar el lazo de control sustituyendo el patrón de test hardcodeado por un controlador PID que use la velocidad medida por los encoders como retroalimentación. Ajustar las constantes Kp, Ki, Kd experimentalmente.
+   - **Cerrar el lazo de control PID:** Actualmente los motores funcionan con un patrón de test fijo. El siguiente paso es implementar el controlador PID que use la velocidad medida por los encoders como retroalimentación, y ajustar las constantes experimentalmente sobre el robot real.
 
-   - **Integración de visión con control de motores:** Conectar la curvatura calculada por el nodo de visión con el lazo de control del firmware para lograr un siguelíneas funcional en pista real. Validar la latencia del pipeline completo (cámara → procesamiento → MQTT → actuación).
+   - **Integrar visión con motores:** Conectar el valor de curvatura de la cámara con el control de dirección del firmware para lograr un siguelíneas funcional en pista real. Medir la latencia total del pipeline (cámara → procesamiento → MQTT → actuación en motores).
 
-   - **Integración del LiDAR D500:** Implementar el driver de comunicación UART con el LiDAR y validar el mapa de puntos 360° para navegación autónoma con Nav2.
+   - **Integrar el LiDAR:** Implementar la comunicación con el LiDAR D500 y validar el mapa de 360° para la navegación autónoma.
 
-   - **Sensor de corriente y voltaje INA226:** Implementar la lectura I2C del INA226 para monitorización de batería en tiempo real. Calibrar los umbrales de apagado seguro.
+   - **Sensor de batería (INA226):** Programar la lectura del sensor de corriente y voltaje para monitorizar la batería en tiempo real y configurar un apagado seguro cuando el nivel sea crítico.
 
-   - **Sensor de línea IR (array de 8 canales):** Integrar el array IR como entrada analógica de error para el PID de seguimiento de línea. Calibrar sobre superficie real.
+   - **Sensor de línea IR:** Integrar el array de 8 sensores infrarrojos como entrada alternativa al PID de seguimiento de línea, calibrándolo sobre la superficie real de la pista.
 
-   - **Pruebas de autonomía completa:** Validar el robot en un circuito de prueba con todos los subsistemas integrados. Medir la autonomía de la batería LiPo 4S 2300mAh bajo carga real.
-
-   - **Pruebas de robustez y recuperación:** Simular fallos de comunicación, pérdida de alimentación parcial y situaciones de emergencia para validar que la máquina de estados reacciona correctamente en todos los casos.
+   - **Prueba de autonomía completa:** Validar el robot con todos los subsistemas integrados en un circuito de prueba y medir cuánto dura la batería LiPo 4S 2300mAh bajo carga real.
 
 6. ## Presupuesto {#presupuesto}
 
-   El presupuesto total del proyecto se ha optimizado buscando los proveedores más económicos para cada componente, priorizando AliExpress para componentes electrónicos y proveedores europeos para elementos críticos o urgentes.
+   Uno de los mayores retos del proyecto ha sido ajustar el diseño a un presupuesto limitado. Para cada componente, comparamos precios en múltiples proveedores (AliExpress, Mouser Electronics, RobotShop, Amazon, Farnell) y elaboramos una hoja de cálculo con todas las opciones.
+
+   **Proceso de selección de componentes:**
+
+   Las decisiones de compra no fueron solo económicas, también técnicas. Por ejemplo, para el microcontrolador evaluamos el STM32F411 (~4 €), el STM32F407 (~18 €) y el ESP32-P4-ETH (~18 €). Elegimos el ESP32-P4 porque incluye Ethernet integrado (necesario para comunicarse con la Raspberry Pi sin WiFi), dos núcleos de alto rendimiento y un amplio ecosistema de desarrollo (ESP-IDF). Para los motores, descartamos los servos Dynamixel (40–300 € por unidad) porque necesitábamos rotación continua a alta velocidad, no posicionamiento preciso, y los motores DC JGA25-370 (~10 €) cumplían perfectamente a una fracción del coste.
+
+   Un problema recurrente fue la **gestión de tiempos de envío**: AliExpress ofrece los mejores precios pero con plazos de 3-4 semanas, lo que nos obligó a hacer pedidos antes de tener el diseño completamente cerrado. En algunos casos compramos componentes que luego no usamos (como un driver TB9051FTG que sustituimos por el DRV8871 por disponibilidad). Para componentes urgentes o críticos, recurrimos a proveedores europeos (Mouser, RobotShop) asumiendo un coste mayor.
 
    **Resumen por categoría:**
 
@@ -275,9 +283,7 @@ Experimentado tras trabajar como programador en la empresa GDA (Grupul de Despă
    | Materiales y mecánica (PLA, ruedas) | 8,80 € |
    | **TOTAL** | **243,00 €** |
 
-   Este presupuesto considera los precios más económicos por proveedor estándar. Con proveedores afiliados (BricoGeek, Filament2Print, Mouser), el total asciende a 276,69 €. El gasto efectivo fuera de afiliados es de tan solo 6,05 € (cable ethernet y ruedas giratorias), ya que la mayoría de componentes se cubren con los patrocinios o se adquieren a través de proveedores colaboradores.
-
-   Varios componentes ya se encontraban en posesión del equipo antes del inicio del proyecto (motores JGA25-370, altavoces, portafusibles, interruptores, conector 2-a-6, convertidores buck, cámara IMX219, array IR, ESP32-P4-ETH y PLA), lo que reduce el gasto real necesario a aproximadamente 189,50 €.
+   Varios componentes ya se encontraban en posesión del equipo de proyectos anteriores (motores, altavoces, portafusibles, interruptores, convertidores buck, cámara, array IR, ESP32-P4 y PLA), lo que reduce el gasto real necesario a aproximadamente 189,50 €. Con proveedores afiliados y patrocinadores, el gasto efectivo de bolsillo se reduce a tan solo 6,05 €.
 
 7. ## Financiación {#financiación}
 
