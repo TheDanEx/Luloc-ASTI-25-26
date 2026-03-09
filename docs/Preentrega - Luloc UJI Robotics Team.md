@@ -119,6 +119,10 @@ Experimentado tras trabajar como programador en la empresa GDA (Grupul de Despă
 
    1. ### Diseño mecánico {#diseño-mecánico}
 
+      El diseño mecánico del robot ha pasado por varias iteraciones significativas. Uno de los mayores cambios vino tras la reunión informativa con la organización del ASTI Challenge: habíamos planificado que la transpaleta fuese un **accesorio desmontable** que no contara para la restricción de tamaño del robot. Al descubrir que sí computaba dentro del volumen máximo permitido, tuvimos que **rediseñar gran parte del modelo 3D**, ingeniar un sistema de transpaleta **plegable/recogible** que cupiera dentro de las dimensiones reglamentarias, y descartar el sensor IMU que ya no cabía en el nuevo diseño.
+
+      Además, desde el principio del diseño tuvimos en cuenta la **distribución de pesos** del robot, ya que necesita ser capaz de mover cargas sin perder estabilidad ni tracción. La posición de la batería, los motores y la electrónica se distribuyó para mantener el centro de gravedad bajo y centrado.
+
       *\[Fotos y renders incluidos en el documento final\]*
 
    2. ### Diseño eléctrico {#diseño-eléctrico}
@@ -133,13 +137,13 @@ Experimentado tras trabajar como programador en la empresa GDA (Grupul de Despă
 
       - **ESP32-P4 (microcontrolador):** Control determinista de motores, lectura de encoders y sensores críticos (IMU, corriente). Si la Raspberry Pi falla, el ESP32 puede frenar el robot de forma autónoma.
 
-      - **Raspberry Pi 5 (microprocesador):** Procesamiento de cámara con OpenCV, navegación autónoma con ROS2/Nav2, y sistema completo de telemetría y monitorización (InfluxDB, Grafana). Envía órdenes de alto nivel al ESP32.
+      - **Raspberry Pi 5 (microprocesador):** Procesamiento de cámara con OpenCV, scripts de visión en Python, y sistema completo de telemetría y monitorización (InfluxDB, Grafana). Envía órdenes de alto nivel al ESP32.
 
       **Decisión clave — MQTT en lugar de micro-ROS:**
 
       Inicialmente queríamos usar **micro-ROS** para integrar el ESP32 directamente con el ecosistema ROS2 de la Raspberry Pi. Sin embargo, **no existe todavía una implementación estable de micro-ROS para el ESP32-P4**, que es un chip muy reciente. Intentar portarlo habría consumido semanas sin garantía de éxito.
 
-      La solución fue usar **MQTT**, un protocolo de mensajería más ligero y probado. Aunque perdemos la integración directa con ROS2, ganamos una comunicación fiable que pudimos poner en marcha en pocos días. La conexión se hace por **cable Ethernet directo** (no WiFi) para eliminar latencia variable.
+      La solución fue usar **MQTT**, un protocolo de mensajería más ligero y probado. Actualmente **toda la comunicación del robot funciona exclusivamente sobre MQTT** — no utilizamos nada de ROS2 en la práctica. Ganamos una comunicación fiable que pudimos poner en marcha en pocos días. La conexión se hace por **cable Ethernet directo** (no WiFi) para eliminar latencia variable.
 
       **Distribución de tareas en el ESP32-P4:**
 
@@ -170,11 +174,11 @@ Experimentado tras trabajar como programador en la empresa GDA (Grupul de Despă
 
       **Servicios en desarrollo (preparados pero desactivados):**
 
-      - **Visión:** Nodo Python con OpenCV que captura la cámara CSI (IMX219), aplica transformada de perspectiva, detecta la línea del suelo y calcula la curvatura del recorrido. Publica el valor al ESP32 vía MQTT para feedforward de dirección. Un problema que encontramos fue que las librerías de la cámara CSI (libcamera/picamera2) no son triviales de configurar dentro de Docker, lo cual nos obligó a probar tanto dentro como fuera del contenedor.
+      - **Visión:** Script Python con OpenCV que captura la cámara CSI (IMX219), aplica transformada de perspectiva, detecta la línea del suelo y calcula la curvatura del recorrido. Publica el valor al ESP32 vía MQTT para feedforward de dirección. Un problema que encontramos fue que las librerías de la cámara CSI (libcamera/picamera2) no son triviales de configurar dentro de Docker, lo cual nos obligó a probar tanto dentro como fuera del contenedor.
 
-      - **Navegación:** Nodo ROS2 Humble con Nav2 que integra el LiDAR D500 para SLAM y planificación de rutas. Contenedor preparado pero pendiente de integración.
+      - **Navegación:** Contenedor preparado con Nav2 y LiDAR D500 para SLAM y planificación de rutas, pendiente de integración.
 
-      - **Controlador principal:** Backend en Python (FastAPI) que implementa la máquina de estados a nivel de misión, el puente ROS2↔MQTT y una API REST para el dashboard.
+      - **Controlador principal:** Backend en Python (FastAPI) que implementa la máquina de estados a nivel de misión y una API REST para el dashboard. Toda la comunicación con el ESP32 se realiza exclusivamente por MQTT.
 
    3. ### Firmware {#firmware}
 
@@ -270,6 +274,10 @@ Experimentado tras trabajar como programador en la empresa GDA (Grupul de Despă
 
    Un problema recurrente fue la **gestión de tiempos de envío**: AliExpress ofrece los mejores precios pero con plazos de 3-4 semanas, lo que nos obligó a hacer pedidos antes de tener el diseño completamente cerrado. En algunos casos compramos componentes que luego no usamos (como un driver TB9051FTG que sustituimos por el DRV8871 por disponibilidad). Para componentes urgentes o críticos, recurrimos a proveedores europeos (Mouser, RobotShop) asumiendo un coste mayor.
 
+   Además, al realizar parte de los pedidos **a través de afiliados de la universidad**, nos encontramos con paquetes que no se habían pedido correctamente o que no llegaban a tiempo. Esto nos obligó a ir **adaptándonos a los componentes conforme iban llegando**, ajustando el diseño y la planificación sobre la marcha en lugar de seguir un plan cerrado.
+
+   Cuadrar todo dentro del presupuesto fue un reto en sí mismo. Queríamos incluir dispositivos como la Raspberry Pi 5, el microcontrolador ESP32-P4, un LiDAR y una cámara — componentes que nos permiten tener un robot con el que poder desarrollar y probar todo lo que estudiamos en la carrera. Conseguir encajar toda esa electrónica sin exceder el límite requirió una búsqueda exhaustiva de precios y el aprovechamiento de componentes de proyectos anteriores.
+
    **Resumen por categoría:**
 
    | Categoría | Coste estimado |
@@ -288,11 +296,12 @@ Experimentado tras trabajar como programador en la empresa GDA (Grupul de Despă
 
 7. ## Financiación {#financiación}
 
-   El proyecto cuenta con el apoyo de tres patrocinadores:
+   La búsqueda de financiación ha sido un proceso activo desde el inicio del proyecto. Contactamos con varias empresas y entidades explicando el proyecto y lo que necesitábamos, y no siempre salió como esperábamos:
 
-   - **BRICOGEEK:** Tienda online de electrónica y robótica que proporciona componentes y módulos electrónicos para el desarrollo del robot.
-   - **JLCPCB:** Fabricante de PCBs que colabora con servicios de fabricación de placas de circuito impreso para posibles diseños de PCB personalizados.
-   - **UJILAB Innovació:** Laboratorio de innovación de la Universitat Jaume I que proporciona acceso a herramientas, espacios de trabajo y recursos de fabricación (impresoras 3D, herramientas de taller).
+   - **UJILAB Innovació:** Es patrocinador del club UJI Robotics en su conjunto y ayuda a financiar las actividades del club. Nos proporciona acceso a herramientas, impresoras 3D y recursos de fabricación.
+   - **Espaitec:** Nos cede el espacio de las oficinas donde trabajamos como equipo.
+   - **BRICOGEEK:** Contactamos con ellos para obtener componentes electrónicos. Inicialmente querían cedernos las Raspberry Pi, pero **no había stock disponible**. Finalmente nos enviaron un cargador de baterías y filamento para la impresora 3D, que hemos utilizado para las pruebas y la fabricación de piezas.
+   - **JLCPCB:** Les contactamos para fabricar PCBs a medida para el robot. Por complicaciones en el diseño y los plazos, **no han dado tiempo para la semifinal**, pero si llegamos a la final contaremos con ellas.
 
    Adicionalmente, parte del material ha sido adquirido directamente por los miembros del equipo con fondos propios, y se buscan activamente acuerdos con proveedores como Mouser Electronics y RobotShop para obtener descuentos educativos.
 
@@ -342,14 +351,16 @@ Experimentado tras trabajar como programador en la empresa GDA (Grupul de Despă
 
 3. ## Modificaciones o adaptaciones al diseño original {#modificaciones-o-adaptaciones-al-diseño-original}
 
-   Para adaptar el robot del ASTI Challenge al escenario de transporte inter-líneas en fábrica, se contemplan las siguientes modificaciones:
+   La principal adaptación del robot para este escenario ha sido el diseño e integración del **sistema de transpaleta**:
 
-   - **Plataforma de carga:** Añadir una bandeja o soporte superior al chasis para transportar cajas y bandejas de componentes. El servo MG996R puede utilizarse como mecanismo de retención o liberación de la carga en las estaciones de recogida y entrega.
+   - **Mecanismo de transpaleta con servo:** Se diseñó un sistema de elevación controlado por el servo MG996R que permite al robot recoger, transportar y depositar bandejas y cajas en las estaciones de trabajo. Este mecanismo es el núcleo de la adaptación al escenario de transporte inter-líneas.
 
-   - **Refuerzo de motores:** Para cargas superiores a 5 kg, sustituir los motores JGA25-370 por motores de mayor par manteniendo la misma interfaz de driver (DRV8871). Alternativamente, aumentar la relación de reducción de la reductora.
+   - **Distribución de pesos:** A la hora de diseñar el robot, tuvimos en cuenta la distribución de pesos para poder mover cargas sin perder estabilidad ni tracción. La posición de la batería, motores y electrónica se planificó para que el centro de gravedad se mantenga bajo y equilibrado incluso con carga.
 
-   - **Gestión de flota (software):** Desarrollar un servicio adicional en Docker (en la Raspberry Pi o en un servidor central) que implemente la lógica de asignación de misiones: cola de pedidos de transporte, asignación al robot más cercano disponible y gestión de prioridades.
+   - **Refuerzo de motores:** Para cargas superiores a 5 kg, se contemplan motores de mayor par manteniendo la misma interfaz de driver (DRV8871), o aumentar la relación de reducción.
 
-   - **Identificación de estaciones:** Utilizar la cámara IMX219 para leer códigos QR o ArUco markers en cada estación de trabajo, permitiendo al robot confirmar que ha llegado al destino correcto antes de depositar la carga.
+   - **Gestión de flota (software):** Desarrollar un servicio adicional en Docker que implemente la lógica de asignación de misiones: cola de pedidos de transporte, asignación al robot más cercano disponible y gestión de prioridades. La arquitectura MQTT existente facilita escalar de un solo robot a una flota coordinada.
 
-   - **Ampliación de autonomía:** Para turnos de trabajo largos (8h), añadir una batería LiPo de mayor capacidad o implementar un sistema de carga por contacto en las estaciones de espera, aprovechando la monitorización del INA226 para gestionar la rotación de robots según nivel de batería.
+   - **Identificación de estaciones:** Utilizar la cámara IMX219 para leer códigos QR o ArUco markers en cada estación de trabajo, confirmando que el robot ha llegado al destino correcto antes de depositar la carga.
+
+   - **Ampliación de autonomía:** Para turnos largos, añadir una batería de mayor capacidad o implementar carga por contacto en las estaciones de espera, aprovechando la monitorización del INA226 para gestionar la rotación de robots según nivel de batería.
