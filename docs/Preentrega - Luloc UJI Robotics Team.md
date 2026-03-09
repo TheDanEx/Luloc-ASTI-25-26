@@ -143,14 +143,13 @@ Experimentado tras trabajar como programador en la empresa GDA (Grupul de Despă
 
       **Distribución de tareas en el ESP32-P4:**
 
-      El ESP32-P4 dispone de dos núcleos RISC-V a 400 MHz. Los repartimos así:
+      El ESP32-P4 dispone de dos núcleos RISC-V a 400 MHz. Separar las responsabilidades entre núcleos fue una decisión temprana: durante las primeras pruebas, ejecutar el control de motores y las comunicaciones MQTT en el mismo núcleo provocaba jitter en el PWM cada vez que se publicaba un mensaje. Al fijar cada función a un núcleo dedicado, el control de motores dejó de verse afectado por las operaciones de red.
 
-      | Núcleo | Función |
-      | :---- | :---- |
-      | **CPU0** | Control de motores en tiempo real y lectura de encoders. No realiza operaciones de red para evitar bloqueos. |
-      | **CPU1** | Comunicaciones MQTT, publicación de telemetría, recepción de comandos y lectura de sensores secundarios (IMU, corriente). |
-
-      Además, una tarea de vigilancia con prioridad mínima envía un heartbeat cada 5 segundos. Si deja de emitir, indica que el sistema está sobrecargado.
+      | Núcleo | Tarea | Prioridad | Función |
+      | :---- | :---- | :---- | :---- |
+      | **CPU0 (HP)** | `task_rtcontrol_cpu0` | 10 (máxima) | Control de motores en tiempo real, lectura de encoders, PID, reacciones críticas. No realiza ninguna operación de red. |
+      | **CPU1 (HP)** | `task_comms_cpu1` | 10 (máxima) | Gestión MQTT, publicación de telemetría, recepción de comandos, lectura de sensores complejos (IMU, corriente). |
+      | **CPU1 (HP)** | `task_monitor_lowpower` | 1 (mínima) | Watchdog de hambruna: publica un heartbeat cada 5 segundos. Si deja de emitir, indica que el sistema está saturado. |
 
    2. ### Software {#software}
 
@@ -160,10 +159,12 @@ Experimentado tras trabajar como programador en la empresa GDA (Grupul de Despă
 
       Un reto inicial fue cómo almacenar y visualizar los cientos de datos por segundo que genera el robot. Una base de datos convencional no era viable por la frecuencia de escritura. La solución fue montar una cadena especializada en series temporales:
 
-      1. **Mosquitto (MQTT Broker)** — Recibe los datos del ESP32 y los distribuye a los servicios que los necesiten.
-      2. **Telegraf** — Recoge mensajes MQTT y los ingesta en la base de datos. También monitoriza la salud de la propia Raspberry Pi (temperatura, CPU, memoria).
-      3. **InfluxDB 2.7** — Base de datos de series temporales, optimizada para escrituras de alta frecuencia y consultas como "¿qué velocidad tenía la rueda hace 3 minutos?".
-      4. **Grafana** — Dashboard web con gráficas en tiempo real: uso de CPU por núcleo del ESP32, temperatura, vista embebida de la cámara y logs de comandos.
+      | Servicio | Contenedor Docker | Función |
+      | :---- | :---- | :---- |
+      | **Mosquitto** | `mqtt-broker` | Broker MQTT que recibe los datos del ESP32 y los distribuye a los servicios suscritos. |
+      | **Telegraf** | `telegraf` | Recoge mensajes MQTT y los ingesta en la base de datos. También monitoriza la salud de la propia Raspberry Pi (temperatura, CPU, memoria). |
+      | **InfluxDB 2.7** | `influxdb` | Base de datos de series temporales, optimizada para escrituras de alta frecuencia y consultas como "¿qué velocidad tenía la rueda hace 3 minutos?". |
+      | **Grafana** | `grafana` | Dashboard web con gráficas en tiempo real: uso de CPU por núcleo del ESP32, temperatura, vista embebida de la cámara y logs de comandos. |
 
       Esta cadena nos ha permitido diagnosticar problemas que de otro modo serían invisibles, como picos de uso de CPU al publicar datos MQTT o subidas de temperatura de la RPi5 al procesar vídeo.
 
