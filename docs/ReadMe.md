@@ -77,6 +77,6 @@ Telemetry uses **batched Influx Line Protocol** (not individual JSON messages). 
 
 ## Git Workflow
 
-- Branch naming: `<contributor>/main` (e.g., `Luloc/main`, `PabloMotos/main`)
+- Branch naming: `<team>/<contributor>/main` (e.g., `Luloc/TheDanEx/main`, `PabloMotos/MCU-Karman/main`)
 - A GitHub Actions workflow auto-creates sync PRs from `main` to contributor branches on push to `main`
 - PRs merge contributor branches into `main`
