@@ -2,7 +2,7 @@
 
 # Validar ejecución como root
 if [ "$EUID" -ne 0 ]; then
-  echo "Error: Este script debe ejecutarse con privilegios elevados. Usa: sudo ./deploy.sh"
+  echo "Error: Este script debe ejecutarse con privilegios elevados. Usa sudo"
   exit 1
 fi
 
