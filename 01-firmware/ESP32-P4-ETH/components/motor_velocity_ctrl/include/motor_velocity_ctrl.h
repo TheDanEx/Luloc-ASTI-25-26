@@ -67,6 +67,16 @@ esp_err_t motor_velocity_ctrl_update(motor_velocity_ctrl_handle_t handle,
  */
 esp_err_t motor_velocity_ctrl_set_pid(motor_velocity_ctrl_handle_t handle, float kp, float ki, float kd);
 
+/**
+ * @brief Gets the current auto-sweeping target velocity for Live Calibration mode.
+ * 
+ * Automatically switches between CONFIG_VELOCITY_CTRL_SWEEP_SPEED_1 and SPEED_2
+ * based on the elapsed time and CONFIG_VELOCITY_CTRL_SWEEP_TIME_MS.
+ * 
+ * @return float The current target speed (m/s).
+ */
+float motor_velocity_ctrl_get_sweep_target(void);
+
 #ifdef __cplusplus
 }
 #endif

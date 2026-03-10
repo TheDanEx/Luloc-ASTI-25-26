@@ -5,9 +5,11 @@ idf_component_register(
         "tasks/task_rtcontrol_cpu0.c"
         "tasks/task_comms_cpu1.c"
         "tasks/task_monitor_lowpower_cpu1.c"
+        "modes/mode_calibrate.c"
     INCLUDE_DIRS
         "."
         "tasks"
+        "modes"
     REQUIRES
         ethernet
         mqtt_custom_client

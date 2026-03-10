@@ -20,6 +20,26 @@ menu "[UJI] 1. Control: Motor Velocity"
             If the battery drops to 14V, the controller will automatically boost
             the base PWM to match the performance of a 16.8V battery.
 
+    menu "Live Calibration Sweeper"
+        config VELOCITY_CTRL_SWEEP_SPEED_1
+            string "Sweep Target Speed 1 (m/s)"
+            default "0.5"
+            help
+                First speed step injected when MODE_CALIBRATE_MOTORS is active.
+
+        config VELOCITY_CTRL_SWEEP_SPEED_2
+            string "Sweep Target Speed 2 (m/s)"
+            default "-0.5"
+            help
+                Second alternating speed step. Can be negative for reverse testing.
+
+        config VELOCITY_CTRL_SWEEP_TIME_MS
+            int "Sweep Step Duration (ms)"
+            default 3000
+            help
+                Time in milliseconds each speed step is maintained before swapping.
+    endmenu
+
     config VELOCITY_CTRL_MAX_MOTOR_SPEED_MS
         string "Max Motor Speed (m/s) at Max Battery Voltage"
         default "1.5"

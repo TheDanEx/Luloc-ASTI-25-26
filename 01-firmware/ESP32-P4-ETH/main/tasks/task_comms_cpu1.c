@@ -69,53 +69,9 @@ static void collect_sensor_data(void);
 
 static void handle_mqtt_command(const char *cmd_str)
 {
-    int mode_id = -1;
-    int sound_id = 0;
-    int volume = -1;
-
-    // 1. Mode Change
-    if (strncmp(cmd_str, "CMD_MODE:", 9) == 0) {
-        if (sscanf(cmd_str, "CMD_MODE:%d", &mode_id) == 1) {
-            if (mode_id >= MODE_NONE && mode_id < MODE_COUNT) {
-                if (state_machine_request_mode((robot_mode_t)mode_id)) {
-                    ESP_LOGI(TAG, "Mode changed to: %d", mode_id);
-                    // Events are sporadic, sending manually is fine or could make an event telemetry
-                    char event_json[128];
-                    snprintf(event_json, sizeof(event_json), 
-                            "{\"event\":\"MODE_CHANGE\",\"mode\":%d,\"mode_str\":\"%s\"}", 
-                             mode_id, get_mode_name((robot_mode_t)mode_id));
-                    mqtt_custom_client_publish("robot/events", event_json, 0, 1, 0);
-                } else {
-                    ESP_LOGW(TAG, "Mode change rejected: %d", mode_id);
-                    mqtt_custom_client_publish("robot/events", "{\"error\":\"MODE_CHANGE_REJECTED\"}", 0, 1, 0);
-                }
-            }
-        }
-    } 
-    // 2. Named Modes
-    else if (strncmp(cmd_str, "MODE_AUTONOMOUS", 15) == 0) {
-        state_machine_request_mode(MODE_AUTONOMOUS_PATH);
-    } else if (strncmp(cmd_str, "MODE_REMOTE_DRIVE", 17) == 0) {
-        state_machine_request_mode(MODE_REMOTE_DRIVE);
-    } else if (strncmp(cmd_str, "MODE_TELEMETRY_STREAM", 21) == 0) {
-        state_machine_request_mode(MODE_TELEMETRY_STREAM);
-    } 
-    // 3. Sound
-    else if (strncmp(cmd_str, "CMD_PLAY_SOUND", 14) == 0) {
-        if (sscanf(cmd_str, "CMD_PLAY_SOUND:%d:%d", &sound_id, &volume) == 2) {
-             if (sound_id >= 0 && sound_id < SOUND_MAX) {
-                 audio_player_play_vol((audio_sound_t)sound_id, (uint8_t)volume);
-                 ESP_LOGI(TAG, "Playing sound %d at vol %d", sound_id, volume);
-             }
-        } else if (sscanf(cmd_str, "CMD_PLAY_SOUND:%d", &sound_id) == 1) {
-             if (sound_id >= 0 && sound_id < SOUND_MAX) {
-                 audio_player_play((audio_sound_t)sound_id);
-                 ESP_LOGI(TAG, "Playing sound %d", sound_id);
-             }
-        }
-    } else {
-        ESP_LOGW(TAG, "Unknown command: %s", cmd_str);
-    }
+    // String commands are now deprecated.
+    // All synchronous interactions pass through the JSON API (robot/api/set).
+    ESP_LOGW(TAG, "Legacy string cmd ignored: %s. Use JSON API.", cmd_str);
 }
 
 static void mqtt_cmd_callback(const char *topic, int topic_len, const char *data, int data_len)

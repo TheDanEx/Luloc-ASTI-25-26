@@ -3,7 +3,12 @@
 #include "esp_log.h"
 #include "task_rtcontrol_cpu0.h"
 #include "motor.h"
-
+#include "state_machine.h"
+#include "motor_velocity_ctrl.h"
+#include "pid_tuner.h"
+#include "shared_memory.h"
+#include "mode_calibrate.h"
+#include <stdlib.h>
 
 static const char *TAG = "rt_cntrl";
 
@@ -20,24 +25,52 @@ static motor_driver_mcpwm_t motors = {
 
 static void task_rtcontrol_cpu0(void *arg)
 {
-    ESP_LOGD(TAG, "Control loop running");
+    ESP_LOGI(TAG, "Control loop running");
     motor_mcpwm_init(&motors);
+    
+    // Configuración base leída de Kconfig (Cargada desde NVS si hay Live Tuning)
+    motor_velocity_config_t m_config = {
+        .kp = 0.5f, .ki = 0.05f, .kd = 0.01f, // Default, se sobreescribe
+        .max_battery_mv = 16800.0f,
+        .max_motor_speed = 1.5f
+    };
+    pid_tuner_load_motor_pid(&m_config.kp, &m_config.ki, &m_config.kd);
+
+    motor_velocity_ctrl_handle_t ctrl_left, ctrl_right;
+    motor_velocity_ctrl_create(&m_config, &ctrl_left);
+    motor_velocity_ctrl_create(&m_config, &ctrl_right);
+
+    const float dt = 0.01f; // 10ms = 100 Hz
+    const TickType_t poll_rate = pdMS_TO_TICKS(10); 
 
     while(1) {
-        // Motor control, sensor reading, real-time algorithms
-        //ESP_LOGI(TAG, "Turning th motor %s!", "FORWARD");
-        motor_mcpwm_set(&motors, -1000, -1000);   // adelante
-        vTaskDelay(pdMS_TO_TICKS(1500));
-        // ESP_LOGI(TAG, "Turning the motor %s!", "STOP");
-        // motor_mcpwm_stop(&motors);
-        // vTaskDelay(pdMS_TO_TICKS(1000));
-        // ESP_LOGI(TAG, "Turning the motor %s!", "REVERSE");
-        // motor_mcpwm_set(&motors, -700, -700);   // atras
-        // vTaskDelay(pdMS_TO_TICKS(1500));
-        // ESP_LOGI(TAG, "Turning the motor %s!", "STOP");
-        // motor_mcpwm_stop(&motors);
-        // vTaskDelay(pdMS_TO_TICKS(1000));
-        // vTaskDelay(pdMS_TO_TICKS(1));  // 100 Hz
+        robot_state_context_t* ctx = state_machine_get_context();
+        shared_memory_t* shm = shared_memory_get();
+        xSemaphoreTake(shm->mutex, portMAX_DELAY);
+
+        // Update PID live tuning si hay cambios desde MQTT
+        if (shm->live_pid.updated_flag) {
+            motor_velocity_ctrl_set_pid(ctrl_left, shm->live_pid.kp, shm->live_pid.ki, shm->live_pid.kd);
+            motor_velocity_ctrl_set_pid(ctrl_right, shm->live_pid.kp, shm->live_pid.ki, shm->live_pid.kd);
+            shm->live_pid.updated_flag = false;
+        }
+
+        // Leer Telemetría local (si fuera necesario explícitamente aquí, o se delega al modo)
+        
+        xSemaphoreGive(shm->mutex);
+
+        // --- ENRUTAMIENTO DE MODOS (Router Pattern) ---
+        if (ctx->current_mode == MODE_CALIBRATE_MOTORS || ctx->current_mode == MODE_CALIBRATE_LINE) {
+            
+            // Delegamos la lógica al módulo de calibración dinámico
+            mode_calibrate_execute(&motors, ctrl_left, ctrl_right, dt);
+            
+        } else {
+            // Placeholder global: Por defecto, si el modo no está mapeado aún, frenamos.
+            motor_mcpwm_stop(&motors);
+        }
+
+        vTaskDelay(poll_rate);
     }
 }
 

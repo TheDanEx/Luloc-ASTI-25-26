@@ -5,16 +5,7 @@ Este documento consolida la totalidad de tópicos y payloads (Mensajes) que mane
 ## 1. Comandos de Reducción Simples (Inputs Asíncronos)
 *Gestionado por: `task_comms_cpu1` (RX).*
 
-El microcontrolador escucha órdenes nativas literales tipo String para cambiar sus estados internos a nivel global o disparar actuadores tontos.
-**Tópico Base:** `robot/cmd`
-
-| Payload Esperado (String Mínimo) | Descripción de la Acción |
-| :--- | :--- |
-| `CMD_MODE:<n>` | Fuerza la máquina de estados a cambiar a la Fase `n` (siendo `n` un ENUM). |
-| `MODE_AUTONOMOUS` | Solicita cambiar específicamente a Conducción Autónoma pura. |
-| `MODE_REMOTE_DRIVE` | Solicita cambiar específicamente a Pilotaje Remoto por Gamepad. |
-| `MODE_TELEMETRY_STREAM` | Solicita cambiar a modo de Inspección (Motores parados, pero Telemetría al 100%). |
-| `CMD_PLAY_SOUND:<id>:<vol>` | Solicita al chip ES8311 que reproduzca el sonido de la SD de id `<id>` a volumen `%vol`. Si se omite `<vol>`, usa el por defecto. |
+*(Deprecado en favor de la API Síncrona REST-Like JSON). El robot ya no procesa strings puros en `robot/cmd` para evitar fallos de parseo. Acuda a la sección final de este documento.*
 
 ---
 
@@ -70,15 +61,40 @@ Para interactuar con la API, escriber por MQTT al tópico **GET** un JSON con es
 ### Recursos Soportados:
 1. Petición Batería: 
    - Envío: `{"resource": "battery"}`
-   - Respuesta: `{"resource": "battery", "battery_mv": 16400, "motor_current_ma": 420.5}`
+   - Respuesta: `{"resource": "battery", "battery_mv": 16400, "robot_current_ma": 420.5}`
 2. Petición Cinemática: 
    - Envío: `{"resource": "encoder"}`
-   - Respuesta: `{"resource": "encoder", "speed_ms": 1.2, "encoder_ticks": 454322}`
+   - Respuesta: `{"resource": "encoder", "speed_l_ms": 1.2, "speed_r_ms": 1.15, "ticks_l": 454322, "ticks_r": 454100}`
 3. Petición Tiempos: 
    - Envío: `{"resource": "uptime"}`
-   - Respuesta: `{"resource": "uptime", "uptime_sec": 3491, "uptime_ms": 3491500}`
+   - Respuesta: `{"resource": "uptime", "uptime_sec": 3491, "uptime_us": 3491500000}`
 4. Petición Total: 
    - Envío: `{"resource": "all"}`
-   - Respuesta: `{"resource": "all", "battery_mv": 16400, "motor_current_ma": 420.5, "speed_ms": 1.2, "encoder_ticks": 454322, "uptime_sec": 3491, "uptime_ms": 3491500}`
+   - Respuesta: `{"resource": "all", "battery_mv": 16400, "robot_current_ma": 420.5, "speed_l_ms": 1.2, "speed_r_ms": 1.15, "ticks_l": 454322, "ticks_r": 454100, "uptime_sec": 3491, "uptime_us": 3491500000}`
    
    *(Si un `resource` no existe en el código C del firmware, el robot retornará amistosamente un JSON informando `{"resource": "foo", "error": "Unknown Resource"}`).*
+
+---
+
+## 6. API Síncrona REST-Like (Comandos de Acción POST/SET)
+*Gestionado por: `mqtt_api_responder` (RX/TX).*
+
+Sustituye a los antiguos comandos de String permitiendo inyección de parámetros estructurados. Tras procesar la acción, el robot siempre responde indicando éxito o fracaso.
+**Tópico Endpoint:** `robot/api/set` (Para mandar ejecutar acciones)
+**Tópico Output:** `robot/api/response` (Robot responde aquí el JSON resultante confirmando la acción).
+
+Para interactuar con la API, escriber por MQTT al tópico **SET** un JSON con esta firma exacta: `{"action": "<nombre_accion>", "param1": X, "param2": Y}`
+
+### Acciones Soportadas:
+1. Reproducir Sonido (Audio Player): 
+   - Envío: `{"action": "play_sound", "sound_id": 1, "volume": 80}` (El campo `volume` es opcional).
+   - Sonidos Enum disponibles:`0 = BATTERY_LOW`, `1 = STARTUP`
+   - Respuesta Éxito: `{"action": "play_sound", "status": "success", "message": "Sound queued"}`
+   - Respuesta Fallo: `{"action": "play_sound", "status": "error", "message": "Invalid sound_id"}`
+
+2. Cambiar de Modo (State Machine):
+   - Envío: `{"action": "set_mode", "mode_id": 1, "force": false}` (El campo `force` es opcional, false por defecto).
+   - Modos Enum disponibles: `1 = PATH`, `2 = OBSTACLE`, `3 = REMOTE`, `4 = TELEMETRY`, `5 = CALIBRATE_MOTORS`, `6 = CALIBRATE_LINE`.
+   - Propósito del Force: Si no es forzado, la propia máquina de estados verificará preventivamente si se cumplen las condiciones de sensores y enlace de red requeridos y abortará si es inseguro. Si es `true`, saltará estas salvaguardias.
+   - Respuesta Éxito: `{"action": "set_mode", "status": "success", "message": "Mode changed"}` (Asincronamente la MQ emitirá también un evento `MODE_CHANGE` a `robot/events`).
+   - Respuesta Fallo: `{"action": "set_mode", "status": "error", "message": "Mode change rejected"}` (P.ej por falta de interlocks o sensores no listos).

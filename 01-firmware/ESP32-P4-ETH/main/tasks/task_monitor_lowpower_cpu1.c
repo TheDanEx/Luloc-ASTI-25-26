@@ -76,7 +76,7 @@ static void task_monitor_lowpower_cpu1(void *arg)
             if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
                 // Update specific power fields
                 shm->sensors.battery_voltage = bus_voltage_mv;
-                shm->sensors.motor_current = current_ma;
+                shm->sensors.robot_current = current_ma;
                 // Leave other sensor fields (encoders, speeds) untouched
                 xSemaphoreGive(shm->mutex);
             }

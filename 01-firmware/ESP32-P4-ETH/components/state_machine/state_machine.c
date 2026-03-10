@@ -148,7 +148,7 @@ void state_machine_notify_mqtt_status(bool connected)
     }
 }
 
-bool state_machine_request_mode(robot_mode_t new_mode)
+bool state_machine_request_mode(robot_mode_t new_mode, bool force)
 {
     const mode_config_t *config = get_mode_config(new_mode);
     if (!config) {
@@ -156,15 +156,19 @@ bool state_machine_request_mode(robot_mode_t new_mode)
         return false;
     }
 
-    // Check MQTT requirement
-    if (config->requires_mqtt && !g_state.mqtt_connected) {
-        ESP_LOGW(TAG, "Mode %s requires MQTT but not connected", get_mode_name(new_mode));
-        return false;
-    }
-    
-    if (config->requires_mqtt && g_state.current_state == STATE_MQTT_LOST_ERROR) {
-        ESP_LOGE(TAG, "Cannot switch to MQTT-dependent mode in ERROR state");
-        return false;
+    if (!force) {
+        // Check MQTT requirement
+        if (config->requires_mqtt && !g_state.mqtt_connected) {
+            ESP_LOGW(TAG, "Mode %s requires MQTT but not connected", get_mode_name(new_mode));
+            return false;
+        }
+        
+        if (config->requires_mqtt && g_state.current_state == STATE_MQTT_LOST_ERROR) {
+            ESP_LOGE(TAG, "Cannot switch to MQTT-dependent mode in ERROR state");
+            return false;
+        }
+    } else {
+        ESP_LOGW(TAG, "FORCING Mode %s regardless of conditions", get_mode_name(new_mode));
     }
     
     ESP_LOGI(TAG, "Mode transition: %d → %d", g_state.current_mode, new_mode);

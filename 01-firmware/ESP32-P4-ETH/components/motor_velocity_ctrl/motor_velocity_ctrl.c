@@ -1,6 +1,9 @@
 #include "motor_velocity_ctrl.h"
 #include "esp_log.h"
 #include <stdlib.h>
+#include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 static const char *TAG = "VEL_CTRL";
 
@@ -118,4 +121,31 @@ esp_err_t motor_velocity_ctrl_set_pid(motor_velocity_ctrl_handle_t handle, float
     
     ctx->integral = 0.0f;
     return ESP_OK;
+}
+
+float motor_velocity_ctrl_get_sweep_target(void)
+{
+    static TickType_t sweep_last_toggle = 0;
+    static bool sweep_phase_1 = true;
+    static bool initialized = false;
+    
+    // Parse strings once or on the fly to save memory
+    float sweep_speed_1 = atof(CONFIG_VELOCITY_CTRL_SWEEP_SPEED_1);
+    float sweep_speed_2 = atof(CONFIG_VELOCITY_CTRL_SWEEP_SPEED_2);
+    uint32_t sweep_time_ms = CONFIG_VELOCITY_CTRL_SWEEP_TIME_MS;
+
+    if (!initialized) {
+        sweep_last_toggle = xTaskGetTickCount();
+        initialized = true;
+    }
+
+    TickType_t now = xTaskGetTickCount();
+    if ((now - sweep_last_toggle) >= pdMS_TO_TICKS(sweep_time_ms)) {
+        sweep_phase_1 = !sweep_phase_1;
+        sweep_last_toggle = now;
+        ESP_LOGI(TAG, "SWEEP: Altering target speed to %.2f m/s", 
+                 sweep_phase_1 ? sweep_speed_1 : sweep_speed_2);
+    }
+    
+    return sweep_phase_1 ? sweep_speed_1 : sweep_speed_2;
 }

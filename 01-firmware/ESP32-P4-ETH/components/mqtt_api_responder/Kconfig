@@ -7,6 +7,13 @@ menu "[UJI] 3. Comms: MQTT API Responder"
             The component subscribes to this topic to receive JSON queries
             e.g. {"resource": "battery"}
 
+    config MQTT_API_SET_TOPIC
+        string "MQTT Subscription Topic for API Commands (SET)"
+        default "robot/api/set"
+        help
+            The component subscribes to this topic to receive JSON commands
+            e.g. {"action": "play_sound", "sound_id": 1, "volume": 100}
+
     config MQTT_API_RESP_TOPIC
         string "MQTT Publish Topic for API Responses"
         default "robot/api/response"
