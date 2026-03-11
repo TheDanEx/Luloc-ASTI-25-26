@@ -180,7 +180,7 @@ Experimentado tras trabajar como programador en la empresa GDA (Grupul de Despă
 
       - **ESP32-P4 (microcontrolador):** Control determinista de motores, lectura de encoders y sensores críticos (IMU, corriente). Si la Raspberry Pi falla, el ESP32 puede frenar el robot de forma autónoma.
 
-      - **Raspberry Pi 5 (microprocesador):** Procesamiento de cámara con OpenCV, scripts de visión en Python, y sistema completo de telemetría y monitorización (InfluxDB, Grafana). Envía órdenes de alto nivel al ESP32.
+      - **Raspberry Pi 5 (microprocesador):** Procesamiento de cámara con scikit-image y picamera2, scripts de visión en Python, y sistema completo de telemetría y monitorización (InfluxDB, Grafana). Envía órdenes de alto nivel al ESP32.
 
       **Decisión clave — MQTT en lugar de micro-ROS:**
 
@@ -217,7 +217,7 @@ Experimentado tras trabajar como programador en la empresa GDA (Grupul de Despă
 
       **Servicios en desarrollo (preparados pero desactivados):**
 
-      - **Visión:** Script Python con OpenCV que captura la cámara CSI (IMX219), aplica transformada de perspectiva, detecta la línea del suelo y calcula la curvatura del recorrido. Publica el valor al ESP32 vía MQTT para feedforward de dirección. Un problema que encontramos fue que las librerías de la cámara CSI (libcamera/picamera2) no son triviales de configurar dentro de Docker, lo cual nos obligó a probar tanto dentro como fuera del contenedor.
+      - **Visión:** Script Python que captura la cámara CSI (IMX219) mediante **picamera2** y procesa los fotogramas con **scikit-image** (skimage). El pipeline aplica umbralizado sobre la imagen en escala de grises, una transformada de perspectiva (`ProjectiveTransform` + `warp` de skimage) para obtener una vista cenital de la línea, detecta el centroide de la línea en cada franja de la imagen mediante un blob detector basado en momentos, y calcula la curvatura del recorrido a partir del cambio de ángulo entre centroides consecutivos. El valor de curvatura se publica al ESP32 vía MQTT para feedforward de dirección. Un problema que encontramos fue que las librerías de la cámara CSI (libcamera/picamera2) no son triviales de configurar dentro de Docker, lo cual nos obligó a probar tanto dentro como fuera del contenedor.
 
       - **Navegación:** Contenedor preparado con Nav2 y LiDAR D500 para SLAM y planificación de rutas, pendiente de integración.
 
