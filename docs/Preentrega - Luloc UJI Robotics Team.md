@@ -119,15 +119,58 @@ Experimentado tras trabajar como programador en la empresa GDA (Grupul de Despă
 
    1. ### Diseño mecánico {#diseño-mecánico}
 
-      El diseño mecánico del robot ha pasado por varias iteraciones significativas. Uno de los mayores cambios vino tras la reunión informativa con la organización del ASTI Challenge: habíamos planificado que la transpaleta fuese un **accesorio desmontable** que no contara para la restricción de tamaño del robot. Al descubrir que sí computaba dentro del volumen máximo permitido, tuvimos que **rediseñar gran parte del modelo 3D**, ingeniar un sistema de transpaleta **plegable/recogible** que cupiera dentro de las dimensiones reglamentarias, y descartar el sensor IMU que ya no cabía en el nuevo diseño.
+      El diseño mecánico ha sido un trabajo conjunto entre los dos equipos. En primer lugar, realizamos el **diseño individual de cada componente**: modelamos en 3D cada pieza con sus fijaciones y el espacio que ocupa, para poder planificar cómo organizarlos dentro del chasis y dimensionar la estructura del robot.
+
+      *\[Foto de los componentes individuales modelados\]*
+
+      A partir de la inspiración en soluciones industriales como las de **Schneider Electric**, definimos la forma general del robot y comenzamos un proceso iterativo de diseño del chasis.
+
+      *\[Foto de referencia Schneider\]*
 
       Además, desde el principio del diseño tuvimos en cuenta la **distribución de pesos** del robot, ya que necesita ser capaz de mover cargas sin perder estabilidad ni tracción. La posición de la batería, los motores y la electrónica se distribuyó para mantener el centro de gravedad bajo y centrado.
 
-      *\[Fotos y renders incluidos en el documento final\]*
+      **Iteraciones del chasis:**
+
+      El diseño mecánico del robot ha pasado por varias iteraciones significativas:
+
+      **Versión 1 (v1):** Primer diseño del chasis con la distribución inicial de componentes. Servía como prueba de concepto para validar las dimensiones generales y la disposición de motores y electrónica.
+
+      *\[Foto chasis v1\]*
+
+      **Versión 2 (v2):** Incorpora el **mecanismo de transpaleta inclinado**. Uno de los mayores cambios vino tras la reunión informativa con la organización del ASTI Challenge: habíamos planificado que la transpaleta fuese un **accesorio desmontable** que no contara para la restricción de tamaño del robot. Al descubrir que sí computaba dentro del volumen máximo permitido, tuvimos que **rediseñar gran parte del modelo 3D**, ingeniar un sistema de transpaleta **plegable/recogible** que cupiera dentro de las dimensiones reglamentarias, y descartar el sensor IMU que ya no cabía en el nuevo diseño.
+
+      *\[Foto chasis v2 con mecanismo inclinado\]*
+
+      **Versión 3 (v3):** Rediseño del chasis con mejoras derivadas de las versiones anteriores, optimizando el espacio interior y la accesibilidad a los componentes.
+
+      *\[Foto chasis v3\]*
 
    2. ### Diseño eléctrico {#diseño-eléctrico}
 
-      *\[Esquemáticos y diagramas incluidos en el documento final\]*
+      El sistema eléctrico del robot se alimenta desde una **batería LiPo 4S** (14.8V nominal), que proporciona energía a todos los subsistemas a través de una distribución regulada por etapas.
+
+      **Alimentación y regulación:**
+
+      Desde la batería LiPo 4S, la alimentación se distribuye de la siguiente forma:
+
+      - **Drivers de motores (DRV8871):** Conectados directamente a la batería para aprovechar el voltaje completo en los motores DC JGA25-370.
+      - **3 reguladores buck XL4015 (5A)** que generan los distintos voltajes necesarios:
+        - **5.15V** para la Raspberry Pi 5.
+        - **6V** para el servo MG996R del mecanismo de transpaleta.
+        - **3.3V** para el ESP32-P4 y los sensores.
+
+      **Conexiones de sensores y periféricos:**
+
+      - **Sensores de línea IR (array de 8 canales):** Conectados a las **entradas analógicas** del ESP32-P4.
+      - **Sensor INA226 (monitorización de batería):** Conectado por bus **I2C** al ESP32-P4 para medir voltaje y corriente de la batería en tiempo real.
+      - **LiDAR D500:** Conectado por **puerto serie** tanto a la Raspberry Pi como al ESP32-P4, y también a los **puertos USB** de la Raspberry Pi.
+      - **Drivers de motores (DRV8871):** Controlados desde las **salidas PWM** del ESP32-P4 mediante el periférico MCPWM.
+
+      *\[Esquema eléctrico general del robot\]*
+
+      **PCBs a medida:**
+
+      Se diseñaron PCBs personalizadas con el patrocinador JLCPCB para simplificar el cableado y mejorar la fiabilidad de las conexiones. Sin embargo, por complicaciones en el diseño y los plazos, **las PCBs no han llegado a tiempo para la semifinal**. Actualmente todas las conexiones se realizan con cableado manual. Si avanzamos a la final, contaremos con las PCBs fabricadas.
 
 3. ## Programación del robot {#programación-del-robot}
 
@@ -200,7 +243,9 @@ Experimentado tras trabajar como programador en la empresa GDA (Grupul de Despă
 
       - **Memoria compartida inter-core:** Los dos núcleos intercambian datos (sensores y comandos) a través de estructuras protegidas por mutex con timeout de 10 ms. Incluye contadores de heartbeat por CPU para detectar bloqueos del otro núcleo.
 
-      - **Máquina de estados:** 7 estados (INIT, WAITING_ORDERS, AUTONOMOUS, REMOTE_CONTROLLED, TELEMETRY_ONLY, MQTT_LOST_ERROR, SHUTDOWN). Si se pierde la conexión MQTT durante un modo que la requiere, el robot detiene los motores y entra en error seguro. Tras 5 segundos, intenta reconectar. Cada transición se publica como evento JSON retenido.
+      - **Máquina de estados:** Gestiona los modos de operación del robot y las transiciones entre ellos. Si se pierde la conexión MQTT durante un modo que la requiere, el robot detiene los motores y entra en error seguro, intentando reconectar automáticamente. Cada transición se publica como evento JSON retenido. *(Nota: la máquina de estados está siendo actualizada en la rama de desarrollo actual.)*
+
+      *\[Capturas del código de la máquina de estados\]*
 
       - **Feedforward de curvatura:** Recibe del nodo de visión el valor de curvatura del camino y lo pone a disposición del lazo de control para anticipar los giros antes de que los encoders detecten la desviación.
 
@@ -208,19 +253,27 @@ Experimentado tras trabajar como programador en la empresa GDA (Grupul de Despă
 
       - **Monitor de rendimiento:** Mide el uso de CPU por tarea FreeRTOS y lo publica en JSON a Grafana. Fue clave para detectar que la tarea de comunicaciones consumía más recursos de lo esperado al formatear JSON.
 
+      *\[Capturas del código del firmware — componentes principales\]*
+
 4. ## Montaje y construcción {#montaje-y-construcción}
 
    1. ### Impresión 3D {#impresión-3d}
 
-      *\[Fotos incluidas en el documento final\]*
+      Todas las piezas estructurales del robot (chasis, soportes de motores, monturas de sensores y mecanismo de transpaleta) se han fabricado mediante **impresión 3D en PLA** utilizando las impresoras disponibles en UJILAB. El proceso de impresión se fue adaptando a las iteraciones del diseño mecánico, reimprimiendo piezas conforme se refinaba el chasis.
+
+      *\[Fotos del proceso de impresión 3D y piezas impresas\]*
 
    2. ### Conexiones eléctricas {#conexiones-eléctricas}
 
-      *\[Fotos incluidas en el documento final\]*
+      El cableado del robot conecta la batería LiPo 4S con los reguladores buck XL4015, los drivers de motores DRV8871 y los distintos sensores y periféricos según el esquema eléctrico descrito anteriormente. Todas las conexiones se han realizado con cableado manual, ya que las PCBs personalizadas no llegaron a tiempo.
+
+      *\[Fotos del cableado y conexiones eléctricas\]*
 
    3. ### Montaje mecánico {#montaje-mecánico}
 
-      *\[Fotos incluidas en el documento final\]*
+      El montaje final integra las piezas impresas en 3D con los componentes electrónicos y mecánicos. Se atornillaron los motores, se fijaron los soportes de la Raspberry Pi y el ESP32-P4, y se montó el mecanismo de transpaleta con el servo. La distribución interna sigue el diseño planificado para mantener el centro de gravedad bajo y equilibrado.
+
+      *\[Fotos del montaje mecánico completo\]*
 
 5. ## Pruebas, validaciones y mejoras {#pruebas,-validaciones-y-mejoras}
 
