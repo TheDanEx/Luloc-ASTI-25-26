@@ -364,9 +364,15 @@ Experimentado tras trabajar como programador en la empresa GDA (Grupul de Despă
 
    **Transporte de material entre líneas de producción en entornos de fabricación industrial.**
 
-   En las fábricas modernas de manufactura electrónica e industrial — como las plantas de Schneider Electric — el flujo de materiales entre distintas zonas de producción es una operación constante y crítica. Por ejemplo, en una planta donde una zona se dedica a la fabricación de PCBs y otra zona al ensamblaje del producto final, existe un flujo continuo de bandejas, cajas y contenedores de componentes que deben moverse de una línea a otra.
+   **Inspiración en Schneider Electric:**
 
-   Actualmente, este transporte inter-líneas se realiza de varias formas:
+   Nuestra propuesta nace de estudiar el funcionamiento real de plantas de fabricación industrial como las de **Schneider Electric**. Al investigar cómo operan estas fábricas, nos fijamos en que el flujo de materiales entre distintas zonas de producción es una operación constante y crítica que todavía depende en gran medida de procesos manuales o de soluciones sobredimensionadas. En concreto, observamos cómo en sus plantas de manufactura electrónica existen circuitos internos donde bandejas y contenedores de componentes se mueven continuamente entre líneas — por ejemplo, desde la zona de fabricación de PCBs hasta la zona de ensamblaje del producto final. Este escenario real fue lo que nos inspiró a enfocar nuestro desafío en el transporte intra-fábrica de cargas ligeras.
+
+   *\[Foto de referencia de planta Schneider Electric\]*
+
+   **Situación actual del transporte inter-líneas:**
+
+   Actualmente, este transporte se realiza de varias formas:
    - **Manualmente**, con operarios que empujan carros o llevan bandejas, lo que consume tiempo productivo y es propenso a errores de entrega.
    - **Con carretillas elevadoras (toros/transpaletas)**, que están sobredimensionadas para cargas ligeras y representan un riesgo de seguridad en zonas con personal.
    - **Con AGVs de gran tamaño tipo transpaleta**, que son soluciones costosas (decenas de miles de euros) diseñadas para mover palés completos, cuando en muchos casos la carga real entre líneas son cajas o bandejas de pocos kilogramos.
