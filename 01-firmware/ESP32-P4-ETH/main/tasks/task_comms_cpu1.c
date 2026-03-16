@@ -22,6 +22,7 @@
 #include "ethernet.h"
 #include "encoder_sensor.h"
 #include "telemetry_manager.h"
+#include "ina226_sensor.h"
 #include "curvature_feedforward.h"
 #include "pid_tuner.h"
 #include "mqtt_api_responder.h"
@@ -52,9 +53,9 @@ static QueueHandle_t command_queue = NULL;
 static volatile bool mqtt_initialized = false;
 static encoder_sensor_handle_t encoder_handle = NULL;
 
-// Telemetry Handles
 static telemetry_handle_t tel_odometry = NULL;
 static telemetry_handle_t tel_system = NULL;
+static telemetry_handle_t tel_power = NULL;
 
 // =============================================================================
 // Helper Function Prototypes
@@ -100,9 +101,6 @@ static void collect_sensor_data(void)
         // Push to telemetry: field=val
         telemetry_add_float(tel_odometry, "velIZ", speed);
         telemetry_add_float(tel_odometry, "posIZ", distance);
-        
-        // Also print to serial for offline debugging
-        ESP_LOGI(TAG, "Encoder: speed=%.3f m/s, distance=%.3f m", speed, distance);
     }
 
     // 2. System Data
@@ -115,8 +113,33 @@ static void collect_sensor_data(void)
     if (curvature_feedforward_has_value()) {
         telemetry_add_float(tel_system, "curvatura_ff", curvature_feedforward_get_value());
     }
+
+    // 3. Power Sensor Data (INA226/INA219)
+    float bus_voltage_mv = 0;
+    float current_ma = 0;
+    float power_mw = 0;
+
+    if (ina226_sensor_read_bus_voltage_mv(&bus_voltage_mv) == ESP_OK &&
+        ina226_sensor_read_current_ma(&current_ma) == ESP_OK &&
+        ina226_sensor_read_power_mw(&power_mw) == ESP_OK) {
+        
+        // Save to shared memory for motor control
+        shared_memory_t* shm = shared_memory_get();
+        xSemaphoreTake(shm->mutex, portMAX_DELAY);
+        shm->sensors.robot_current = bus_voltage_mv; // Naming is a bit mixed up, but this stores voltage
+        xSemaphoreGive(shm->mutex);
+
+        // Calculate power and push to telemetry
+        float cur_a = current_ma / 1000.0f;
+        float vol_v = bus_voltage_mv / 1000.0f;
+        float pwr_w = power_mw / 1000.0f;
+
+        telemetry_add_float(tel_power, "v_bat", vol_v);
+        telemetry_add_float(tel_power, "a_bat", cur_a);
+        telemetry_add_float(tel_power, "w_bat", pwr_w);
+    }
     
-    // 3. Performance Data
+    // 4. Performance Data
     // Perf mon generates its own complex report, but we could add summary metrics here
     // or keep using its internal json reporter if complex nested data is needed.
     // For Influx, flat fields are better.
@@ -189,12 +212,21 @@ static void task_comms_cpu1(void *arg)
     // Performance Monitor
     perf_mon_init();
 
+    // Test Sensor (uptime)
+    test_sensor_init();
+
     // Setup Telemetries (InfluxDB Line Protocol)
     // Topic: robot/odometry, Measurement: odometry, Interval: 5000ms
     tel_odometry = telemetry_create("robot/odometry", "odometry", 5000);
     
     // Topic: robot/telemetry, Measurement: system, Interval: 5000ms
     tel_system = telemetry_create("robot/telemetry", "system", 5000);
+
+    // Topic: robot/power, Measurement: power, Interval: 1000ms
+    tel_power = telemetry_create("robot/power", "power", 1000);
+
+    // Sensors
+    ina226_sensor_init();
 
     // Subscriptions
     vTaskDelay(pdMS_TO_TICKS(1000)); 

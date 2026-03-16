@@ -1,4 +1,4 @@
-menu "Robot Configuration"
+menu "Luloc-ASTI: 0. Main Configuration"
 
 config ROBOT_USE_ETHERNET
     bool "Enable Ethernet"

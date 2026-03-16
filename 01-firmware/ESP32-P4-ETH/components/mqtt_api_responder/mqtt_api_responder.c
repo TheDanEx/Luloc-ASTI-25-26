@@ -204,26 +204,6 @@ static void api_mqtt_callback(const char *topic, int topic_len, const char *data
     }
 
     // Stringify and publish response if anything was added
-
-    if (strcmp(resource, "battery") == 0) {
-        handle_resource_battery(response_root);
-    } 
-    else if (strcmp(resource, "encoder") == 0) {
-        handle_resource_encoder(response_root);
-    }
-    else if (strcmp(resource, "uptime") == 0) {
-        handle_resource_uptime(response_root);
-    }
-    else if (strcmp(resource, "all") == 0) {
-        handle_resource_battery(response_root);
-        handle_resource_encoder(response_root);
-        handle_resource_uptime(response_root);
-    }
-    else {
-        cJSON_AddStringToObject(response_root, "error", "Unknown Resource");
-    }
-
-    // Stringify and publish response if anything was added
     if (response_root->child != NULL) { // only publish if not empty
         char *json_str = cJSON_PrintUnformatted(response_root);
         if (json_str != NULL) {

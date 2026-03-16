@@ -565,7 +565,7 @@ CONFIG_IDF_TOOLCHAIN_GCC=y
 CONFIG_IDF_TARGET_ARCH_RISCV=y
 CONFIG_IDF_TARGET_ARCH="riscv"
 CONFIG_IDF_TARGET="esp32p4"
-CONFIG_IDF_INIT_VERSION="5.4.0"
+CONFIG_IDF_INIT_VERSION="5.5.2"
 CONFIG_IDF_TARGET_ESP32P4=y
 CONFIG_IDF_FIRMWARE_CHIP_ID=0x0012
 
@@ -762,7 +762,7 @@ CONFIG_PARTITION_TABLE_MD5=y
 # end of Partition Table
 
 #
-# Robot Configuration
+# Luloc-ASTI: 0. Main Configuration
 #
 CONFIG_ROBOT_USE_ETHERNET=y
 # CONFIG_ROBOT_ETH_DHCP is not set
@@ -770,10 +770,10 @@ CONFIG_ROBOT_ETH_STATIC_IP=y
 CONFIG_ROBOT_ETH_STATIC_IP_ADDR="192.168.5.2"
 CONFIG_ROBOT_ETH_STATIC_NETMASK="255.255.255.0"
 CONFIG_ROBOT_ETH_STATIC_GATEWAY="192.168.5.1"
-# end of Robot Configuration
+# end of Luloc-ASTI: 0. Main Configuration
 
 #
-# [UJI] 4. Net: Ethernet MAC/PHY Settings
+# Luloc-ASTI: 1. Communications - Ethernet
 #
 CONFIG_ENV_GPIO_RANGE_MIN=0
 CONFIG_ENV_GPIO_RANGE_MAX=54
@@ -790,13 +790,13 @@ CONFIG_EXAMPLE_ETH_MDIO_GPIO=52
 CONFIG_EXAMPLE_ETH_PHY_RST_GPIO=51
 CONFIG_EXAMPLE_ETH_PHY_ADDR=1
 # CONFIG_EXAMPLE_USE_SPI_ETHERNET is not set
-# end of [UJI] 4. Net: Ethernet MAC/PHY Settings
+# end of Luloc-ASTI: 1. Communications - Ethernet
 
 #
-# [UJI] 3. Comms: MQTT Client
+# Luloc-ASTI: 1. Communications - MQTT Client
 #
-CONFIG_BROKER_URL="mqtt://192.168.50.53:1883"
-# end of [UJI] 3. Comms: MQTT Client
+CONFIG_BROKER_URL="mqtt://192.168.5.1:1883"
+# end of Luloc-ASTI: 1. Communications - MQTT Client
 
 #
 # Compiler options
@@ -2448,21 +2448,21 @@ CONFIG_WIFI_PROV_STA_ALL_CHANNEL_SCAN=y
 # end of Wi-Fi Provisioning Manager
 
 #
-# [UJI] 2. Sensors: INA219 Power Monitor
+# Luloc-ASTI: 2. Sensors - INA226 Power Monitor
 #
-CONFIG_INA219_I2C_PORT=0
-CONFIG_INA219_I2C_SDA_PIN=21
-CONFIG_INA219_I2C_SCL_PIN=22
-CONFIG_INA219_I2C_CLOCK_SPEED_HZ=400000
-CONFIG_INA219_SHUNT_OHMS="0.01"
-CONFIG_INA219_MAX_EXPECTED_AMPS="3.2"
-CONFIG_INA219_POLLING_RATE_HZ=5
-CONFIG_INA219_TELEMETRY_RATE_MS=1000
-CONFIG_INA219_MQTT_TOPIC="robot/telemetry/power"
-# end of [UJI] 2. Sensors: INA219 Power Monitor
+CONFIG_INA226_I2C_PORT=0
+CONFIG_INA226_I2C_SDA_PIN=7
+CONFIG_INA226_I2C_SCL_PIN=8
+CONFIG_INA226_I2C_CLOCK_SPEED_HZ=400000
+CONFIG_INA226_SHUNT_OHMS="0.01"
+CONFIG_INA226_MAX_EXPECTED_AMPS="10.0"
+CONFIG_INA226_POLLING_RATE_HZ=5
+CONFIG_INA226_TELEMETRY_RATE_MS=1000
+CONFIG_INA226_MQTT_TOPIC="robot/telemetry/power"
+# end of Luloc-ASTI: 2. Sensors - INA226 Power Monitor
 
 #
-# [UJI] 1. Control: Line Follower
+# Luloc-ASTI: 3. Control & Motors - Line Follower
 #
 CONFIG_LINE_FOLLOWER_DEFAULT_KP="1.5"
 CONFIG_LINE_FOLLOWER_DEFAULT_KI="0.0"
@@ -2470,38 +2470,48 @@ CONFIG_LINE_FOLLOWER_DEFAULT_KD="0.5"
 CONFIG_LINE_FOLLOWER_DEFAULT_BASE_SPEED="50.0"
 CONFIG_LINE_FOLLOWER_DEFAULT_MAX_SPEED="100.0"
 CONFIG_LINE_FOLLOWER_CAMERA_WEIGHT="20.0"
-# end of [UJI] 1. Control: Line Follower
+# end of Luloc-ASTI: 3. Control & Motors - Line Follower
 
 #
-# [UJI] 2. Sensors: ADC Line Array
+# Luloc-ASTI: 2. Sensors - ADC Line Array
 #
 CONFIG_LINE_SENSOR_CALIB_THRESHOLD=1500
 CONFIG_LINE_SENSOR_OVERSAMPLING=16
 CONFIG_LINE_SENSOR_DETECTION_THRESHOLD=50
-# end of [UJI] 2. Sensors: ADC Line Array
+# end of Luloc-ASTI: 2. Sensors - ADC Line Array
 
 #
-# [UJI] 1. Control: Motor Velocity
+# Luloc-ASTI: 3. Control & Motors - Motor Velocity
 #
 CONFIG_VELOCITY_CTRL_DEFAULT_KP="0.5"
 CONFIG_VELOCITY_CTRL_DEFAULT_KI="0.1"
 CONFIG_VELOCITY_CTRL_DEFAULT_KD="0.05"
 CONFIG_VELOCITY_CTRL_MAX_BATTERY_MV="16800.0"
-CONFIG_VELOCITY_CTRL_MAX_MOTOR_SPEED_MS="1.5"
-# end of [UJI] 1. Control: Motor Velocity
 
 #
-# [UJI] 3. Comms: MQTT API Responder
+# Live Calibration Sweeper
+#
+CONFIG_VELOCITY_CTRL_SWEEP_SPEED_1="0.5"
+CONFIG_VELOCITY_CTRL_SWEEP_SPEED_2="-0.5"
+CONFIG_VELOCITY_CTRL_SWEEP_TIME_MS=3000
+# end of Live Calibration Sweeper
+
+CONFIG_VELOCITY_CTRL_MAX_MOTOR_SPEED_MS="1.5"
+# end of Luloc-ASTI: 3. Control & Motors - Motor Velocity
+
+#
+# Luloc-ASTI: 1. Communications - MQTT API Responder
 #
 CONFIG_MQTT_API_GET_TOPIC="robot/api/get"
+CONFIG_MQTT_API_SET_TOPIC="robot/api/set"
 CONFIG_MQTT_API_RESP_TOPIC="robot/api/response"
-# end of [UJI] 3. Comms: MQTT API Responder
+# end of Luloc-ASTI: 1. Communications - MQTT API Responder
 
 #
-# [UJI] 1. Control: Live PID Tuning
+# Luloc-ASTI: 4. Telemetry & Tuning - Live PID Tuning
 #
 CONFIG_PID_TUNER_MQTT_TOPIC="robot/config/pid_motors"
-# end of [UJI] 1. Control: Live PID Tuning
+# end of Luloc-ASTI: 4. Telemetry & Tuning - Live PID Tuning
 # end of Component config
 
 # CONFIG_IDF_EXPERIMENTAL_FEATURES is not set

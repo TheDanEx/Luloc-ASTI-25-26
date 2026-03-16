@@ -1,4 +1,4 @@
-menu "[UJI] 3. Comms: MQTT Client"
+menu "Luloc-ASTI: 1. Communications - MQTT Client"
     config BROKER_URL
         string "Broker URL"
         default "mqtt://192.168.42.15:51111"

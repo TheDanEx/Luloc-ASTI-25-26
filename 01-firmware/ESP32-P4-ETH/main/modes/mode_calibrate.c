@@ -3,8 +3,6 @@
 #include "shared_memory.h"
 #include <stdlib.h>
 
-static const char *TAG = "MODE_CALIBRATE";
-
 void mode_calibrate_execute(motor_driver_mcpwm_t* motors, 
                             motor_velocity_ctrl_handle_t ctrl_left, 
                             motor_velocity_ctrl_handle_t ctrl_right, 

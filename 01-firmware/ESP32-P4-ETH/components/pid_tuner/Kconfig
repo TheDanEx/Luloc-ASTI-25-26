@@ -1,4 +1,4 @@
-menu "[UJI] 1. Control: Live PID Tuning"
+menu "Luloc-ASTI: 4. Telemetry & Tuning - Live PID Tuning"
 
     config PID_TUNER_MQTT_TOPIC
         string "MQTT Topic for Live PID JSON Tuning"

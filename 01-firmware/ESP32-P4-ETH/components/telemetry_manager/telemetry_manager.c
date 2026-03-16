@@ -10,6 +10,7 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "mqtt_custom_client.h"
 #include "telemetry_manager.h"
 
@@ -78,9 +79,7 @@ static void telemetry_task(void *arg)
         xSemaphoreTake(obj->mutex, portMAX_DELAY);
         
         if (obj->field_count > 0) {
-            // Build Line Protocol String: measurement field1=val1,field2=val2
-            // Note: We are NOT sending timestamp, relying on server time
-            
+            // Build Line Protocol String: measurement field1=val1,field2=val2 timestamp_us
             int offset = snprintf(buffer, MAX_BUFFER_SIZE, "%s ", obj->measurement);
             
             for (int i = 0; i < obj->field_count; i++) {
@@ -93,6 +92,17 @@ static void telemetry_task(void *arg)
                 
                 offset += snprintf(buffer + offset, MAX_BUFFER_SIZE - offset, 
                                    "%s=%s", obj->fields[i].key, obj->fields[i].value_str);
+            }
+
+            // Append Timestamp in microseconds 
+            // InfluxDB takes nanoseconds by default if not specified in the database, 
+            // but the instructions ask for us resolution. We append "000" to make it ns,
+            // or just rely on the DB being configured for microseconds. 
+            // Standard Influx Line Protocol (ns): timestamp = us * 1000
+            int64_t current_time_us = esp_timer_get_time();
+            if (offset < MAX_BUFFER_SIZE - 1) {
+                // Add space and timestamp. Microseconds to nanoseconds: append 000
+                offset += snprintf(buffer + offset, MAX_BUFFER_SIZE - offset, " %lld000", current_time_us);
             }
             
             // Clear fields after consuming
@@ -193,9 +203,8 @@ void telemetry_add_int(telemetry_handle_t handle, const char *key, int32_t value
     telemetry_obj_t *obj = (telemetry_obj_t *)handle;
     
     char val_str[32];
-    snprintf(val_str, sizeof(val_str), "%li", value); // Influx Integer usually implies 'i' suffix? 
-    // Standard Line Protocol integers don't strictly need 'i' unless type conflict, 
-    // but usually sent as plain numbers. If strict: "%lii"
+    snprintf(val_str, sizeof(val_str), "%liH", value); // Influx Integer is represented with 'i'. Note: the AI instructions actually say use 'i' not 'H', wait, Influx takes 'i' to explicitly define an integer type: e.g. 42i
+    snprintf(val_str, sizeof(val_str), "%lii", value); 
     
     xSemaphoreTake(obj->mutex, portMAX_DELAY);
     append_field_str(obj, key, val_str);

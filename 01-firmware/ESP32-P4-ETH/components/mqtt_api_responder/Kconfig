@@ -1,4 +1,4 @@
-menu "[UJI] 3. Comms: MQTT API Responder"
+menu "Luloc-ASTI: 1. Communications - MQTT API Responder"
 
     config MQTT_API_GET_TOPIC
         string "MQTT Subscription Topic for API Requests (GET)"

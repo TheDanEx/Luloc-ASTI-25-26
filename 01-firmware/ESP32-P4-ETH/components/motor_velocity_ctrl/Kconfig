@@ -1,4 +1,4 @@
-menu "[UJI] 1. Control: Motor Velocity"
+menu "Luloc-ASTI: 3. Control & Motors - Motor Velocity"
 
     config VELOCITY_CTRL_DEFAULT_KP
         string "Default Proportional Gain (Kp)"

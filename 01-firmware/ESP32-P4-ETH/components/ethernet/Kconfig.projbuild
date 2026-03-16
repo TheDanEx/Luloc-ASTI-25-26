@@ -1,4 +1,4 @@
-menu "[UJI] 4. Net: Ethernet MAC/PHY Settings"
+menu "Luloc-ASTI: 1. Communications - Ethernet"
 
     orsource "$IDF_PATH/examples/common_components/env_caps/$IDF_TARGET/Kconfig.env_caps"
 

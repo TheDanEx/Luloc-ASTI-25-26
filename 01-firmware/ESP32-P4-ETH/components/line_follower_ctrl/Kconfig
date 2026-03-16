@@ -1,4 +1,4 @@
-menu "[UJI] 1. Control: Line Follower"
+menu "Luloc-ASTI: 3. Control & Motors - Line Follower"
 
     config LINE_FOLLOWER_DEFAULT_KP
         string "Default Proportional Gain (Kp)"

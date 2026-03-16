@@ -20,7 +20,7 @@ static esp_mqtt_client_handle_t mqtt_client_handle = NULL;
 static bool mqtt_connected = false;
 
 // Callback storage for incoming messages
-#define MQTT_CALLBACK_MAX 4
+#define MQTT_CALLBACK_MAX 10
 typedef struct {
     char topic[64];
     mqtt_message_callback_t callback;
