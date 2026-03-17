@@ -1,0 +1,9 @@
+menu "Telemetry Configuration"
+
+    config TELEMETRY_ROBOT_NAME
+        string "Robot Name"
+        default "Luloc"
+        help
+            The global name of the robot that will be added to all telemetry points as a tag (e.g., robot=Luloc).
+
+endmenu

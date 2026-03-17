@@ -12,15 +12,23 @@
  */
 
 typedef struct {
-    // Sensor data from CPU0 (motor, encoder, etc.)
-    float motor_speed_left;     // RPM or rad/s
-    float motor_speed_right;    // RPM or rad/s
-    float robot_current;        // mA
-    float battery_voltage;      // mV
-    float temperature;          // °C
-    int32_t encoder_count_left; // Ticks
-    int32_t encoder_count_right;// Ticks
-    uint32_t timestamp_ms;      // Local timestamp
+    // Sensor data (motor, encoder, etc.)
+    float motor_speed_left;      // m/s
+    float motor_speed_right;     // m/s
+    float motor_distance_left;   // m
+    float motor_distance_right;  // m
+    
+    float robot_current;         // mA
+    float battery_voltage;       // mV
+    float temperature;           // °C
+    
+    // Line Sensor
+    bool  line_detected;
+    float line_position;         // Normalize or meters
+    
+    int32_t encoder_count_left;  // Ticks
+    int32_t encoder_count_right; // Ticks
+    uint32_t timestamp_ms;       // Local timestamp
 } robot_sensor_data_t;
 
 typedef struct {

@@ -10,18 +10,22 @@
 #include "mode_calibrate.h"
 #include <stdlib.h>
 
+#include "telemetry_manager.h"
+
 static const char *TAG = "rt_cntrl";
 
+// Motor Configuration (PINS: Iz: 47/48, Dr: 20/21)
 static motor_driver_mcpwm_t motors = {
-    .left  = { .in1 = GPIO_NUM_25, .in2 = GPIO_NUM_26},
-    .right = { .in1 = GPIO_NUM_23, .in2 = GPIO_NUM_5},
+    .left  = { .in1 = GPIO_NUM_47, .in2 = GPIO_NUM_48},
+    .right = { .in1 = GPIO_NUM_20, .in2 = GPIO_NUM_21},
 
-    .nsleep = GPIO_NUM_NC,      // o el GPIO real
+    .nsleep = GPIO_NUM_NC,
     .pwm_hz = 20000,
     .resolution_hz = 10000000,  // 10 MHz
     .deadband = 30,
     .brake_on_stop = true,
 };
+
 
 static void task_rtcontrol_cpu0(void *arg)
 {
@@ -51,6 +55,7 @@ static void task_rtcontrol_cpu0(void *arg)
     while(1) {
         robot_state_context_t* ctx = state_machine_get_context();
         shared_memory_t* shm = shared_memory_get();
+
         xSemaphoreTake(shm->mutex, portMAX_DELAY);
 
         // Update PID live tuning si hay cambios desde MQTT

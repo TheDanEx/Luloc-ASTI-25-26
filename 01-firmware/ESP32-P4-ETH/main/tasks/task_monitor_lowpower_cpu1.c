@@ -43,6 +43,7 @@ static void task_monitor_lowpower_cpu1(void *arg)
 #endif
 
     telemetry_handle_t telemetry_power = telemetry_create(mqtt_topic_power, "power_system", telemetry_rate_ms);
+    telemetry_set_tags(telemetry_power, "sensor=battery");
 
     uint32_t polling_rate_hz = 5;
 #ifdef CONFIG_INA226_POLLING_RATE_HZ
@@ -71,7 +72,7 @@ static void task_monitor_lowpower_cpu1(void *arg)
             telemetry_add_float(telemetry_power, "voltage_mv", power_data.voltage_mv);
             telemetry_add_float(telemetry_power, "current_ma", power_data.current_ma);
             telemetry_add_float(telemetry_power, "power_mw",   power_data.power_mw);
-            telemetry_add_int(telemetry_power,   "timestamp_us", (int32_t)esp_timer_get_time());
+            telemetry_commit_point(telemetry_power);
         }
 
         vTaskDelay(pdMS_TO_TICKS(1000 / polling_rate_hz));

@@ -21,7 +21,6 @@ void app_main(void)
     task_rtcontrol_cpu0_start();
     printf("[CPU%d] %-40s [ OK ]\n", 0, "Started RT Control");
 
-    // Secondary monitor task: keep disabled unless needed.
-    // task_monitor_lowpower_cpu1_start();
-    // printf("[CPU%d] %-40s [ OK ]\n", 1, "Started Monitor Task");
+    task_monitor_lowpower_cpu1_start();
+    printf("[CPU%d] %-40s [ OK ]\n", 1, "Started Monitor Task");
 }

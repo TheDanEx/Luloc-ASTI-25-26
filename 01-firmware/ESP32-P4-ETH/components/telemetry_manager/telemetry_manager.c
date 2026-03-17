@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "sdkconfig.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,7 +17,7 @@
 
 static const char *TAG = "telemetry";
 
-#define MAX_BUFFER_SIZE 512
+#define MAX_BUFFER_SIZE 2048
 #define MAX_FIELDS 16
 
 typedef struct {
@@ -27,11 +28,14 @@ typedef struct {
 typedef struct {
     char *topic;
     char *measurement;
+    char *tags;
     uint32_t interval_ms;
     
     // Internal State
     field_t fields[MAX_FIELDS];
     int field_count;
+    char *batch_buffer;
+    int batch_offset;
     SemaphoreHandle_t mutex;
     TaskHandle_t task_handle;
     bool running;
@@ -59,14 +63,7 @@ static void append_field_str(telemetry_obj_t *obj, const char *key, const char *
 static void telemetry_task(void *arg)
 {
     telemetry_obj_t *obj = (telemetry_obj_t *)arg;
-    char *buffer = malloc(MAX_BUFFER_SIZE);
     
-    if (!buffer) {
-        ESP_LOGE(TAG, "Failed to allocate buffer for %s", obj->measurement);
-        vTaskDelete(NULL);
-        return;
-    }
-
     TickType_t period = pdMS_TO_TICKS(obj->interval_ms);
     
     while (obj->running) {
@@ -78,52 +75,18 @@ static void telemetry_task(void *arg)
 
         xSemaphoreTake(obj->mutex, portMAX_DELAY);
         
-        if (obj->field_count > 0) {
-            // Build Line Protocol String: measurement field1=val1,field2=val2 timestamp_us
-            int offset = snprintf(buffer, MAX_BUFFER_SIZE, "%s ", obj->measurement);
+        if (obj->batch_offset > 0) {
+            // Publish the accumulated batch buffer
+            mqtt_custom_client_publish(obj->topic, obj->batch_buffer, 0, 0, 0);
             
-            for (int i = 0; i < obj->field_count; i++) {
-                if (offset >= MAX_BUFFER_SIZE - 1) break;
-                
-                // Separator: Comma between fields, starting from 2nd field
-                if (i > 0) {
-                    offset += snprintf(buffer + offset, MAX_BUFFER_SIZE - offset, ",");
-                }
-                
-                offset += snprintf(buffer + offset, MAX_BUFFER_SIZE - offset, 
-                                   "%s=%s", obj->fields[i].key, obj->fields[i].value_str);
-            }
-
-            // Append Timestamp in microseconds 
-            // InfluxDB takes nanoseconds by default if not specified in the database, 
-            // but the instructions ask for us resolution. We append "000" to make it ns,
-            // or just rely on the DB being configured for microseconds. 
-            // Standard Influx Line Protocol (ns): timestamp = us * 1000
-            int64_t current_time_us = esp_timer_get_time();
-            if (offset < MAX_BUFFER_SIZE - 1) {
-                // Add space and timestamp. Microseconds to nanoseconds: append 000
-                offset += snprintf(buffer + offset, MAX_BUFFER_SIZE - offset, " %lld000", current_time_us);
-            }
-            
-            // Clear fields after consuming
-            for (int i = 0; i < obj->field_count; i++) {
-                free(obj->fields[i].key);
-                free(obj->fields[i].value_str);
-            }
-            obj->field_count = 0;
-            
-            // Release Mutex before publishing (network op might be slow)
-            xSemaphoreGive(obj->mutex);
-            
-            // Publish
-            mqtt_custom_client_publish(obj->topic, buffer, 0, 0, 0);
-            
-        } else {
-            xSemaphoreGive(obj->mutex);
+            // Clear batch buffer
+            obj->batch_offset = 0;
+            obj->batch_buffer[0] = '\0';
         }
+        
+        xSemaphoreGive(obj->mutex);
     }
 
-    free(buffer);
     vTaskDelete(NULL);
 }
 
@@ -137,6 +100,12 @@ telemetry_handle_t telemetry_create(const char *topic, const char *measurement, 
     obj->interval_ms = interval_ms;
     obj->mutex = xSemaphoreCreateMutex();
     obj->running = true;
+
+    obj->batch_buffer = calloc(1, MAX_BUFFER_SIZE);
+    if (!obj->batch_buffer) {
+        telemetry_destroy(obj);
+        return NULL;
+    }
 
     // Create task pinned to CPU1 as requested
     char task_name[16];
@@ -162,16 +131,12 @@ void telemetry_destroy(telemetry_handle_t handle)
     telemetry_obj_t *obj = (telemetry_obj_t *)handle;
 
     obj->running = false;
-    // Task will delete itself, but we should probably join or wait? 
-    // For simplicity in this embedded context, we assume dynamic destruction is rare or app shutdown.
-    
-    // Simple cleanup of allocated strings
-    // Note: This is unsafe if task is currently running. 
-    // In a robust system we would wait for task notification.
-    vTaskDelay(100); 
+    vTaskDelay(pdMS_TO_TICKS(100)); 
 
     if (obj->topic) free(obj->topic);
     if (obj->measurement) free(obj->measurement);
+    if (obj->tags) free(obj->tags);
+    if (obj->batch_buffer) free(obj->batch_buffer);
     
     xSemaphoreTake(obj->mutex, portMAX_DELAY);
     for (int i = 0; i < obj->field_count; i++) {
@@ -182,6 +147,69 @@ void telemetry_destroy(telemetry_handle_t handle)
     vSemaphoreDelete(obj->mutex);
     
     free(obj);
+}
+
+void telemetry_set_tags(telemetry_handle_t handle, const char *tags)
+{
+    if (!handle) return;
+    telemetry_obj_t *obj = (telemetry_obj_t *)handle;
+    
+    xSemaphoreTake(obj->mutex, portMAX_DELAY);
+    if (obj->tags) free(obj->tags);
+    obj->tags = tags ? strdup(tags) : NULL;
+    xSemaphoreGive(obj->mutex);
+}
+
+void telemetry_commit_point(telemetry_handle_t handle)
+{
+    if (!handle) return;
+    telemetry_obj_t *obj = (telemetry_obj_t *)handle;
+    
+    xSemaphoreTake(obj->mutex, portMAX_DELAY);
+    
+    if (obj->field_count > 0) {
+        // Build Line Protocol String: measurement[,tags] field1=val1,field2=val2 timestamp_ns\n
+        char point_buf[256];
+        int offset = 0;
+
+#ifdef CONFIG_TELEMETRY_ROBOT_NAME
+        const char *global_robot_tag = "robot=" CONFIG_TELEMETRY_ROBOT_NAME;
+#else
+        const char *global_robot_tag = "robot=unknown";
+#endif
+
+        if (obj->tags && strlen(obj->tags) > 0) {
+            offset = snprintf(point_buf, sizeof(point_buf), "%s,%s,%s ", obj->measurement, global_robot_tag, obj->tags);
+        } else {
+            offset = snprintf(point_buf, sizeof(point_buf), "%s,%s ", obj->measurement, global_robot_tag);
+        }
+        
+        for (int i = 0; i < obj->field_count; i++) {
+            if (offset >= sizeof(point_buf) - 64) break; // Leave room for timestamp
+            if (i > 0) offset += snprintf(point_buf + offset, sizeof(point_buf) - offset, ",");
+            offset += snprintf(point_buf + offset, sizeof(point_buf) - offset, "%s=%s", obj->fields[i].key, obj->fields[i].value_str);
+        }
+
+        // Timestamp in nanoseconds (relative to boot)
+        int64_t timestamp_ns = esp_timer_get_time() * 1000LL;
+        offset += snprintf(point_buf + offset, sizeof(point_buf) - offset, " %lld\n", timestamp_ns);
+
+        // Append to batch buffer if there's space
+        if (obj->batch_offset + offset < MAX_BUFFER_SIZE - 1) {
+            memcpy(obj->batch_buffer + obj->batch_offset, point_buf, offset);
+            obj->batch_offset += offset;
+            obj->batch_buffer[obj->batch_offset] = '\0';
+        }
+
+        // Clear temporary fields
+        for (int i = 0; i < obj->field_count; i++) {
+            free(obj->fields[i].key);
+            free(obj->fields[i].value_str);
+        }
+        obj->field_count = 0;
+    }
+    
+    xSemaphoreGive(obj->mutex);
 }
 
 void telemetry_add_float(telemetry_handle_t handle, const char *key, float value)
