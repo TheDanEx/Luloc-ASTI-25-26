@@ -20,6 +20,9 @@ typedef struct {
     float kd;
     float max_battery_mv;    // e.g. 16800.0f
     float max_motor_speed;   // e.g. 1.5f (m/s)
+    float deadband_v;        // Minimum voltage to overcome friction (e.g. 1.2f)
+    float accel_limit_ms2;   // Max acceleration (e.g. 2.5f m/s^2)
+    float ema_alpha;         // Encoder filtering alpha (0.0 - 1.0)
 } motor_velocity_config_t;
 
 /**

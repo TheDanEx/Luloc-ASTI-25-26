@@ -48,4 +48,25 @@ menu "Luloc-ASTI: 3. Control & Motors - Motor Velocity"
             exactly Max Battery Voltage (e.g. 16800mV) is applied at 100% PWM.
             This builds the Feed-Forward map.
 
+    config VEL_CTRL_DEADBAND_V
+        string "Motor Deadband Voltage (V)"
+        default "1.2"
+        help
+            Minimum voltage required to overcome static friction and start moving.
+            This is added as an offset to the controller output.
+
+    config VEL_CTRL_ACCEL_LIMIT
+        string "Acceleration Limit (m/s^2)"
+        default "2.0"
+        help
+            Maximum allowed change in target speed per second to protect motors 
+            and reduce current spikes.
+
+    config VEL_CTRL_EMA_ALPHA
+        string "Encoder EMA Filter Alpha (0.0 - 1.0)"
+        default "0.3"
+        help
+            Smoothing factor for the encoder speed. 
+            lower = smoother/delayed, higher = noisier/faster.
+
 endmenu

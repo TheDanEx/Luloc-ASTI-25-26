@@ -30,9 +30,14 @@ static void task_rtcontrol_cpu0(void *arg)
     
     // Configuración base leída de Kconfig (Cargada desde NVS si hay Live Tuning)
     motor_velocity_config_t m_config = {
-        .kp = 0.5f, .ki = 0.05f, .kd = 0.01f, // Default, se sobreescribe
-        .max_battery_mv = 16800.0f,
-        .max_motor_speed = 1.5f
+        .kp              = atof(CONFIG_VELOCITY_CTRL_DEFAULT_KP),
+        .ki              = atof(CONFIG_VELOCITY_CTRL_DEFAULT_KI),
+        .kd              = atof(CONFIG_VELOCITY_CTRL_DEFAULT_KD),
+        .max_battery_mv  = atof(CONFIG_VELOCITY_CTRL_MAX_BATTERY_MV),
+        .max_motor_speed = atof(CONFIG_VELOCITY_CTRL_MAX_MOTOR_SPEED_MS),
+        .deadband_v      = atof(CONFIG_VEL_CTRL_DEADBAND_V),
+        .accel_limit_ms2 = atof(CONFIG_VEL_CTRL_ACCEL_LIMIT),
+        .ema_alpha       = atof(CONFIG_VEL_CTRL_EMA_ALPHA)
     };
     pid_tuner_load_motor_pid(&m_config.kp, &m_config.ki, &m_config.kd);
 

@@ -13,7 +13,7 @@ void mode_calibrate_execute(motor_driver_mcpwm_t* motors,
 
     // Safely snapshot shared variables needed for the iteration
     xSemaphoreTake(shm->mutex, portMAX_DELAY);
-    float bat_mv = shm->sensors.robot_current; // FIXME: Map correctly to battery voltage
+    float bat_mv = shm->sensors.battery_voltage; 
     float cur_spd_left = shm->sensors.motor_speed_left;
     float cur_spd_right = shm->sensors.motor_speed_right;
     xSemaphoreGive(shm->mutex);

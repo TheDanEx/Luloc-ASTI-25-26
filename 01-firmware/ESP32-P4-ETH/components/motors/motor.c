@@ -83,6 +83,7 @@ static void set_motor_one(motor_driver_mcpwm_t *m, motor_hw_mcpwm_t *hw, int16_t
 {
     int16_t v = clamp_i16(cmd, -1000, 1000);
 
+    // Deadband check
     if (m->deadband > 0 && (v < m->deadband && v > -m->deadband)) {
         v = 0;
     }
@@ -104,27 +105,43 @@ static void set_motor_one(motor_driver_mcpwm_t *m, motor_hw_mcpwm_t *hw, int16_t
     uint32_t duty_ticks = map_1000_to_ticks(v_abs, m->period_ticks);
 
     if (duty_ticks == 0) {
-        // equivalente a parado (por si acaso)
-        gen_force_low(hw->gen_in1);
-        gen_force_low(hw->gen_in2);
+        if (m->brake_on_stop) {
+            gen_force_high(hw->gen_in1);
+            gen_force_high(hw->gen_in2);
+        } else {
+            gen_force_low(hw->gen_in1);
+            gen_force_low(hw->gen_in2);
+        }
         return;
     }
 
+    // --- SLOW DECAY (Brake-Mode PWM) Implementation ---
+    // For DRV8871:
+    // H, L = Forward
+    // L, H = Reverse
+    // H, H = Brake (Slow Decay)
+    // L, L = Coast (Fast Decay)
+    //
+    // To achieve Slow Decay during PWM:
+    // Forward: IN1 is kept HIGH, IN2 toggles PWM.
+    // PWM cycle: IN2=L (Drive) -> IN2=H (Brake)
+    
     if (v > 0) {
-        // Forward: IN1 = PWM, IN2 = 0
-        gen_release(hw->gen_in1);
-        gen_force_low(hw->gen_in2);
-
-        mcpwm_comparator_set_compare_value(hw->cmpr_in1, duty_ticks);
-        // IN2 está forzado a 0, su comparator da igual, pero lo dejamos coherente:
-        mcpwm_comparator_set_compare_value(hw->cmpr_in2, 0);
-    } else {
-        // Reverse: IN1 = 0, IN2 = PWM
-        gen_force_low(hw->gen_in1);
+        // Forward
+        gen_force_high(hw->gen_in1);
         gen_release(hw->gen_in2);
-
-        mcpwm_comparator_set_compare_value(hw->cmpr_in1, 0);
-        mcpwm_comparator_set_compare_value(hw->cmpr_in2, duty_ticks);
+        
+        // Since generator setup is TEZ=HIGH, CMP=LOW (Active High):
+        // duty_ticks ticks of HIGH = duty_ticks ticks of BRAKE.
+        // We want duty_ticks of DRIVE (L).
+        // So we set compare to (period - duty_ticks).
+        mcpwm_comparator_set_compare_value(hw->cmpr_in2, m->period_ticks - duty_ticks);
+    } else {
+        // Reverse
+        gen_force_high(hw->gen_in2);
+        gen_release(hw->gen_in1);
+        
+        mcpwm_comparator_set_compare_value(hw->cmpr_in1, m->period_ticks - duty_ticks);
     }
 }
 
