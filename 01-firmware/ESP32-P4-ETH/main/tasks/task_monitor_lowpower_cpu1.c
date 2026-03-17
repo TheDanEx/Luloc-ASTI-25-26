@@ -1,14 +1,12 @@
 /*
  * Task Monitor Low Power CPU1
- * Low-priority task for secondary monitoring only.
  * SPDX-License-Identifier: MIT
  */
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-
 #include "esp_log.h"
-#include "esp_timer.h" // For microsecond timestamps
+#include "esp_timer.h"
 
 #include "test_sensor.h"
 #include "task_monitor_lowpower_cpu1.h"
@@ -16,90 +14,73 @@
 #include "shared_memory.h"
 #include "telemetry_manager.h"
 
+// =============================================================================
+// Constants & Config
+// =============================================================================
 static const char *TAG = "mon_cpu1";
+
+// =============================================================================
+// Main Task Implementation
+// =============================================================================
 
 static void task_monitor_lowpower_cpu1(void *arg)
 {
     (void)arg;
+    test_sensor_init();
 
-    // 1. Initialize generic test sensor
-    if (test_sensor_init() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize test sensor");
-        // Proceed anyway, might just be a mock
+    if (ina_init() != ESP_OK) {
+        ESP_LOGE(TAG, "INA hardware init failed");
     }
 
-    // 2. Initialize INA226 Power Monitor
-    if (ina226_sensor_init() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize INA226 sensor");
-    }
-
-    // 3. Create Telemetry Batched Reporter
-    // This will aggregate data and send it every CONFIG_INA226_TELEMETRY_RATE_MS
-    uint32_t telemetry_rate = 1000;
+    uint32_t telemetry_rate_ms = 1000;
 #ifdef CONFIG_INA226_TELEMETRY_RATE_MS
-    telemetry_rate = CONFIG_INA226_TELEMETRY_RATE_MS;
+    telemetry_rate_ms = CONFIG_INA226_TELEMETRY_RATE_MS;
 #endif
 
-    const char* topic = "robot/telemetry/power";
+    const char* mqtt_topic_power = "robot/telemetry/power";
 #ifdef CONFIG_INA226_MQTT_TOPIC
-    topic = CONFIG_INA226_MQTT_TOPIC;
+    mqtt_topic_power = CONFIG_INA226_MQTT_TOPIC;
 #endif
 
-    telemetry_handle_t tel_handle = telemetry_create(topic, "power_system", telemetry_rate);
+    telemetry_handle_t telemetry_power = telemetry_create(mqtt_topic_power, "power_system", telemetry_rate_ms);
 
-    // 4. Calculate sampling delay
     uint32_t polling_rate_hz = 5;
 #ifdef CONFIG_INA226_POLLING_RATE_HZ
     polling_rate_hz = CONFIG_INA226_POLLING_RATE_HZ;
 #endif
     if (polling_rate_hz == 0) polling_rate_hz = 1;
-    TickType_t delay_ticks = pdMS_TO_TICKS(1000 / polling_rate_hz);
 
-    // Give system time to settle before looping
     vTaskDelay(pdMS_TO_TICKS(2000));
 
     while (1) {
-        // --- Read INA226 ---
-        float bus_voltage_mv = 0.0f;
-        float current_ma = 0.0f;
-        float power_mw = 0.0f;
+        ina_data_t power_data = {0};
+        
+        // Capture data and trigger audible alerts if thresholds are breached
+        ina_read(&power_data, true);
 
-        ina226_sensor_read_bus_voltage_mv(&bus_voltage_mv);
-        ina226_sensor_read_current_ma(&current_ma);
-        ina226_sensor_read_power_mw(&power_mw);
-
-        // --- Save to Shared Memory (For other cores) ---
-        shared_memory_t* shm = shared_memory_get();
-        if (shm != NULL) {
-            if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-                // Update specific power fields
-                shm->sensors.battery_voltage = bus_voltage_mv;
-                shm->sensors.robot_current = current_ma;
-                // Leave other sensor fields (encoders, speeds) untouched
-                xSemaphoreGive(shm->mutex);
-            }
+        // Update Global State (Shared Memory)
+        shared_memory_t* shared_mem = shared_memory_get();
+        if (shared_mem && xSemaphoreTake(shared_mem->mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+            shared_mem->sensors.battery_voltage = power_data.voltage_mv;
+            shared_mem->sensors.robot_current   = power_data.current_ma;
+            xSemaphoreGive(shared_mem->mutex);
         }
 
-        // --- Add to Telemetry Batch (For MQTT) ---
-        if (tel_handle) {
-            telemetry_add_float(tel_handle, "voltage_mv", bus_voltage_mv);
-            telemetry_add_float(tel_handle, "current_ma", current_ma);
-            telemetry_add_float(tel_handle, "power_mw", power_mw);
-            // Append timestamp dynamically per rule 5 (Influx Line Protocol)
-            // Even though batched, we might want to know the last read time
-            telemetry_add_int(tel_handle, "timestamp_us", (int32_t)esp_timer_get_time());
+        // Send to Telemetry Manager (MQTT Batching)
+        if (telemetry_power) {
+            telemetry_add_float(telemetry_power, "voltage_mv", power_data.voltage_mv);
+            telemetry_add_float(telemetry_power, "current_ma", power_data.current_ma);
+            telemetry_add_float(telemetry_power, "power_mw",   power_data.power_mw);
+            telemetry_add_int(telemetry_power,   "timestamp_us", (int32_t)esp_timer_get_time());
         }
 
-        // --- Original Uptime Logging ---
-        // (Reducing verbosity for clean console)
-        /*
-        test_sensor_get_uptime_str(uptime_str, sizeof(uptime_str));
-        ESP_LOGD(TAG, "Uptime: %s | V: %.0f mV, I: %.0f mA", uptime_str, bus_voltage_mv, current_ma);
-        */
-
-        vTaskDelay(delay_ticks);
+        vTaskDelay(pdMS_TO_TICKS(1000 / polling_rate_hz));
     }
 }
+
+// =============================================================================
+// Start Task Wrapper
+// =============================================================================
 
 void task_monitor_lowpower_cpu1_start(void)
 {

@@ -4,60 +4,52 @@
 
 El componente `ina226_sensor` es el encargado de la monitorización de potencia del robot Lurloc-ASTI. Proporciona lecturas precisas de voltaje de bus (batería), corriente y consumo de potencia en tiempo real.
 
-Este componente está optimizado para el chip **INA226**, que ofrece una resolución superior (1.25mV por LSB de voltaje) comparado con modelos anteriores como el INA219.
+Este componente ha sido refactorizado para ofrecer una **API simplificada y eficiente** que permite obtener todas las métricas y gestionar alertas en una sola línea de código, manteniendo el desacoplamiento y la legibilidad.
 
 ## Entorno y Dependencias
 
 - **Hardware:** Sensor INA226 conectado vía I2C (Bus 0).
 - **Firmware:** ESP-IDF v5.x.
 - **Dependencias locales:**
-  - `esp_driver_i2c`: Requerido para la comunicación física.
-  - `audio_player`: El sensor comparte el bus I2C con el codec de audio, por lo que depende de que el driver I2C haya sido inicializado previamente por el componente de audio.
+  - `driver`: Requerido para la comunicación I2C (API Legacy).
+  - `audio_player`: Utilizado para la emisión de alertas sonoras.
 
 ## Interfaces de E/S (Inputs/Outputs)
 
 - **Inputs:**
   - Registros de hardware del INA226 vía I2C.
-  - Configuración vía Kconfig (`Shunt value`, `Expected Current`).
+  - Configuración vía Kconfig (Thresholds y sonidos).
 - **Outputs:**
-  - `voltage_mv`: Voltaje de la batería en milivoltios.
-  - `current_ma`: Corriente de consumo en miliamperios.
-  - `power_mw`: Potencia consumida en milivatios.
-  - Logs de depuración en consola (`INA226`).
+  - Estructura `ina_data_t` con voltaje, corriente y potencia.
+  - Alertas auditivas configurables.
 
 ## Flujo de Ejecución Lógico
 
-1. El sensor se inicializa llamando a `ina226_sensor_init()`.
-2. Se verifica el ID del fabricante (0x5449) para asegurar la presencia del chip INA226.
-3. Se realiza una calibración interna calculando el valor del registro `CALIBRATION` basado en el Shunt y la Corriente Máxima esperada definidos en Kconfig.
-4. Las funciones de lectura acceden directamente a los registros de datos, aplicando los factores de escala (LSBs) adecuados.
+1. **Inicialización:** `ina_init()` realiza el handshake I2C y calibra el chip.
+2. **Lectura Inteligente:** `ina_read()` permite capturar todos los datos y procesar alertas automáticamente si se desea, simplificando los bucles de monitoreo.
+3. **Alertas:** Se gestionan internamente con un cooldown de 30s para evitar saturar el audio.
 
-## Funciones Principales y Parámetros
+## Funciones Principales (API Simplificada)
 
-- `esp_err_t ina226_sensor_init(void)`: Inicializa y calibra el chip.
-- `esp_err_t ina226_sensor_read_bus_voltage_mv(float *voltage_mv)`: Obtiene el voltaje de bus. LSB = 1.25mV.
-- `esp_err_t ina226_sensor_read_current_ma(float *current_ma)`: Obtiene la corriente.
-- `esp_err_t ina226_sensor_read_power_mw(float *power_mw)`: Obtiene la potencia.
+- `esp_err_t ina_init(void)`: Inicialización y calibración.
+- `esp_err_t ina_read(ina_data_t *data, bool check_alerts)`: **Función recomendada.** Lee todo y opcionalmente comprueba alertas.
+- `esp_err_t ina_check_alerts(void)`: Comprobación manual de umbrales.
+- `esp_err_t ina_read_voltage(float *v_mv)` / `ina_read_current(...)` / `ina_read_power(...)`: Lecturas individuales.
 
-## Puntos Críticos y Depuración
-
-- **Coexistencia I2C:** Al compartir el bus con el audio, cualquier error en el driver I2C afectará a ambos. Se debe asegurar que `audio_player_init` se ejecute antes.
-- **Precisión:** La lectura de voltaje es nativamente 1.25mV/bit. Si se detecta una desviación constante contra multímetro, verificar la integridad del chip o posibles caídas de tensión en las pistas del PCB.
-
-## Ejemplo de Uso e Instanciación
+## Ejemplo de Uso (Simplificado)
 
 ```c
 #include "ina226_sensor.h"
 
-void app_main(void) {
-    // Inicializar audio primero (levanta el bus I2C)
-    audio_player_init();
-
-    // Inicializar sensor de potencia
-    if (ina226_sensor_init() == ESP_OK) {
-        float v_bat = 0;
-        ina226_sensor_read_bus_voltage_mv(&v_bat);
-        printf("Batería: %.2f V\n", v_bat / 1000.0f);
+void monitor_task(void *arg) {
+    ina_init();
+    while(1) {
+        ina_data_t pwr;
+        // Lee voltios, amperios, vatios y gestiona alertas en UN paso
+        if (ina_read(&pwr, true) == ESP_OK) {
+            printf("Bat: %.1fV, Consumo: %.1fA\n", pwr.voltage_mv/1000, pwr.current_ma/1000);
+        }
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 ```

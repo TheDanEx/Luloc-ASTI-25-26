@@ -1,52 +1,59 @@
 /**
  * @file ina226_sensor.h
- * @brief High-precision Power Monitor Driver for INA226 (ESP32-P4)
- * 
- * Hardware assumptions:
- * - Shared I2C Bus with Audio Codec.
- * - Initialization depends on bus being already up.
+ * @brief High-precision Power Monitor Driver for INA226.
  */
 
 #ifndef INA226_SENSOR_H
 #define INA226_SENSOR_H
 
 #include "esp_err.h"
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/**
- * @brief Initializes the INA226 sensor.
- * 
- * @note Assumes I2C driver is already installed (usually by audio_player).
- * @return esp_err_t ESP_OK on success, ESP_FAIL if chip not found.
- */
-esp_err_t ina226_sensor_init(void);
+// =============================================================================
+// Types & Structures
+// =============================================================================
 
 /**
- * @brief Reads the current bus voltage from the sensor.
- * 
- * @param[out] voltage_mv Pointer to store the voltage in millivolts.
- * @return esp_err_t ESP_OK on successful read.
+ * @brief Unified data structure for power system metrics.
  */
-esp_err_t ina226_sensor_read_bus_voltage_mv(float *voltage_mv);
+typedef struct {
+    float voltage_mv;
+    float current_ma;
+    float power_mw;
+} ina_data_t;
+
+// =============================================================================
+// Public API
+// =============================================================================
 
 /**
- * @brief Reads the current flowing through the shunt resistor.
- * 
- * @param[out] current_ma Pointer to store the current in milliamperes.
- * @return esp_err_t ESP_OK on successful read.
+ * @brief Initialize the INA226 sensor hardware.
  */
-esp_err_t ina226_sensor_read_current_ma(float *current_ma);
+esp_err_t ina_init(void);
 
 /**
- * @brief Reads the calculated power consumption.
- * 
- * @param[out] power_mw Pointer to store the power in milliwatts.
- * @return esp_err_t ESP_OK on successful read.
+ * @brief Read individual power system metrics.
  */
-esp_err_t ina226_sensor_read_power_mw(float *power_mw);
+esp_err_t ina_read_voltage(float *voltage_mv);
+esp_err_t ina_read_current(float *current_ma);
+esp_err_t ina_read_power(float *power_mw);
+
+/**
+ * @brief Capture all system metrics and optionally process audible alerts.
+ * 
+ * @param[out] data Summary structure with all readings.
+ * @param check_alerts If true, executes threshold logic and plays audio.
+ */
+esp_err_t ina_read(ina_data_t *data, bool check_alerts);
+
+/**
+ * @brief Internal threshold monitor and audio alert trigger.
+ */
+esp_err_t ina_check_alerts(void);
 
 #ifdef __cplusplus
 }

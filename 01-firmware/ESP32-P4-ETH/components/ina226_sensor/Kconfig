@@ -58,4 +58,53 @@ menu "Luloc-ASTI: 2. Sensors - INA226 Power Monitor"
         help
             Topic name for the InfluxDB Line Protocol power payloads.
 
+    menu "Power Alerts (Audible)"
+        config INA226_ALERTS_ENABLED
+            bool "Enable Audible Power Alerts"
+            default y
+            help
+                Enable/Disable the battery low and overcurrent audio alerts.
+
+        config INA226_ALERT_VOLTAGE_THRESHOLD_MV
+            int "Low Voltage Threshold (mV)"
+            default 14000
+            help
+                Alert when battery voltage drops below this value. 
+                For 4S LiPo: 14000mV (3.5V/cell) is a safe warning level.
+
+        config INA226_ALERT_CURRENT_THRESHOLD_MA
+            int "High Current Threshold (mA)"
+            default 8000
+            help
+                Alert when total current consumption exceeds this value.
+                Useful to detect motor stalls or shorts.
+
+        choice INA226_LOW_VOLTAGE_SOUND
+            prompt "Sound for Low Voltage"
+            default INA226_LOW_VOLTAGE_SOUND_BATTERY_LOW
+            depends on INA226_ALERTS_ENABLED
+            help
+                Which sound to play when battery is low.
+
+            config INA226_LOW_VOLTAGE_SOUND_BATTERY_LOW
+                bool "BATTERY_LOW"
+            config INA226_LOW_VOLTAGE_SOUND_STARTUP
+                bool "STARTUP"
+        endchoice
+
+        choice INA226_HIGH_CURRENT_SOUND
+            prompt "Sound for High Current"
+            default INA226_HIGH_CURRENT_SOUND_BATTERY_LOW
+            depends on INA226_ALERTS_ENABLED
+            help
+                Which sound to play when current is high.
+
+            config INA226_HIGH_CURRENT_SOUND_BATTERY_LOW
+                bool "BATTERY_LOW"
+            config INA226_HIGH_CURRENT_SOUND_STARTUP
+                bool "STARTUP"
+        endchoice
+
+    endmenu
+
 endmenu
