@@ -1,55 +1,48 @@
 # Telemetry Manager
 
 ## Propósito Arquitectónico
-Abstrae la construcción de mensajes de telemetría estructurados. Actúa como un builder para recolectar diferentes datos (flotantes, enteros, booleanos) de los sensores en tiempo real y prepararlos para ser enviados por red en un formato que bases de datos o brokers entiendan nativamente (JSON/Influx).
+Abstrae la construcción de mensajes de telemetría estructurados siguiendo el formato **Influx Line Protocol (ILP)**. Actúa como un motor de acumulación (*Batching*) en SRAM para recolectar métricas de alta frecuencia y emitirlas periódicamente por MQTT, optimizando el ancho de banda y reduciendo la carga del broker.
 
 ## Entorno y Dependencias
-Depende estrictamente del wrapper inferior `mqtt_custom_client.h`. Pensado para entornos donde el stack TCP/IP y la sesión MQTT ya están inicializadas.
+Depende del wrapper `mqtt_custom_client.h` para el transporte y de `esp_timer.h` para los timestamps de precisión. Se ejecuta en una tarea dedicada dentro del **CPU1**.
 
 ## Interfaces de E/S (Inputs/Outputs)
-- **Software:** Constructor que devuelve un puntero opaco `telemetry_handle_t` configurado con métricas principales (Topic y Measurement ID e Intervalos recomendados). Funciones inyectoras `telemetry_add_float()`, `telemetry_add_int()`, `telemetry_add_bool()`.
+- **Inputs:** Funciones `telemetry_add_*` para inyectar campos y `telemetry_commit_point()` para cerrar una lectura (fila) y añadirla al buffer de salida.
+- **Outputs:** Strings puros en formato ILP transmitidos por MQTT al tópico configurado.
 
 ## Flujo de Ejecución Lógico
-Al iniciar la comunicación o telemetría, el programa (CPU1) crea instancias de "reporteros" mediante `telemetry_create()`. Durante el ciclo útil se agrupan campos llamando iterativamente a los métodos `add_*`. Al final de la rutina y dependiendo del flujo de código `.c`, el sistema emite todo el diccionario por el puerto MQTT asociado y reinicia su estado.
+1. El usuario crea un reportero persistente con `telemetry_create()`.
+2. Se pueden definir etiquetas estáticas con `telemetry_set_tags()` (ej. `sensor=battery`).
+3. En cada lectura de sensor, se añaden campos (`add_float`, etc) y se llama a `telemetry_commit_point()`. Esto añade una línea con timestamp en nanosegundos (`esp_timer_get_time() * 1000`) al buffer interno.
+4. Internamente, una tarea FreeRTOS despierta cada `interval_ms`, publica todo el buffer acumulado (varias líneas separadas por `\n`) y limpia el buffer.
 
 ## Funciones Principales y Parámetros
-- `telemetry_create(const char *topic, const char *measurement, uint32_t interval_ms)`: Funda un builder de reporte telemétrico temporal pre-etiquetado para bases de datos e inicializa la memoria dinámica de su string.
-  - `topic`: Ruta MQTT destino (`robot/telemetry`).
-  - `measurement`: Etiqueta principal JSON. Retorna handle opaco `telemetry_handle_t`.
-- `telemetry_add_float(telemetry_handle_t handle, const char *key, float value)`: Inyecta una métrica dentro del buffer de iteración actual. 
-  - `key`: Etiqueta explícita de la variable (p. ej. `"velocity"`).
-  - `value`: Número de tipo decimal de lectura.
-- `telemetry_add_int(...)` / `telemetry_add_bool(...)`: Variantes polimórficos de agregado tipado a la cadena JSON.
-- `telemetry_destroy(telemetry_handle_t handle)`: Cierra la trama completa del JSON actual, efectúa el trigger de comunicación por red hacia MQTT y finalmente OBLIGATORIAMENTE destruye y libera (Free) la memoria del string alojada para ese reporte, liquidando el handle.
+- `telemetry_create(topic, measurement, interval_ms)`: Inicializa el reportero y su tarea de publicación.
+- `telemetry_set_tags(handle, tags)`: Define etiquetas fijas (ej. `"sensor=battery"`) que irán en cada línea.
+- `telemetry_add_float(handle, key, value)`: Añade un campo decimal al punto actual.
+- `telemetry_commit_point(handle)`: Finaliza la lectura actual, le adosa el timestamp en nanosegundos y la guarda en el buffer de SRAM.
+- `telemetry_destroy(handle)`: Finaliza la tarea, libera los buffers y el handle.
 
 ## Puntos Críticos y Depuración
-- **Memory Leaks Ocultos:** Si no se emplea correctamente la macro de destrucción `telemetry_destroy(handle)`, el montón (Heap) de FreeRTOS será agotado aceleradamente causando reinicios por OOM (Out Of Memory) impredecibles.
-- **Saturación del Buffer Interno:** Asumiblemente existe un char buffer alojado detrás del handle. Si un desarrollador intenta incrustar docenas de variables float de precision muy amplia, superará el tamaño del buffer corrompiendo memoria RAM general (Buffer Overflow) a menos que esté estrictamente blindado internamente.
+- **Saturación del Buffer (SRAM Batching):** El buffer tiene un tamaño fijo (`MAX_BUFFER_SIZE = 2048`). Si se acumulan demasiados puntos antes de que venza el `interval_ms`, los nuevos puntos se descartarán para evitar desbordamientos. 
+- **Timestamps:** Se utilizan nanosegundos basados en el temporizador del hardware. Estos son relativos al arranque a menos que se sincronice el sistema mediante NTP.
 
 ## Ejemplo de Uso e Instanciación
 ```c
 #include "telemetry_manager.h"
-#include "mqtt_custom_client.h"
 
-// Tarea Cíclica de Reporte (Core 1) a 10Hz
-void telemetry_sys_task(void *pvParameters) {
-    while(1) {
-        // 1. Iniciar la trama Influx Line Protocol (ILP) o JSON
-        // Esto aloja dinámicamente un buffer en el Heap
-        telemetry_handle_t frame = telemetry_create("robot/metrics", "kinematics", 100);
+// 1. Inicialización (una sola vez)
+telemetry_handle_t tel = telemetry_create("robot/telemetry/power", "power_system", 1000);
+telemetry_set_tags(tel, "sensor=battery");
 
-        if (frame != NULL) {
-            // 2. Inyectar variables de forma transparente (El timestamp lo pone por debajo)
-            telemetry_add_float(frame, "speed_ms", current_speed);
-            telemetry_add_int(frame, "battery_pct", battery_level);
-            telemetry_add_bool(frame, "is_autonomous", mode_auto);
-
-            // 3. Empaquetar y Disparar el envío por red 
-            // CUIDADO: Destruye el buffer OBLIGATORIAMENTE evitando fugas de memoria
-            telemetry_destroy(frame);
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(100)); // Esperar 100ms
-    }
+// 2. Bucle de lectura (Alta frecuencia)
+while(1) {
+    float v = read_voltage();
+    telemetry_add_float(tel, "voltage_mv", v);
+    telemetry_commit_point(tel); // Guarda el punto con su nano-timestamp
+    
+    vTaskDelay(pdMS_TO_TICKS(100)); // 10Hz
 }
+
+// El manager enviará el batch de 10 lecturas cada 1000ms automáticamente.
 ```

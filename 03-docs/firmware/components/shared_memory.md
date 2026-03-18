@@ -8,7 +8,7 @@ Core Semaphores primitives de FreeRTOS (`freertos/semphr.h`).
 
 ## Interfaces de E/S (Inputs/Outputs)
 - **Hardware:** Todo se encuentra anclado a buffers en SRAM local compartida.
-- **Software:** Wrapper sobre una gran directiva estática `shared_memory_t` separando sub-bloques de Sensores (`robot_sensor_data_t`) y Comandos (`robot_command_t`). Usa mutadores y descriptores con Timeout estricto de concurrencia (`shared_memory_read/write_sensors()`). Implementa variables bidireccionales de 'Heartbeat' para chequeos pasivos de vida y estados MQTT (`mqtt_connected`).
+- **Software:** Wrapper sobre una gran directiva estática `shared_memory_t` separando sub-bloques de Sensores (`robot_sensor_data_t`) y Comandos (`robot_command_t`). Incluye configuración de PID por motor (`motor_pids[2]`) y máscara de selección para calibración (`calibration_motor_mask`). Usa mutadores y descriptores con Timeout estricto de concurrencia (`shared_memory_read/write_sensors()`). Implementa variables bidireccionales de 'Heartbeat' para chequeos pasivos de vida y estados MQTT (`mqtt_connected`).
 
 ## Flujo de Ejecución Lógico
 Instanciación única en inicio (`shared_memory_init()`). Cada bloque (Control o Comms) llama a primitivas `write/read` con un `TickType_t` max timeout. Internamente, un Mutex asegura que los structs de bytes múltiples jamás se crucen a la mitad (Lectura sucia). Un núcleo también escribe periodicamente incrementando un `heartbeat_cpuX++` y valida el contiguo. 
