@@ -27,27 +27,30 @@ esp_err_t pid_tuner_init(void) {
     return err;
 }
 
-esp_err_t pid_tuner_load_motor_pid(float *kp, float *ki, float *kd) {
+esp_err_t pid_tuner_load_motor_pid(uint8_t index, float *kp, float *ki, float *kd) {
     nvs_handle_t my_handle;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &my_handle);
     if (err != ESP_OK) {
-        ESP_LOGD(TAG, "NVS Open Failed (first boot?), using Kconfig defaults");
+        ESP_LOGD(TAG, "NVS Open Failed for index %d, using Kconfig defaults", index);
         return err;
     }
 
     uint32_t raw_kp = 0, raw_ki = 0, raw_kd = 0;
+    char key_kp[8], key_ki[8], key_kd[8];
+    snprintf(key_kp, sizeof(key_kp), "%c_kp", (index == 0) ? 'l' : 'r');
+    snprintf(key_ki, sizeof(key_ki), "%c_ki", (index == 0) ? 'l' : 'r');
+    snprintf(key_kd, sizeof(key_kd), "%c_kd", (index == 0) ? 'l' : 'r');
     
-    // We store floats directly natively casted as uint32_t to bypass NVS float lack natively easily
-    if (nvs_get_u32(my_handle, "m_kp", &raw_kp) == ESP_OK) *kp = *((float*)&raw_kp);
-    if (nvs_get_u32(my_handle, "m_ki", &raw_ki) == ESP_OK) *ki = *((float*)&raw_ki);
-    if (nvs_get_u32(my_handle, "m_kd", &raw_kd) == ESP_OK) *kd = *((float*)&raw_kd);
+    if (nvs_get_u32(my_handle, key_kp, &raw_kp) == ESP_OK) *kp = *((float*)&raw_kp);
+    if (nvs_get_u32(my_handle, key_ki, &raw_ki) == ESP_OK) *ki = *((float*)&raw_ki);
+    if (nvs_get_u32(my_handle, key_kd, &raw_kd) == ESP_OK) *kd = *((float*)&raw_kd);
 
     nvs_close(my_handle);
-    ESP_LOGI(TAG, "Loaded PIDs from NVS: Kp=%.3f, Ki=%.3f, Kd=%.3f", *kp, *ki, *kd);
+    ESP_LOGI(TAG, "Loaded PIDs [%d] from NVS: Kp=%.3f, Ki=%.3f, Kd=%.3f", index, *kp, *ki, *kd);
     return ESP_OK;
 }
 
-esp_err_t pid_tuner_save_motor_pid(float kp, float ki, float kd) {
+esp_err_t pid_tuner_save_motor_pid(uint8_t index, float kp, float ki, float kd) {
     nvs_handle_t my_handle;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &my_handle);
     if (err != ESP_OK) {
@@ -59,15 +62,20 @@ esp_err_t pid_tuner_save_motor_pid(float kp, float ki, float kd) {
     uint32_t raw_ki = *((uint32_t*)&ki);
     uint32_t raw_kd = *((uint32_t*)&kd);
 
-    err = nvs_set_u32(my_handle, "m_kp", raw_kp);
-    err |= nvs_set_u32(my_handle, "m_ki", raw_ki);
-    err |= nvs_set_u32(my_handle, "m_kd", raw_kd);
+    char key_kp[8], key_ki[8], key_kd[8];
+    snprintf(key_kp, sizeof(key_kp), "%c_kp", (index == 0) ? 'l' : 'r');
+    snprintf(key_ki, sizeof(key_ki), "%c_ki", (index == 0) ? 'l' : 'r');
+    snprintf(key_kd, sizeof(key_kd), "%c_kd", (index == 0) ? 'l' : 'r');
+
+    err = nvs_set_u32(my_handle, key_kp, raw_kp);
+    err |= nvs_set_u32(my_handle, key_ki, raw_ki);
+    err |= nvs_set_u32(my_handle, key_kd, raw_kd);
     
     err |= nvs_commit(my_handle);
     nvs_close(my_handle);
     
     if (err == ESP_OK) {
-        ESP_LOGI(TAG, "Saved PIDs to NVS: Kp=%.3f, Ki=%.3f, Kd=%.3f", kp, ki, kd);
+        ESP_LOGI(TAG, "Saved PIDs [%d] to NVS: Kp=%.3f, Ki=%.3f, Kd=%.3f", index, kp, ki, kd);
     } else {
         ESP_LOGE(TAG, "Failed to commit PIDs to NVS");
     }
@@ -81,62 +89,57 @@ esp_err_t pid_tuner_save_motor_pid(float kp, float ki, float kd) {
 // =============================================================================
 
 static void pid_mqtt_callback(const char *topic, int topic_len, const char *data, int data_len) {
-    // Safety check size
     if (topic_len <= 0 || data_len <= 0 || data_len > 512) return;
-
-    // We only care about our specific topic
     if (strncmp(topic, CONFIG_PID_TUNER_MQTT_TOPIC, topic_len) != 0) return;
 
-    // Parse JSON
     cJSON *root = cJSON_ParseWithLength(data, data_len);
     if (root == NULL) {
         ESP_LOGE(TAG, "Invalid JSON received for PID tuning");
         return;
     }
 
-    float current_kp = 0.0f, current_ki = 0.0f, current_kd = 0.0f;
-    pid_tuner_load_motor_pid(&current_kp, &current_ki, &current_kd);
-
-    bool updated = false;
-
-    cJSON *kp_item = cJSON_GetObjectItem(root, "kp");
-    if (cJSON_IsNumber(kp_item)) {
-        current_kp = kp_item->valuedouble;
-        updated = true;
+    // Determine which motor to update (default: both)
+    bool update_left = true;
+    bool update_right = true;
+    cJSON *motor_item = cJSON_GetObjectItem(root, "motor");
+    if (cJSON_IsString(motor_item)) {
+        if (strcmp(motor_item->valuestring, "left") == 0) {
+            update_right = false;
+        } else if (strcmp(motor_item->valuestring, "right") == 0) {
+            update_left = false;
+        }
     }
 
-    cJSON *ki_item = cJSON_GetObjectItem(root, "ki");
-    if (cJSON_IsNumber(ki_item)) {
-        current_ki = ki_item->valuedouble;
-        updated = true;
-    }
+    for (int i = 0; i < 2; i++) {
+        if ((i == 0 && !update_left) || (i == 1 && !update_right)) continue;
 
-    cJSON *kd_item = cJSON_GetObjectItem(root, "kd");
-    if (cJSON_IsNumber(kd_item)) {
-        current_kd = kd_item->valuedouble;
-        updated = true;
+        float kp = 0.0f, ki = 0.0f, kd = 0.0f;
+        pid_tuner_load_motor_pid(i, &kp, &ki, &kd);
+
+        bool updated = false;
+        cJSON *kp_item = cJSON_GetObjectItem(root, "kp");
+        if (cJSON_IsNumber(kp_item)) { kp = kp_item->valuedouble; updated = true; }
+        cJSON *ki_item = cJSON_GetObjectItem(root, "ki");
+        if (cJSON_IsNumber(ki_item)) { ki = ki_item->valuedouble; updated = true; }
+        cJSON *kd_item = cJSON_GetObjectItem(root, "kd");
+        if (cJSON_IsNumber(kd_item)) { kd = kd_item->valuedouble; updated = true; }
+
+        if (updated) {
+            ESP_LOGW(TAG, "Live PID Update Received for Motor %d! Kp:%.3f, Ki:%.3f, Kd:%.3f", i, kp, ki, kd);
+            pid_tuner_save_motor_pid(i, kp, ki, kd);
+            
+            shared_memory_t* shm = shared_memory_get();
+            if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+                shm->motor_pids[i].kp = kp;
+                shm->motor_pids[i].ki = ki;
+                shm->motor_pids[i].kd = kd;
+                shm->motor_pids[i].updated_flag = true;
+                xSemaphoreGive(shm->mutex);
+            }
+        }
     }
     
     cJSON_Delete(root);
-
-    if (updated) {
-        ESP_LOGW(TAG, "Live PID Update Received! Kp:%.3f, Ki:%.3f, Kd:%.3f", current_kp, current_ki, current_kd);
-        
-        // 1. Save to Flash Storage immediately
-        pid_tuner_save_motor_pid(current_kp, current_ki, current_kd);
-        
-        // 2. Inject to Shared Memory so CPU0 (RT Control Task) applies it on the next loop tick
-        shared_memory_t* shm = shared_memory_get();
-        if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-            shm->live_pid.kp = current_kp;
-            shm->live_pid.ki = current_ki;
-            shm->live_pid.kd = current_kd;
-            shm->live_pid.updated_flag = true;
-            xSemaphoreGive(shm->mutex);
-        } else {
-            ESP_LOGE(TAG, "Timeout taking shared memory mutex to inject PIDs");
-        }
-    }
 }
 
 esp_err_t pid_tuner_register_callback(void) {

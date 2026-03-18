@@ -69,6 +69,14 @@ static void handle_resource_uptime(cJSON *response_root) {
     }
 }
 
+static void handle_resource_status(cJSON *response_root) {
+    robot_state_context_t* ctx = state_machine_get_context();
+    cJSON_AddNumberToObject(response_root, "state_id", ctx->current_state);
+    cJSON_AddStringToObject(response_root, "state_str", get_state_name(ctx->current_state));
+    cJSON_AddNumberToObject(response_root, "mode_id", ctx->current_mode);
+    cJSON_AddStringToObject(response_root, "mode_str", get_mode_name(ctx->current_mode));
+}
+
 // =============================================================================
 // Action Handlers (SET)
 // =============================================================================
@@ -137,13 +145,37 @@ static void handle_action_play_sound(cJSON *root, cJSON *response_root) {
     }
 }
 
+static void handle_action_set_cal_mask(cJSON *root, cJSON *response_root) {
+    cJSON *mask_item = cJSON_GetObjectItem(root, "mask");
+    if (cJSON_IsNumber(mask_item)) {
+        uint8_t mask = (uint8_t)mask_item->valueint;
+        shared_memory_t* shm = shared_memory_get();
+        if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+            shm->calibration_motor_mask = mask;
+            xSemaphoreGive(shm->mutex);
+            cJSON_AddStringToObject(response_root, "status", "success");
+            cJSON_AddStringToObject(response_root, "message", "Calibration mask updated");
+        } else {
+            cJSON_AddStringToObject(response_root, "status", "error");
+            cJSON_AddStringToObject(response_root, "message", "Shared memory timeout");
+        }
+    } else {
+        cJSON_AddStringToObject(response_root, "status", "error");
+        cJSON_AddStringToObject(response_root, "message", "Missing or invalid mask");
+    }
+}
+
 // =============================================================================
 // MQTT Callback
 // =============================================================================
 
 static void api_mqtt_callback(const char *topic, int topic_len, const char *data, int data_len) {
     if (topic_len <= 0 || data_len <= 0 || data_len > 512) return;
-    if (strncmp(topic, CONFIG_MQTT_API_GET_TOPIC, topic_len) != 0) return;
+    // Check if it's one of our topics
+    bool is_get = (strncmp(topic, CONFIG_MQTT_API_GET_TOPIC, topic_len) == 0);
+    bool is_set = (strncmp(topic, CONFIG_MQTT_API_SET_TOPIC, topic_len) == 0);
+    
+    if (!is_get && !is_set) return;
 
     cJSON *root = cJSON_ParseWithLength(data, data_len);
     if (root == NULL) {
@@ -154,7 +186,7 @@ static void api_mqtt_callback(const char *topic, int topic_len, const char *data
     cJSON *response_root = cJSON_CreateObject();
     
     // Check if it's a GET request
-    if (strncmp(topic, CONFIG_MQTT_API_GET_TOPIC, topic_len) == 0) {
+    if (is_get) {
         cJSON *resource_item = cJSON_GetObjectItem(root, "resource");
         
         if (cJSON_IsString(resource_item) && (resource_item->valuestring != NULL)) {
@@ -171,10 +203,14 @@ static void api_mqtt_callback(const char *topic, int topic_len, const char *data
             else if (strcmp(resource, "uptime") == 0) {
                 handle_resource_uptime(response_root);
             }
+            else if (strcmp(resource, "status") == 0) {
+                handle_resource_status(response_root);
+            }
             else if (strcmp(resource, "all") == 0) {
                 handle_resource_battery(response_root);
                 handle_resource_encoder(response_root);
                 handle_resource_uptime(response_root);
+                handle_resource_status(response_root);
             }
             else {
                 cJSON_AddStringToObject(response_root, "error", "Unknown Resource");
@@ -182,7 +218,7 @@ static void api_mqtt_callback(const char *topic, int topic_len, const char *data
         }
     } 
     // Check if it's a SET request
-    else if (strncmp(topic, CONFIG_MQTT_API_SET_TOPIC, topic_len) == 0) {
+    else if (is_set) {
         cJSON *action_item = cJSON_GetObjectItem(root, "action");
         
         if (cJSON_IsString(action_item) && (action_item->valuestring != NULL)) {
@@ -195,6 +231,9 @@ static void api_mqtt_callback(const char *topic, int topic_len, const char *data
             } 
             else if (strcmp(action, "set_mode") == 0) {
                 handle_action_set_mode(root, response_root);
+            }
+            else if (strcmp(action, "set_cal_mask") == 0) {
+                handle_action_set_cal_mask(root, response_root);
             }
             else {
                 cJSON_AddStringToObject(response_root, "status", "error");

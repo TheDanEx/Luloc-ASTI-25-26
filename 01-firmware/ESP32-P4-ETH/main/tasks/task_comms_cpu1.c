@@ -199,8 +199,17 @@ static void task_comms_cpu1(void *arg)
     mqtt_api_responder_subscribe();
 
     TickType_t last_sampling_tick = 0;
+    bool last_mqtt_conn = false;
+
     while(1) {
         TickType_t current_tick = xTaskGetTickCount();
+
+        // 0. Synchronize MQTT Status with State Machine
+        bool current_mqtt_conn = mqtt_custom_client_is_connected();
+        if (current_mqtt_conn != last_mqtt_conn) {
+            state_machine_notify_mqtt_status(current_mqtt_conn);
+            last_mqtt_conn = current_mqtt_conn;
+        }
 
         // 1. Inter-core Command Handling
         uint8_t intercore_msg[CMD_QUEUE_ITEM_SIZE];

@@ -16,8 +16,8 @@ static const char *TAG = "rt_cntrl";
 
 // Motor Configuration (PINS: Iz: 47/48, Dr: 20/21)
 static motor_driver_mcpwm_t motors = {
-    .left  = { .in1 = GPIO_NUM_47, .in2 = GPIO_NUM_48},
-    .right = { .in1 = GPIO_NUM_20, .in2 = GPIO_NUM_21},
+    .left  = { .in1 = GPIO_NUM_22, .in2 = GPIO_NUM_23},
+    .right = { .in1 = GPIO_NUM_21, .in2 = GPIO_NUM_20},
 
     .nsleep = GPIO_NUM_NC,
     .pwm_hz = 20000,
@@ -33,7 +33,7 @@ static void task_rtcontrol_cpu0(void *arg)
     motor_mcpwm_init(&motors);
     
     // Configuración base leída de Kconfig (Cargada desde NVS si hay Live Tuning)
-    motor_velocity_config_t m_config = {
+    motor_velocity_config_t cfg_l = {
         .kp              = atof(CONFIG_VELOCITY_CTRL_DEFAULT_KP),
         .ki              = atof(CONFIG_VELOCITY_CTRL_DEFAULT_KI),
         .kd              = atof(CONFIG_VELOCITY_CTRL_DEFAULT_KD),
@@ -43,11 +43,14 @@ static void task_rtcontrol_cpu0(void *arg)
         .accel_limit_ms2 = atof(CONFIG_VEL_CTRL_ACCEL_LIMIT),
         .ema_alpha       = atof(CONFIG_VEL_CTRL_EMA_ALPHA)
     };
-    pid_tuner_load_motor_pid(&m_config.kp, &m_config.ki, &m_config.kd);
+    motor_velocity_config_t cfg_r = cfg_l;
+
+    pid_tuner_load_motor_pid(0, &cfg_l.kp, &cfg_l.ki, &cfg_l.kd);
+    pid_tuner_load_motor_pid(1, &cfg_r.kp, &cfg_r.ki, &cfg_r.kd);
 
     motor_velocity_ctrl_handle_t ctrl_left, ctrl_right;
-    motor_velocity_ctrl_create(&m_config, &ctrl_left);
-    motor_velocity_ctrl_create(&m_config, &ctrl_right);
+    motor_velocity_ctrl_create(&cfg_l, &ctrl_left);
+    motor_velocity_ctrl_create(&cfg_r, &ctrl_right);
 
     const float dt = 0.01f; // 10ms = 100 Hz
     const TickType_t poll_rate = pdMS_TO_TICKS(10); 
@@ -59,10 +62,14 @@ static void task_rtcontrol_cpu0(void *arg)
         xSemaphoreTake(shm->mutex, portMAX_DELAY);
 
         // Update PID live tuning si hay cambios desde MQTT
-        if (shm->live_pid.updated_flag) {
-            motor_velocity_ctrl_set_pid(ctrl_left, shm->live_pid.kp, shm->live_pid.ki, shm->live_pid.kd);
-            motor_velocity_ctrl_set_pid(ctrl_right, shm->live_pid.kp, shm->live_pid.ki, shm->live_pid.kd);
-            shm->live_pid.updated_flag = false;
+        for (int i = 0; i < 2; i++) {
+            if (shm->motor_pids[i].updated_flag) {
+                motor_velocity_ctrl_set_pid((i == 0) ? ctrl_left : ctrl_right, 
+                                          shm->motor_pids[i].kp, 
+                                          shm->motor_pids[i].ki, 
+                                          shm->motor_pids[i].kd);
+                shm->motor_pids[i].updated_flag = false;
+            }
         }
 
         // Leer Telemetría local (si fuera necesario explícitamente aquí, o se delega al modo)

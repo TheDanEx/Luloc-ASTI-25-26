@@ -27,6 +27,7 @@ void shared_memory_init(void)
     g_shared_memory.heartbeat_cpu1 = 0;
     g_shared_memory.cpu0_alive = false;
     g_shared_memory.cpu1_alive = false;
+    g_shared_memory.calibration_motor_mask = 3; // Default: Both motors active during sweep
 
     g_initialized = true;
     ESP_LOGI(TAG, "Shared memory initialized");

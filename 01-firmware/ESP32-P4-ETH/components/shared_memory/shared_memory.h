@@ -50,7 +50,10 @@ typedef struct {
     // Core shared state
     robot_sensor_data_t sensors;
     robot_command_t last_command;
-    shared_pid_config_t live_pid; // Used to pass new PIDs from MQTT (CPU1) to Control (CPU0)
+    
+    shared_pid_config_t motor_pids[2]; // 0=Left, 1=Right
+    uint8_t calibration_motor_mask;    // bitmask: 1=Left, 2=Right, 3=Both
+
     uint32_t heartbeat_cpu0;    // CPU0 heartbeat counter
     uint32_t heartbeat_cpu1;    // CPU1 heartbeat counter
     bool cpu0_alive;
