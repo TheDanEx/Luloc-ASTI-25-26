@@ -200,17 +200,16 @@ static void task_comms_cpu1(void *arg)
     // 1. Initialization
     task_comms_cpu1_init_queue();
     ESP_LOGI(TAG, "Comms task started, waiting for Ethernet link...");
-
     while (!ethernet_is_connected()) {
         vTaskDelay(pdMS_TO_TICKS(500));
     }
-    ESP_LOGI(TAG, "Ethernet connected. Initializing subsystems...");
+    ESP_LOGI(TAG, "Ethernet connected. Initializing MQTT...");
 
     // MQTT
-    if (mqtt_custom_client_init() != ESP_OK) {
-        ESP_LOGE(TAG, "FATAL: MQTT Init Failed");
+    while (mqtt_custom_client_init() != ESP_OK) {
+        ESP_LOGW(TAG, "MQTT init retry...");
         mqtt_initialized = false;
-        vTaskDelete(NULL);
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
     mqtt_initialized = true;
 
@@ -240,10 +239,11 @@ static void task_comms_cpu1(void *arg)
 
     // Subscriptions
     vTaskDelay(pdMS_TO_TICKS(1000)); 
-    mqtt_custom_client_subscribe("robot/cmd", 1);
     mqtt_custom_client_register_topic_callback("robot/cmd", mqtt_cmd_callback);
-    curvature_feedforward_register_callback();
-    curvature_feedforward_subscribe();
+    mqtt_custom_client_subscribe("robot/cmd", 1);
+    if (curvature_feedforward_register_callback() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register curvature feedforward callback");
+    }
 
     ESP_LOGI(TAG, "Comms Task Running on Core %d", xPortGetCoreID());
 
@@ -266,10 +266,15 @@ static void task_comms_cpu1(void *arg)
              if (mqtt_custom_client_is_connected()) {
                  shared_memory_set_mqtt_connected(true);
                  if (curvature_feedforward_subscribe() != ESP_OK) {
-                     // Keep retrying silently while broker/client stabilizes.
+                     // Keep retrying while broker/client stabilizes or reconnects.
                  }
              } else {
                  shared_memory_set_mqtt_connected(false);
+             }
+
+             if (curvature_feedforward_has_value()) {
+                 shared_memory_set_curvature_ff(curvature_feedforward_get_value(),
+                                                curvature_feedforward_get_timestamp_ms());
              }
 
              collect_sensor_data();

@@ -15,3 +15,6 @@
 01-firmware/ESP32-P4-ETH/dependencies.lock
 01-firmware/ESP32-P4-ETH/sdkconfig
 02-software/01-vision/src/__pycache__/feedforward.cpython-310.pyc
+02-software/01-vision/src/.vscode/settings.json
+02-software/01-vision/src/.vscode/c_cpp_properties.json
+02-software/01-vision/src/.vscode/browse.vc.db

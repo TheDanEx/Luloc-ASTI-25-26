@@ -27,6 +27,9 @@ void shared_memory_init(void)
     g_shared_memory.heartbeat_cpu1 = 0;
     g_shared_memory.cpu0_alive = false;
     g_shared_memory.cpu1_alive = false;
+    g_shared_memory.curvature_ff = 0.0f;
+    g_shared_memory.curvature_ts_ms = 0;
+    g_shared_memory.curvature_valid = false;
 
     g_initialized = true;
     ESP_LOGI(TAG, "Shared memory initialized");
@@ -151,6 +154,41 @@ bool shared_memory_get_mqtt_connected(void)
     }
     
     return false;
+}
+
+void shared_memory_set_curvature_ff(float curvature, uint32_t timestamp_ms)
+{
+    if (!g_initialized) {
+        return;
+    }
+
+    if (xSemaphoreTake(g_shared_memory.mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        g_shared_memory.curvature_ff = curvature;
+        g_shared_memory.curvature_ts_ms = timestamp_ms;
+        g_shared_memory.curvature_valid = true;
+        xSemaphoreGive(g_shared_memory.mutex);
+    }
+}
+
+bool shared_memory_get_curvature_ff(float *curvature, uint32_t *timestamp_ms, TickType_t timeout)
+{
+    if (!g_initialized || curvature == NULL || timestamp_ms == NULL) {
+        return false;
+    }
+
+    if (xSemaphoreTake(g_shared_memory.mutex, timeout) != pdTRUE) {
+        return false;
+    }
+
+    if (!g_shared_memory.curvature_valid) {
+        xSemaphoreGive(g_shared_memory.mutex);
+        return false;
+    }
+
+    *curvature = g_shared_memory.curvature_ff;
+    *timestamp_ms = g_shared_memory.curvature_ts_ms;
+    xSemaphoreGive(g_shared_memory.mutex);
+    return true;
 }
 
 shared_memory_t* shared_memory_get(void)

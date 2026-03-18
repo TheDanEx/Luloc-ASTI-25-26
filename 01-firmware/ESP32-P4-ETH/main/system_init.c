@@ -29,6 +29,7 @@ void system_init(void)
     esp_log_level_set("mqtt_custom_client", ESP_LOG_WARN); // Suppress MQTT info logs (keep warnings)
     // Enable comms task logs for debugging (show encoder speed on serial)
     esp_log_level_set("comms_c1", ESP_LOG_INFO);
+    esp_log_level_set("curv_ff", ESP_LOG_INFO);
     
     // 2. Core Subsystems
     ESP_ERROR_CHECK(nvs_flash_init());

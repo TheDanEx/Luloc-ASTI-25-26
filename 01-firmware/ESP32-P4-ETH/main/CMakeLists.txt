@@ -15,6 +15,7 @@ idf_component_register(
         encoder_sensor
         telemetry_manager
         curvature_feedforward
+        pid_siguelineas
         shared_memory
         state_machine
         audio_player

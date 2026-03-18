@@ -90,6 +90,9 @@ esp_err_t curvature_feedforward_register_callback(void)
     esp_err_t ret = mqtt_custom_client_register_topic_callback(CURVATURE_FF_TOPIC, curvature_feedforward_mqtt_callback);
     if (ret == ESP_OK) {
         s_callback_registered = true;
+        ESP_LOGI(TAG, "Callback registered for %s", CURVATURE_FF_TOPIC);
+    } else {
+        ESP_LOGW(TAG, "Failed to register callback for %s (err=0x%x)", CURVATURE_FF_TOPIC, (unsigned)ret);
     }
     return ret;
 }
@@ -103,19 +106,22 @@ esp_err_t curvature_feedforward_subscribe(void)
         }
     }
 
+    if (!mqtt_custom_client_is_connected()) {
+        s_topic_subscribed = false;
+        return ESP_ERR_INVALID_STATE;
+    }
+
     if (s_topic_subscribed) {
         return ESP_OK;
     }
 
-    if (!mqtt_custom_client_is_connected()) {
-        return ESP_ERR_INVALID_STATE;
-    }
-
     if (mqtt_custom_client_subscribe(CURVATURE_FF_TOPIC, 0) < 0) {
+        ESP_LOGW(TAG, "Subscribe failed for %s (MQTT connected=%d)", CURVATURE_FF_TOPIC, mqtt_custom_client_is_connected() ? 1 : 0);
         return ESP_FAIL;
     }
 
     s_topic_subscribed = true;
+    ESP_LOGI(TAG, "Subscribed to %s", CURVATURE_FF_TOPIC);
     return ESP_OK;
 }
 

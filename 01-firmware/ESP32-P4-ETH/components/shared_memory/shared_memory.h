@@ -38,6 +38,9 @@ typedef struct {
     bool cpu0_alive;
     bool cpu1_alive;
     bool mqtt_connected;        // CPU1 reports MQTT connection status to CPU0
+    float curvature_ff;         // Feedforward curvature from camera/MQTT
+    uint32_t curvature_ts_ms;   // Timestamp of curvature_ff
+    bool curvature_valid;
     SemaphoreHandle_t mutex;    // Protect concurrent access
 } shared_memory_t;
 
@@ -77,6 +80,12 @@ void shared_memory_heartbeat_cpu1(void);
  */
 void shared_memory_set_mqtt_connected(bool connected);
 bool shared_memory_get_mqtt_connected(void);
+
+/**
+ * Camera curvature feedforward (CPU1 -> CPU0)
+ */
+void shared_memory_set_curvature_ff(float curvature, uint32_t timestamp_ms);
+bool shared_memory_get_curvature_ff(float *curvature, uint32_t *timestamp_ms, TickType_t timeout);
 
 /**
  * Get reference to shared memory (advanced use)
