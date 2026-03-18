@@ -42,8 +42,8 @@ static pid_siguelineas_config_t line_pid_cfg = {
 };
 
 static motor_driver_mcpwm_t motors = {
-    .left  = { .in1 = GPIO_NUM_25, .in2 = GPIO_NUM_26},
-    .right = { .in1 = GPIO_NUM_23, .in2 = GPIO_NUM_5},
+    .left  = { .in1 = GPIO_NUM_22, .in2 = GPIO_NUM_23},
+    .right = { .in1 = GPIO_NUM_20, .in2 = GPIO_NUM_21},
 
     .nsleep = GPIO_NUM_NC,      // o el GPIO real
     .pwm_hz = 20000,
