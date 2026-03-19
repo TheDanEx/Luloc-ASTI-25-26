@@ -30,33 +30,42 @@ Configura en inicio los temporizadores y la frecuencia de ciclo de trabajo (e.g.
 
 ## Ejemplo de Uso e Instanciación
 ```c
-#include "motors.h"
+#include "motor.h"
 #include "driver/gpio.h"
 
-// 1. Declarar la configuración de los pines del DRV8874
+// 1. Declarar la configuración del driver (Dual-Channel)
 motor_driver_mcpwm_t chasis_control = {
-    .in1 = GPIO_NUM_18, // Pin PWM Directo
-    .in2 = GPIO_NUM_19, // Pin PWM Inverso
-    .pwm_freq_hz = 20000, // 20 kHz por encima del umbral audible
-    .resolution_hz = 10000000, // Resolución interna timer 10MHz
-    .deadband_ns = 50 // Para evitar cortos de puente completo
+    .left = {
+        .in1 = GPIO_NUM_18,
+        .in2 = GPIO_NUM_19
+    },
+    .right = {
+        .in1 = GPIO_NUM_20,
+        .in2 = GPIO_NUM_21
+    },
+    .pwm_hz = 20000,           // 20 kHz (Silencioso)
+    .resolution_hz = 10000000, // 10 MHz (Resolución interna)
+    .deadband = 50,            // Zona muerta para evitar jitter
+    .brake_on_stop = true,     // Activar frenado magnético al parar
+    .nsleep = GPIO_NUM_25      // Pin de gestión de energía (DRV887x)
 };
 
 // 2. Tarea de control
 void control_task(void *pvParameters) {
-    // Inicializar temporizadores MCPWM y amarrar al handle
+    // Inicializar hardware MCPWM
     esp_err_t err = motor_mcpwm_init(&chasis_control);
-    
-    // Despertar el chip de potencia si tiene pin SLEEP (Opcional)
-    // motor_mcpwm_sleep(&chasis_control, false);
+    if (err != ESP_OK) {
+        ESP_LOGE("APP", "Fallo al inicializar motores");
+        vTaskDelete(NULL);
+    }
 
     while(1) {
-        // Enviar velocidades asimétricas (Ej: -100% izquierda, +50% derecha)
-        motor_mcpwm_set(&chasis_control, -1000, 500);
+        // Enviar velocidades (-1000 a 1000)
+        // Implementa Slow Decay internamente para mayor linealidad
+        motor_mcpwm_set(&chasis_control, 800, 800); // Record: 80% adelante
         vTaskDelay(pdMS_TO_TICKS(1000));
         
-        // Ejecutar frenado electromagnético forzado (cortocircuito sobre H-Bridge)
-        motor_mcpwm_brake(&chasis_control);
+        motor_mcpwm_stop(&chasis_control); // Parada con freno (brake_on_stop=true)
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
