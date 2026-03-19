@@ -76,19 +76,18 @@ El formato final transmitido al Broker MQTT y procesado por Telegraf no será un
 Ejemplo del formato de salida transmitido por MQTT (Varias líneas empaquetadas en un solo Payload):
 
 ```text
-odometry velIZ=1.23,posIZ=0.5 1677628800000000
-odometry velIZ=1.24,posIZ=0.8 1677628800001000
-odometry velIZ=1.25,posIZ=1.1 1677628800002000
+odometry velIZ=1.23,posIZ=0.5 1677628800001000000
+odometry velIZ=1.24,posIZ=0.8 1677628800002000000
+odometry velIZ=1.25,posIZ=1.1 1677628800003000000
 ```
 
 - `<Measurement>` (Ej: `odometry`): Define la tabla general.
 - `<Fields>` (Ej: `velIZ=1.23,posIZ=0.5`): Conjunto clave-valor separados por comas.
-- `<Timestamp>` (Ej: `1677628800001000`): **OBLIGATORIO en precisión de microsegundos (`esp_timer_get_time()`)** separado de los fields por un espacio. El reloj del ESP32 debe adjuntarlo en cada lectura al vuelo. Grafana usará esta estampa de tiempo exacta (Absolute Time) en lugar del tiempo en que el dato llegó al servidor.
+- `<Timestamp>` (Ej: `1677628800001000000`): **OBLIGATORIO en precisión de nanosegundos (Unix Epoch)** separado de los fields por un espacio. El reloj del ESP32 debe adjuntarlo en cada lectura al vuelo (usando `clock_gettime` o escalando `esp_timer_get_time` a 19 dígitos). Grafana usará esta estampa de tiempo exacta (Absolute Time) en lugar del tiempo en que el dato llegó al servidor.
 
 ### B. Ciclo de Vida del Transmisor (Batching en SRAM)
 
 La recolección de alta frecuencia no modifica las llamadas de la API superior de los componentes, pero `telemetry_manager.c` por debajo (el backend) no publicará en MQTT Inmediatamente:
-
-1. **Acumulación (High Frequency):** La rutina de control rápido llamará a `telemetry_add_float()` múltiples veces por milisegundo o decasegundo en el buffer privado. El manejador apilará líneas de string internamente y les adosará el microsegundo exacto de hardware del instante en el que recivió la petición.
+1. **Acumulación (High Frequency):** La rutina de control rápido llamará a `telemetry_add_float()` múltiples veces por milisegundo o decasegundo en el buffer privado. El manejador apilará líneas de string internamente y les adosará el nanosegundo exacto de hardware del instante en el que recibió la petición.
 2. **Ventana de Envío (Publish Interval de Baja Frecuencia):** Únicamente cuando el Temporizador del manejador de telemetría venza (`interval_ms`, usualmente entre `500ms` a `2000ms`) o cuando el Buffer SRAM pre-asignado roce su capacidad máxima (Max Chunk Size), se cerrcerá el Payload concatenado y se lanzará un ÚNICO `mqtt_custom_client_publish()`.
 3. Esto mantiene inalterada la usabilidad para los desarrolladores (Simples llamadas a `add_float`) pero previene que un bucle `while_1` saturado cause un DoS al Broker.
