@@ -10,15 +10,15 @@ Requiere `cJSON` para el _parsing_ robusto de la mensajería entrante y el _stri
 Requiere `audio_player` para recibir e inyectar solicitudes de comando SET de audio desde hardware externo a través de la red.
 
 ## Interfaces de E/S (Inputs/Outputs)
-- **Input (GET):** Se suscribe configurablemente al tópico `robot/api/get` esperando `{"resource": "<nombre>"}`.
-- **Input (SET):** Se suscribe configurablemente al tópico `robot/api/set` esperando acciones tipo `{"action": "play_sound", "sound_id": 1}`.
-- **Output:** Responde dinámicamente de forma Síncrona publicando el resultado en `robot/api/response` (Configurable vía Kconfig).
+- **Input (UNIFIED):** Se suscribe al tópico `robot/api/request` esperando un JSON con campo `op` (`get` o `set`).
+- **Output (RESP):** Responde de forma Síncrona publicando el resultado en `robot/api/response` (JSON).
+- **Output (ASTYNC):** Publica cambios de estado o modo en `robot/events` usando **Influx Line Protocol (ILP)**.
 
 ## Flujo de Ejecución Lógico
-1. Durante la carga, expone la función `mqtt_api_responder_init()` la cual invoca un Topic Callback en el cliente MQTT para los tópicos GET y SET.
-2. Tras la conexión (`mqtt_api_responder_subscribe()`), permanece escuchando de forma completamente asíncrona dentro de la Tarea principal de Comms en la CPU1.
-3. Al recibir un JSON válido, parsea las llaves `resource` (para consultas) y `action` (para órdenes).
-4. Genera al vuelo un objeto `cJSON` con la respuesta estructurada tomando los bloqueos Mutex correspondientes de `shared_memory`, publica en `robot/api/response`, y libera (free) la memoria dinámica cJSON previniendo fugas.
+1. Durante la carga, expone la función `mqtt_api_responder_init()` la cual registra el callback para el tópico unificado de `request`.
+2. Tras la conexión, permanece escuchando peticiones JSON.
+3. Al recibir un JSON válido, evalúa la operación (`op`) y el recurso o acción solicitada.
+4. Genera una respuesta JSON para el solicitante y, si la acción lo requiere (ej. cambio de modo), dispara un evento asíncrono en **format ILP** hacia `robot/events`.
 
 ## Funciones Principales y Parámetros
 - `esp_err_t mqtt_api_responder_init(void)`: Registra el Callback de tópicos con el subsistema superior. Retorna `ESP_OK` o error de dependencias.

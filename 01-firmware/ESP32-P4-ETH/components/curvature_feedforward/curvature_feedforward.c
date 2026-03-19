@@ -8,6 +8,10 @@
 
 #include "mqtt_custom_client.h"
 
+// =============================================================================
+// Definitions & Local State
+// =============================================================================
+
 static const char *TAG = "curv_ff";
 
 static volatile float s_curvatura_ff = 0.0f;
@@ -16,6 +20,13 @@ static volatile bool s_has_curvature = false;
 static bool s_callback_registered = false;
 static bool s_topic_subscribed = false;
 
+// =============================================================================
+// Internal Helpers
+// =============================================================================
+
+/**
+ * Validate if the payload contains only numeric characters or SCI notation
+ */
 static bool is_payload_numeric_text(const char *data, int data_len)
 {
     if (data_len <= 0 || data_len >= 32) {
@@ -36,6 +47,13 @@ static bool is_payload_numeric_text(const char *data, int data_len)
     return true;
 }
 
+// =============================================================================
+// MQTT Callbacks
+// =============================================================================
+
+/**
+ * Handle incoming curvature data (Binary or Text)
+ */
 void curvature_feedforward_mqtt_callback(const char *topic, int topic_len, const char *data, int data_len)
 {
     (void)topic;
@@ -81,6 +99,13 @@ void curvature_feedforward_mqtt_callback(const char *topic, int topic_len, const
     ESP_LOGW(TAG, "Payload de curvatura demasiado corto (%d bytes)", data_len);
 }
 
+// =============================================================================
+// Public API: Control
+// =============================================================================
+
+/**
+ * Register the component with the MQTT client
+ */
 esp_err_t curvature_feedforward_register_callback(void)
 {
     if (s_callback_registered) {
@@ -119,6 +144,13 @@ esp_err_t curvature_feedforward_subscribe(void)
     return ESP_OK;
 }
 
+// =============================================================================
+// Public API: Getters
+// =============================================================================
+
+/**
+ * Get the current feedforward value
+ */
 float curvature_feedforward_get_value(void)
 {
     return s_curvatura_ff;

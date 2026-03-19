@@ -13,19 +13,19 @@ Depende del wrapper `mqtt_custom_client.h` para el transporte y de `esp_timer.h`
 ## Flujo de Ejecución Lógico
 1. El usuario crea un reportero persistente con `telemetry_create()`.
 2. Se pueden definir etiquetas estáticas con `telemetry_set_tags()` (ej. `sensor=battery`).
-3. En cada lectura de sensor, se añaden campos (`add_float`, etc) y se llama a `telemetry_commit_point()`. Esto añade una línea con timestamp en nanosegundos (`esp_timer_get_time() * 1000`) al buffer interno.
-4. Internamente, una tarea FreeRTOS despierta cada `interval_ms`, publica todo el buffer acumulado (varias líneas separadas por `\n`) y limpia el buffer.
+3. En cada lectura de sensor, se añaden campos (`add_float`, etc) y se llama a `telemetry_commit_point()`. Esto añade una línea con timestamp de **19 dígitos (Unix ns)** al buffer interno.
+4. Internamente, una tarea FreeRTOS despierta cada `interval_ms`, publica todo el buffer acumulado (varias líneas ILP con sus propios marcas de tiempo) y limpia el buffer.
 
 ## Funciones Principales y Parámetros
 - `telemetry_create(topic, measurement, interval_ms)`: Inicializa el reportero y su tarea de publicación.
 - `telemetry_set_tags(handle, tags)`: Define etiquetas fijas (ej. `"sensor=battery"`) que irán en cada línea.
-- `telemetry_add_float(handle, key, value)`: Añade un campo decimal al punto actual.
-- `telemetry_commit_point(handle)`: Finaliza la lectura actual, le adosa el timestamp en nanosegundos y la guarda en el buffer de SRAM.
+- `telemetry_add_float(handle, key, value)`: Añade un campo decimal.
+- `telemetry_commit_point(handle)`: Finaliza la lectura actual, captura el timestamp de alta precisión (**nanosegundos reales** vía `clock_gettime`) y la guarda en el buffer de SRAM.
 - `telemetry_destroy(handle)`: Finaliza la tarea, libera los buffers y el handle.
 
 ## Puntos Críticos y Depuración
-- **Saturación del Buffer (SRAM Batching):** El buffer tiene un tamaño fijo (`MAX_BUFFER_SIZE = 2048`). Si se acumulan demasiados puntos antes de que venza el `interval_ms`, los nuevos puntos se descartarán para evitar desbordamientos. 
-- **Timestamps:** Se utilizan nanosegundos basados en el temporizador del hardware. Estos son relativos al arranque a menos que se sincronice el sistema mediante NTP.
+- **Saturación del Buffer (SRAM Batching):** El buffer tiene un tamaño fijo (`MAX_BUFFER_SIZE = 2048`).
+- **Timestamps:** Se utilizan nanosegundos Unix (19 dígitos). Requiere sincronización horaria o el uso de `CLOCK_REALTIME` para alineación absoluta en InfluxDB.
 
 ## Ejemplo de Uso e Instanciación
 ```c

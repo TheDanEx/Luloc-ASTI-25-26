@@ -12,6 +12,12 @@
 #include "esp_log.h"
 #include "mqtt_client.h"
 #include "mqtt_custom_client.h"
+#include <time.h>
+#include <inttypes.h>
+
+// =============================================================================
+// Definitions & Internal State
+// =============================================================================
 
 static const char *TAG = "mqtt_custom_client";
 
@@ -28,9 +34,11 @@ typedef struct {
 
 static mqtt_topic_callback_t g_topic_callbacks[MQTT_CALLBACK_MAX] = {0};
 
+// =============================================================================
+// Internal Handlers & Helpers
+// =============================================================================
+
 /**
- * @brief Internal MQTT event handler
- * 
  * Processes all MQTT events from the ESP-IDF mqtt component
  */
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
@@ -42,7 +50,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         mqtt_connected = true;
         ESP_LOGD(TAG, "MQTT Connected to broker %s", CONFIG_BROKER_URL);
         // Publish startup event when connected
-        esp_mqtt_client_publish(mqtt_client_handle, "robot/events", "{\"event\":\"connected\",\"msg\":\"ESP32 MQTT connection started\"}", 0, 1, 0);
+        esp_mqtt_client_publish(mqtt_client_handle, "robot/events", 
+                                "events,type=CONNECT,robot=unknown msg=\"ESP32 MQTT connection started\" 0", 0, 1, 0);
         break;
         
     case MQTT_EVENT_DISCONNECTED:
@@ -98,8 +107,12 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     }
 }
 
+// =============================================================================
+// Public API: Lifecycle
+// =============================================================================
+
 /**
- * @brief Initialize and start MQTT client
+ * Initialize and start MQTT client using Kconfig broker URL
  */
 esp_err_t mqtt_custom_client_init(void)
 {
@@ -139,8 +152,12 @@ esp_err_t mqtt_custom_client_init(void)
     return ESP_OK;
 }
 
+// =============================================================================
+// Public API: Messaging
+// =============================================================================
+
 /**
- * @brief Publish message to topic
+ * Publish raw message to a specific topic
  */
 int mqtt_custom_client_publish(const char *topic, const char *data, int len, int qos, int retain)
 {
@@ -212,6 +229,13 @@ bool mqtt_custom_client_is_connected(void)
     return mqtt_connected;
 }
 
+static int64_t get_timestamp_ns(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
+}
+
 #include <stdarg.h>
 
 int mqtt_custom_client_log(const char *level, const char *fmt, ...)
@@ -220,18 +244,26 @@ int mqtt_custom_client_log(const char *level, const char *fmt, ...)
         return -1;
     }
 
+    char raw_message[192];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(raw_message, sizeof(raw_message), fmt, args);
+    va_end(args);
+
+#ifdef CONFIG_TELEMETRY_ROBOT_NAME
+    const char *robot_name = CONFIG_TELEMETRY_ROBOT_NAME;
+#else
+    const char *robot_name = "unknown";
+#endif
+
+    char ilp_payload[384];
+    snprintf(ilp_payload, sizeof(ilp_payload), "logs,level=%s,robot=%s msg=\"%s\" %lld", 
+             level, robot_name, raw_message, get_timestamp_ns());
+
     char topic[64];
     snprintf(topic, sizeof(topic), "robot/logs/%s", level);
 
-    char message[256];
-    va_list args;
-    va_start(args, fmt);
-    int len = vsnprintf(message, sizeof(message), fmt, args);
-    va_end(args);
-
-    if (len < 0) return -1;
-
-    return mqtt_custom_client_publish(topic, message, 0, 0, 0);
+    return mqtt_custom_client_publish(topic, ilp_payload, 0, 0, 0);
 }
 
 int mqtt_custom_client_debug(const char *fmt, ...)
@@ -240,19 +272,31 @@ int mqtt_custom_client_debug(const char *fmt, ...)
         return -1;
     }
 
-    char message[256];
+    char raw_message[192];
     va_list args;
     va_start(args, fmt);
-    int len = vsnprintf(message, sizeof(message), fmt, args);
+    vsnprintf(raw_message, sizeof(raw_message), fmt, args);
     va_end(args);
 
-    if (len < 0) return -1;
+#ifdef CONFIG_TELEMETRY_ROBOT_NAME
+    const char *robot_name = CONFIG_TELEMETRY_ROBOT_NAME;
+#else
+    const char *robot_name = "unknown";
+#endif
 
-    return mqtt_custom_client_publish("robot/debug", message, 0, 0, 0);
+    char ilp_payload[384];
+    snprintf(ilp_payload, sizeof(ilp_payload), "debug,robot=%s msg=\"%s\" %lld", 
+             robot_name, raw_message, get_timestamp_ns());
+
+    return mqtt_custom_client_publish("robot/debug", ilp_payload, 0, 0, 0);
 }
 
+// =============================================================================
+// Public API: Callbacks
+// =============================================================================
+
 /**
- * @brief Register callback for specific topic
+ * Register a listener function for an incoming topic
  */
 esp_err_t mqtt_custom_client_register_topic_callback(const char *topic, mqtt_message_callback_t callback)
 {

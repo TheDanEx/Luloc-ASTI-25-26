@@ -16,10 +16,14 @@
 #include "mqtt_custom_client.h"
 #include "telemetry_manager.h"
 
+// =============================================================================
+// Definitions & Internal Types
+// =============================================================================
+
 static const char *TAG = "telemetry";
 
-#define MAX_BUFFER_SIZE 2048
 #define MAX_FIELDS 16
+#define MAX_BUFFER_SIZE 4096
 
 typedef struct {
     char *key;
@@ -43,7 +47,13 @@ typedef struct {
     bool running;
 } telemetry_obj_t;
 
-// Helper to safely append valid InfluxDB line protocol fields
+// =============================================================================
+// Internal Handlers & Tasks
+// =============================================================================
+
+/**
+ * Helper to safely append valid InfluxDB line protocol fields to the internal list
+ */
 static void append_field_str(telemetry_obj_t *obj, const char *key, const char *val_str)
 {
     if (obj->field_count >= MAX_FIELDS) return;
@@ -97,6 +107,13 @@ static void telemetry_task(void *arg)
     vTaskDelete(NULL);
 }
 
+// =============================================================================
+// Public API: Registry & Lifecycle
+// =============================================================================
+
+/**
+ * Create a new telemetry reporter mapped to a specific topic
+ */
 telemetry_handle_t telemetry_create(const char *topic, const char *measurement, uint32_t interval_ms)
 {
     telemetry_obj_t *obj = calloc(1, sizeof(telemetry_obj_t));
@@ -167,6 +184,13 @@ void telemetry_set_tags(telemetry_handle_t handle, const char *tags)
     xSemaphoreGive(obj->mutex);
 }
 
+// =============================================================================
+// Public API: Field Management & Commit
+// =============================================================================
+
+/**
+ * Format the collected fields into the batch buffer and clear the current point
+ */
 void telemetry_commit_point(telemetry_handle_t handle)
 {
     if (!handle) return;
@@ -237,7 +261,7 @@ void telemetry_add_int(telemetry_handle_t handle, const char *key, int32_t value
     telemetry_obj_t *obj = (telemetry_obj_t *)handle;
     
     char val_str[32];
-    snprintf(val_str, sizeof(val_str), "%li", value); 
+    snprintf(val_str, sizeof(val_str), "%d", (int)value); 
     
     xSemaphoreTake(obj->mutex, portMAX_DELAY);
     append_field_str(obj, key, val_str);
@@ -250,6 +274,6 @@ void telemetry_add_bool(telemetry_handle_t handle, const char *key, bool value)
     telemetry_obj_t *obj = (telemetry_obj_t *)handle;
     
     xSemaphoreTake(obj->mutex, portMAX_DELAY);
-    append_field_str(handle, key, value ? "true" : "false");
+    append_field_str(obj, key, value ? "true" : "false");
     xSemaphoreGive(obj->mutex);
 }

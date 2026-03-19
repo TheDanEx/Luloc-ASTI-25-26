@@ -8,13 +8,13 @@ Todos los tópicos deben colgar de la raíz `robot/`.
 
 | Categoría | Tópico | Formato | Descripción |
 | :--- | :--- | :--- | :--- |
-| **Telemetría** | `robot/telemetry/<M>` | ILP (Unix ns) | Datos de sensores de alta frecuencia para InfluxDB. `<M>` es el nombre de la medición (measurement). |
-| **API Request** | `robot/api/request` | JSON | Canal de entrada unificado para peticiones Síncronas (GET y SET). |
-| **API Response**| `robot/api/response`| JSON | Canal de salida unificado para las respuestas de la API. |
-| **Eventos** | `robot/events` | JSON | Eventos críticos asíncronos (cambios de estado, errores graves, avisos). |
-| **Logs** | `robot/logs/<L>` | Texto/JSON | Trazas de depuración remota. `<L>` es el nivel (`error`, `warn`, `info`, `debug`). |
-| **Debug** | `robot/debug` | Libre / Raw | Sandbox para pruebas temporales y volcado de datos crudos durante el desarrollo. |
-| **Configuración**| `robot/config/<S>` | JSON | Actualización de parámetros persistentes (NVS). `<S>` es el subsistema. |
+| **Telemetría** | `robot/telemetry/<M>` | ILP (Unix ns) | Streaming de sensores (Odometría, Sistema, etc). |
+| **Logs** | `robot/logs/<L>` | ILP (Unix ns) | Trazas de depuración: `logs,level=<L> msg="<txt>" <ns>` |
+| **Eventos** | `robot/events` | ILP (Unix ns) | Cambios de estado: `events,type=<T> msg="<txt>" <ns>` |
+| **API Request** | `robot/api/request` | JSON | Peticiones síncronas de control (GET/SET). |
+| **API Response**| `robot/api/response`| JSON | Respuestas estructuradas para el solicitante. |
+| **Configuración**| `robot/config/<S>` | JSON | Parámetros persistentes NVS. |
+| **Debug** | `robot/debug` | RAW/ILP | Sandbox de desarrollo. |
 
 ---
 

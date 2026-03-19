@@ -6,6 +6,10 @@
 #include "mqtt_custom_client.h"
 #include "shared_memory.h"
 
+// =============================================================================
+// Definitions & Local State
+// =============================================================================
+
 static const char *TAG = "PID_TUNER";
 static const char *NVS_NAMESPACE = "robot_pids";
 
@@ -14,8 +18,12 @@ static const char *NVS_NAMESPACE = "robot_pids";
 #endif
 
 // =============================================================================
-// NVS Loading / Saving
+// Public API: Lifecycle & Storage
 // =============================================================================
+
+/**
+ * Initialize NVS flash for persistent PID storage
+ */
 
 esp_err_t pid_tuner_init(void) {
     esp_err_t err = nvs_flash_init();
@@ -85,8 +93,12 @@ esp_err_t pid_tuner_save_motor_pid(uint8_t index, float kp, float ki, float kd) 
 
 
 // =============================================================================
-// MQTT Subscriptions
+// MQTT Callbacks
 // =============================================================================
+
+/**
+ * Parse incoming JSON PID configurations and update live memory and NVS
+ */
 
 static void pid_mqtt_callback(const char *topic, int topic_len, const char *data, int data_len) {
     if (topic_len <= 0 || data_len <= 0 || data_len > 512) return;
@@ -142,6 +154,13 @@ static void pid_mqtt_callback(const char *topic, int topic_len, const char *data
     cJSON_Delete(root);
 }
 
+// =============================================================================
+// Public API: Configuration
+// =============================================================================
+
+/**
+ * Register the PID tuning callback with the MQTT client
+ */
 esp_err_t pid_tuner_register_callback(void) {
     return mqtt_custom_client_register_topic_callback(CONFIG_PID_TUNER_MQTT_TOPIC, pid_mqtt_callback);
 }

@@ -28,11 +28,18 @@ Formato: ILP con Timestamps de 19 dígitos (Nanosegundos).
 
 ---
 
-## 3. Logs y Debug (Outputs)
-*Gestionado por: `mqtt_custom_client`.*
+### 3. Logs y Eventos (ILP Standard)
+Para maximizar la eficiencia en la ingesta hacia InfluxDB, los logs y eventos se envían directamente en **Influx Line Protocol**.
 
-- **Logs:** `robot/logs/<level>` (error, warn, info, debug).
-- **Debug Sandbox:** `robot/debug` (Para volcado de datos crudos).
+#### Logs Remotos
+- **Tópico:** `robot/logs/<level>`
+- **Formato:** `logs,level=<level>,robot=<name> msg="<mensaje>" <ts_ns>`
+- **Ejemplo:** `logs,level=warn,robot=Lurloc msg="Batería baja" 1710878512000000000`
+
+#### Eventos de Estado
+- **Tópico:** `robot/events`
+- **Formato:** `events,type=<tipo>,robot=<name> msg="<mensaje>" <ts_ns>`
+- **Ejemplo:** `events,type=STATE_CHANGE,robot=Lurloc msg="Transition to WAITING_ORDERS" 1710878512010000000`
 
 ---
 

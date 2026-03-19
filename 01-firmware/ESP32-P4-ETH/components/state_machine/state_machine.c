@@ -5,6 +5,13 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <string.h>
+#include <time.h>
+#include <inttypes.h>
+#include <stdio.h>
+
+// =============================================================================
+// Definitions & Local State
+// =============================================================================
 
 static const char *TAG = "state_machine";
 
@@ -20,25 +27,44 @@ static robot_state_context_t g_state = {
 
 static TickType_t g_state_start_time = 0;
 
+// =============================================================================
+// Internal Handlers
+// =============================================================================
+
 /**
- * Publish state change event to MQTT
+ * Publish state change event to MQTT in ILP format
  */
 static void publish_state_event(const char *event_msg)
 {
     ESP_LOGI(TAG, "STATE EVENT: %s", event_msg);
 
     if (mqtt_custom_client_is_connected()) {
-        char json_payload[128];
-        snprintf(json_payload, sizeof(json_payload), "{\"event\":\"STATE_CHANGE\",\"msg\":\"%s\"}", event_msg);
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        int64_t timestamp_ns = (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
+
+#ifdef CONFIG_TELEMETRY_ROBOT_NAME
+        const char *robot_name = CONFIG_TELEMETRY_ROBOT_NAME;
+#else
+        const char *robot_name = "unknown";
+#endif
+
+        char ilp_payload[192];
+        snprintf(ilp_payload, sizeof(ilp_payload), "events,type=STATE_CHANGE,robot=%s msg=\"%s\" %lld", 
+                 robot_name, event_msg, timestamp_ns);
         
-        int msg_id = mqtt_custom_client_publish("robot/events", json_payload, 0, 1, 0);
+        int msg_id = mqtt_custom_client_publish("robot/events", ilp_payload, 0, 1, 0);
         if (msg_id >= 0) {
-            ESP_LOGD(TAG, "Published event JSON: %s (msg_id=%d)", json_payload, msg_id);
+            ESP_LOGD(TAG, "Published event ILP: %s (msg_id=%d)", ilp_payload, msg_id);
         }
     } else {
         ESP_LOGW(TAG, "MQTT not connected, event not published: %s", event_msg);
     }
 }
+
+// =============================================================================
+// Public API: Lifecycle
+// =============================================================================
 
 void state_machine_init(void)
 {
@@ -77,6 +103,10 @@ static bool check_condition(transition_condition_t condition, uint32_t data_val,
         return false;
     }
 }
+
+// =============================================================================
+// Public API: State Control
+// =============================================================================
 
 robot_state_t state_machine_update(void)
 {
@@ -177,6 +207,10 @@ bool state_machine_request_mode(robot_mode_t new_mode, bool force)
     g_state.current_mode = new_mode;
     return true;
 }
+
+// =============================================================================
+// Public API: Utilities & Getters
+// =============================================================================
 
 robot_state_context_t* state_machine_get_context(void)
 {

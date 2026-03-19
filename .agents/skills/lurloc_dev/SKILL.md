@@ -13,9 +13,12 @@ Senior code is **boring and predictable**. It should read like a well-written bo
 
 - **Self-Documenting Logic:** Names must be so descriptive that comments become redundant. Use `snake_case` for functions/variables and `UPPER_SNAKE_CASE` for macros.
 - **Commenting Philosophy:**
-  - **Exposed APIs:** Provide exactly one clear comment per public function in the header (`.h`) or above the definition, explaining intent rather than implementation.
-  - **Sectioning:** Use visual separators for major logical blocks (e.g., `// --- Initialization ---`).
-  - **The "Why", not the "How":** Only comment complex algorithms (quaternions, hardware hacks, race conditions) to explain the *rationale* behind the logic.
+  - **Exposed APIs:** Provide exactly one clear comment per public function in the header (`.h`) or above the definition.
+  - **Sectioning (MANDATORY):** Use large visual separators for major logical blocks:
+    `// =============================================================================`
+    `// [Section Name]`
+    `// =============================================================================`
+  - **Block Comments:** Add a brief justification/context (the "why") before complex or significant blocks of code.
   - **No Spaghetti:** Reject quick hacks. If a component grows too complex, refactor into sub-modules.
 
 ## 2. Defensive & Real-Time Engineering
@@ -24,41 +27,47 @@ Senior code is **boring and predictable**. It should read like a well-written bo
 - **Thread-Safety:** Assume everything is multi-threaded. Use Mutexes for shared state and `xQueueSendFromISR` for hardware-to-logic communication.
 - **Error Handling:** Never ignore an `esp_err_t`. Catch errors gracefully. Use `ESP_ERROR_CHECK()` only during critical system boot.
 
-## 3. Telemetry: The 19-Digit Standard
+## 3. Telemetry & Monitoring: The ILP Standard
 
-All telemetry data must follow the **Influx Line Protocol (ILP)** and be batched for network efficiency.
+All monitoring data (telemetry, logs, and events) must follow the **Influx Line Protocol (ILP)**. JSON is strictly reserved for the **Control API**.
 
-- **Precision:** Use **Nanoseconds (19 digits)** following the Unix Epoch standard.
-- **Source:** Use `clock_gettime(CLOCK_REALTIME, &ts)` or scale `esp_timer_get_time()` correctly.
-- **Format:** `measurement,tag=val field=val timestamp_ns`.
-- **Independency:** Each variable capture must have its own timestamp, even if batched in the same MQTT payload.
+- **Precision:** Mandatory **Nanoseconds (19 digits)** following the Unix Epoch.
+- **Source:** Use `clock_gettime(CLOCK_REALTIME, &ts)` for absolute UTC-compatible timing.
+- **Format:** `measurement,tag1=val1,tag2=val2 field1=val1,field2=val2 timestamp_ns`.
+- **Zero-JSON Monitoring:** 
+  - **Logs:** `logs,level=info,robot=name msg="Text" <ts>`
+  - **Events:** `events,type=STATE_CHANGE,robot=name msg="Text" <ts>`
+- **Independency:** Each field/variable capture must have its own unique timestamp for high-frequency accuracy.
 
 ## 4. MQTT Communication Hierarchy
 
 All project topics must follow the `robot/` root and adhere to this structure:
 
 - **Telemetry:** `robot/telemetry/<measurement>` (ILP format).
-- **API Request:** `robot/api/request` (Unified JSON GET/SET).
-- **API Response:** `robot/api/response` (Standardized JSON output).
-- **Logging:** `robot/logs/<level>` (error, warn, info, debug).
+- **Logs:** `robot/logs/<level>` (ILP format).
+- **Events:** `robot/events` (ILP format).
+- **API Request/Response:** `robot/api/request` & `robot/api/response` (JSON for Control).
+- **Config:** `robot/config/<subsystem>` (JSON for NVS tuning).
 - **Debug:** `robot/debug` (Sandbox for raw developer testing).
-- **Events:** `robot/events` (Asynchronous status changes).
-- **Config:** `robot/config/<subsystem>` (NVS parameter tuning).
 
 ## 5. Documentation Mastery (`03-docs/`)
 
 You are the **Guardian of Knowledge**. Code and documentation are two sides of the same coin.
 
 - **Sync Constraint:** Every PR/Commit that changes logic **must** update the corresponding `.md` in `03-docs/`.
+- **Proactive Oversight:** When modifying any file, you must:
+  1. Review its existing documentation in `03-docs/`.
+  2. Verify if the file complies with naming, commenting, and communication standards.
+  3. **If non-compliant:** Notify the user immediately and ask for permission before refactoring to meet the current standards.
 - **Mandatory Structure:**
   1. `# [Component Name]`
   2. `## Propósito Arquitectónico`
   3. `## Entorno y Dependencias`
-  4. `## Interfaces de E/S (Inputs/Outputs)` (Abstract)
-  5. `## Flujo de Ejecución Lógico` (RTOS context)
+  4. `## Interfaces de E/S (Inputs/Outputs)`
+  5. `## Flujo de Ejecución Lógico`
   6. `## Funciones Principales y Parámetros`
   7. `## Puntos Críticos y Depuración`
-  8. `## Ejemplo de Uso e Instanciación` (C Code)
+  8. `## Ejemplo de Uso e Instanciación`
 
 ## 5. Professional Constraints
 

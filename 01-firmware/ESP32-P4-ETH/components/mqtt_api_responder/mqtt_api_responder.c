@@ -7,6 +7,9 @@
 #include "audio_player.h"
 #include "state_machine.h"
 #include <string.h>
+#include <time.h>
+#include <inttypes.h>
+#include <stdio.h>
 
 static const char *TAG = "API_RESPONDER";
 
@@ -22,6 +25,9 @@ static const char *TAG = "API_RESPONDER";
 // Resource Handlers
 // =============================================================================
 
+/**
+ * Collect battery and current data from shared memory
+ */
 static void handle_resource_battery(cJSON *response_root) {
     shared_memory_t* shm = shared_memory_get();
     float bat_mv = 0.0f;
@@ -37,6 +43,9 @@ static void handle_resource_battery(cJSON *response_root) {
     cJSON_AddNumberToObject(response_root, "robot_current_ma", current_ma);
 }
 
+/**
+ * Collect motor speeds and encoder ticks from shared memory
+ */
 static void handle_resource_encoder(cJSON *response_root) {
     shared_memory_t* shm = shared_memory_get();
     float speed_l = 0.0f, speed_r = 0.0f;
@@ -56,6 +65,9 @@ static void handle_resource_encoder(cJSON *response_root) {
     cJSON_AddNumberToObject(response_root, "ticks_r", ticks_r);
 }
 
+/**
+ * Collect system uptime and timer data
+ */
 static void handle_resource_uptime(cJSON *response_root) {
     test_sensor_data_t uptime_data;
     if (test_sensor_read(&uptime_data) == ESP_OK) {
@@ -64,6 +76,9 @@ static void handle_resource_uptime(cJSON *response_root) {
     }
 }
 
+/**
+ * Collect current robot state and mode
+ */
 static void handle_resource_status(cJSON *response_root) {
     robot_state_context_t* ctx = state_machine_get_context();
     cJSON_AddNumberToObject(response_root, "state_id", ctx->current_state);
@@ -76,6 +91,9 @@ static void handle_resource_status(cJSON *response_root) {
 // Action Handlers (SET)
 // =============================================================================
 
+/**
+ * Execute mode change request and publish ILP event
+ */
 static void handle_action_set_mode(cJSON *root, cJSON *response_root) {
     cJSON *mode_id_item = cJSON_GetObjectItem(root, "mode_id");
     cJSON *force_item = cJSON_GetObjectItem(root, "force");
@@ -93,16 +111,35 @@ static void handle_action_set_mode(cJSON *root, cJSON *response_root) {
                 cJSON_AddStringToObject(response_root, "status", "success");
                 cJSON_AddStringToObject(response_root, "message", "Mode changed");
                 
-                // Publish the asynchronous event
-                char event_json[128];
-                snprintf(event_json, sizeof(event_json), 
-                        "{\"event\":\"MODE_CHANGE\",\"mode\":%d,\"mode_str\":\"%s\"}", 
-                         mode_id, get_mode_name((robot_mode_t)mode_id));
-                mqtt_custom_client_publish("robot/events", event_json, 0, 1, 0);
+                // Publish the asynchronous event using ILP
+                struct timespec ts;
+                clock_gettime(CLOCK_REALTIME, &ts);
+                int64_t timestamp_ns = (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
+
+#ifdef CONFIG_TELEMETRY_ROBOT_NAME
+                const char *robot_name = CONFIG_TELEMETRY_ROBOT_NAME;
+#else
+                const char *robot_name = "unknown";
+#endif
+
+                char ilp_payload[192];
+                snprintf(ilp_payload, sizeof(ilp_payload), 
+                        "events,type=MODE_CHANGE,robot=%s mode=%di,mode_str=\"%s\" %lld", 
+                        robot_name, mode_id, get_mode_name((robot_mode_t)mode_id), timestamp_ns);
+                
+                mqtt_custom_client_publish("robot/events", ilp_payload, 0, 1, 0);
             } else {
                 cJSON_AddStringToObject(response_root, "status", "error");
                 cJSON_AddStringToObject(response_root, "message", "Mode change rejected");
-                mqtt_custom_client_publish("robot/events", "{\"error\":\"MODE_CHANGE_REJECTED\"}", 0, 1, 0);
+                
+                // Also publish error event in ILP
+                struct timespec ts_err;
+                clock_gettime(CLOCK_REALTIME, &ts_err);
+                int64_t ts_err_ns = (int64_t)ts_err.tv_sec * 1000000000LL + (int64_t)ts_err.tv_nsec;
+                
+                char err_payload[128];
+                snprintf(err_payload, sizeof(err_payload), "events,type=ERROR,robot=unknown error=\"MODE_REJECTED\" %lld", ts_err_ns);
+                mqtt_custom_client_publish("robot/events", err_payload, 0, 1, 0);
             }
         } else {
             cJSON_AddStringToObject(response_root, "status", "error");
@@ -114,6 +151,9 @@ static void handle_action_set_mode(cJSON *root, cJSON *response_root) {
     }
 }
 
+/**
+ * Handle audio playback requests
+ */
 static void handle_action_play_sound(cJSON *root, cJSON *response_root) {
     cJSON *sound_id_item = cJSON_GetObjectItem(root, "sound_id");
     cJSON *volume_item = cJSON_GetObjectItem(root, "volume");
@@ -140,6 +180,9 @@ static void handle_action_play_sound(cJSON *root, cJSON *response_root) {
     }
 }
 
+/**
+ * Update the shared motor calibration mask
+ */
 static void handle_action_set_cal_mask(cJSON *root, cJSON *response_root) {
     cJSON *mask_item = cJSON_GetObjectItem(root, "mask");
     if (cJSON_IsNumber(mask_item)) {
@@ -164,6 +207,9 @@ static void handle_action_set_cal_mask(cJSON *root, cJSON *response_root) {
 // MQTT Callback
 // =============================================================================
 
+/**
+ * Main dispatcher for unified API requests
+ */
 static void api_mqtt_callback(const char *topic, int topic_len, const char *data, int data_len) {
     if (topic_len <= 0 || data_len <= 0 || data_len > 1024) return;
     
@@ -247,7 +293,7 @@ static void api_mqtt_callback(const char *topic, int topic_len, const char *data
 }
 
 // =============================================================================
-// Init
+// Public API
 // =============================================================================
 
 esp_err_t mqtt_api_responder_init(void) {
