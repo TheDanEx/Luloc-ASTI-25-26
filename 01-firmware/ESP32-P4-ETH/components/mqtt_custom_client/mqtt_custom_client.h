@@ -67,6 +67,25 @@ int mqtt_custom_client_unsubscribe(const char *topic);
 bool mqtt_custom_client_is_connected(void);
 
 /**
+ * @brief Publish a log message to robot/logs/<level>
+ * 
+ * @param level Log level string (e.g., "info", "error", "warn")
+ * @param fmt Format string (printf style)
+ * @param ... Arguments for format string
+ * @return Message ID if successful, -1 on failure
+ */
+int mqtt_custom_client_log(const char *level, const char *fmt, ...);
+
+/**
+ * @brief Publish a raw debug message to robot/debug (Sandbox)
+ * 
+ * @param fmt Format string (printf style)
+ * @param ... Arguments for format string
+ * @return Message ID if successful, -1 on failure
+ */
+int mqtt_custom_client_debug(const char *fmt, ...);
+
+/**
  * @brief Register callback for incoming messages on specific topic
  * 
  * @param topic Topic to monitor (e.g., "robot/cmd")

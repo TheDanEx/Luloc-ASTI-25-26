@@ -183,12 +183,10 @@ static void task_comms_cpu1(void *arg)
 
     perf_mon_init();
     
-    tel_odometry = telemetry_create("robot/odometry", "odometry", 5000);
-    tel_system   = telemetry_create("robot/telemetry", "system", 5000);
+    tel_odometry = telemetry_create("robot/telemetry/odometry", "odometry", 5000);
+    tel_system   = telemetry_create("robot/telemetry/system", "system", 5000);
 
     vTaskDelay(pdMS_TO_TICKS(1000)); 
-    mqtt_custom_client_subscribe("robot/cmd", 1);
-    mqtt_custom_client_register_topic_callback("robot/cmd", mqtt_cmd_callback);
     
     curvature_feedforward_register_callback();
     curvature_feedforward_subscribe();

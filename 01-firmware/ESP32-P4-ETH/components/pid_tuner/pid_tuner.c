@@ -10,7 +10,7 @@ static const char *TAG = "PID_TUNER";
 static const char *NVS_NAMESPACE = "robot_pids";
 
 #ifndef CONFIG_PID_TUNER_MQTT_TOPIC
-#define CONFIG_PID_TUNER_MQTT_TOPIC "robot/config/pid_motors"
+#define CONFIG_PID_TUNER_MQTT_TOPIC "robot/config/motors"
 #endif
 
 // =============================================================================

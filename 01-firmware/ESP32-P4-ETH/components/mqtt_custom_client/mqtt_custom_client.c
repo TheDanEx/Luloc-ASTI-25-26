@@ -212,6 +212,45 @@ bool mqtt_custom_client_is_connected(void)
     return mqtt_connected;
 }
 
+#include <stdarg.h>
+
+int mqtt_custom_client_log(const char *level, const char *fmt, ...)
+{
+    if (mqtt_client_handle == NULL || !mqtt_connected || level == NULL || fmt == NULL) {
+        return -1;
+    }
+
+    char topic[64];
+    snprintf(topic, sizeof(topic), "robot/logs/%s", level);
+
+    char message[256];
+    va_list args;
+    va_start(args, fmt);
+    int len = vsnprintf(message, sizeof(message), fmt, args);
+    va_end(args);
+
+    if (len < 0) return -1;
+
+    return mqtt_custom_client_publish(topic, message, 0, 0, 0);
+}
+
+int mqtt_custom_client_debug(const char *fmt, ...)
+{
+    if (mqtt_client_handle == NULL || !mqtt_connected || fmt == NULL) {
+        return -1;
+    }
+
+    char message[256];
+    va_list args;
+    va_start(args, fmt);
+    int len = vsnprintf(message, sizeof(message), fmt, args);
+    va_end(args);
+
+    if (len < 0) return -1;
+
+    return mqtt_custom_client_publish("robot/debug", message, 0, 0, 0);
+}
+
 /**
  * @brief Register callback for specific topic
  */

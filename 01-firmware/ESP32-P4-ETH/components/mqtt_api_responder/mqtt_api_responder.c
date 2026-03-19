@@ -10,12 +10,8 @@
 
 static const char *TAG = "API_RESPONDER";
 
-#ifndef CONFIG_MQTT_API_GET_TOPIC
-#define CONFIG_MQTT_API_GET_TOPIC "robot/api/get"
-#endif
-
-#ifndef CONFIG_MQTT_API_SET_TOPIC
-#define CONFIG_MQTT_API_SET_TOPIC "robot/api/set"
+#ifndef CONFIG_MQTT_API_REQ_TOPIC
+#define CONFIG_MQTT_API_REQ_TOPIC "robot/api/request"
 #endif
 
 #ifndef CONFIG_MQTT_API_RESP_TOPIC
@@ -64,7 +60,6 @@ static void handle_resource_uptime(cJSON *response_root) {
     test_sensor_data_t uptime_data;
     if (test_sensor_read(&uptime_data) == ESP_OK) {
         cJSON_AddNumberToObject(response_root, "uptime_sec", uptime_data.uptime_sec);
-        // User requested microseconds for strict precision
         cJSON_AddNumberToObject(response_root, "uptime_us", (double)esp_timer_get_time()); 
     }
 }
@@ -170,12 +165,10 @@ static void handle_action_set_cal_mask(cJSON *root, cJSON *response_root) {
 // =============================================================================
 
 static void api_mqtt_callback(const char *topic, int topic_len, const char *data, int data_len) {
-    if (topic_len <= 0 || data_len <= 0 || data_len > 512) return;
-    // Check if it's one of our topics
-    bool is_get = (strncmp(topic, CONFIG_MQTT_API_GET_TOPIC, topic_len) == 0);
-    bool is_set = (strncmp(topic, CONFIG_MQTT_API_SET_TOPIC, topic_len) == 0);
+    if (topic_len <= 0 || data_len <= 0 || data_len > 1024) return;
     
-    if (!is_get && !is_set) return;
+    // Check if it's our unified request topic
+    if (strncmp(topic, CONFIG_MQTT_API_REQ_TOPIC, topic_len) != 0) return;
 
     cJSON *root = cJSON_ParseWithLength(data, data_len);
     if (root == NULL) {
@@ -185,60 +178,57 @@ static void api_mqtt_callback(const char *topic, int topic_len, const char *data
 
     cJSON *response_root = cJSON_CreateObject();
     
-    // Check if it's a GET request
-    if (is_get) {
-        cJSON *resource_item = cJSON_GetObjectItem(root, "resource");
-        
-        if (cJSON_IsString(resource_item) && (resource_item->valuestring != NULL)) {
-            const char *resource = resource_item->valuestring;
-            ESP_LOGI(TAG, "API Request for resource: %s", resource);
-            cJSON_AddStringToObject(response_root, "resource", resource);
+    cJSON *op_item = cJSON_GetObjectItem(root, "op");
+    if (!cJSON_IsString(op_item)) {
+        cJSON_AddStringToObject(response_root, "status", "error");
+        cJSON_AddStringToObject(response_root, "message", "Missing 'op' field (get/set)");
+    } else {
+        const char *op = op_item->valuestring;
+        cJSON_AddStringToObject(response_root, "op", "resp");
 
-            if (strcmp(resource, "battery") == 0) {
-                handle_resource_battery(response_root);
-            } 
-            else if (strcmp(resource, "encoder") == 0) {
-                handle_resource_encoder(response_root);
+        if (strcmp(op, "get") == 0) {
+            cJSON *resource_item = cJSON_GetObjectItem(root, "resource");
+            if (cJSON_IsString(resource_item) && (resource_item->valuestring != NULL)) {
+                const char *resource = resource_item->valuestring;
+                ESP_LOGI(TAG, "API Request for resource: %s", resource);
+                cJSON_AddStringToObject(response_root, "resource", resource);
+
+                if (strcmp(resource, "battery") == 0) handle_resource_battery(response_root);
+                else if (strcmp(resource, "encoder") == 0) handle_resource_encoder(response_root);
+                else if (strcmp(resource, "uptime") == 0) handle_resource_uptime(response_root);
+                else if (strcmp(resource, "status") == 0) handle_resource_status(response_root);
+                else if (strcmp(resource, "all") == 0) {
+                    handle_resource_battery(response_root);
+                    handle_resource_encoder(response_root);
+                    handle_resource_uptime(response_root);
+                    handle_resource_status(response_root);
+                } else {
+                    cJSON_AddStringToObject(response_root, "error", "Unknown Resource");
+                }
+            } else {
+                cJSON_AddStringToObject(response_root, "error", "Missing Resource");
             }
-            else if (strcmp(resource, "uptime") == 0) {
-                handle_resource_uptime(response_root);
+        } 
+        else if (strcmp(op, "set") == 0) {
+            cJSON *action_item = cJSON_GetObjectItem(root, "action");
+            if (cJSON_IsString(action_item) && (action_item->valuestring != NULL)) {
+                const char *action = action_item->valuestring;
+                ESP_LOGI(TAG, "API Command for action: %s", action);
+                cJSON_AddStringToObject(response_root, "action", action);
+                
+                if (strcmp(action, "play_sound") == 0) handle_action_play_sound(root, response_root);
+                else if (strcmp(action, "set_mode") == 0) handle_action_set_mode(root, response_root);
+                else if (strcmp(action, "set_cal_mask") == 0) handle_action_set_cal_mask(root, response_root);
+                else {
+                    cJSON_AddStringToObject(response_root, "status", "error");
+                    cJSON_AddStringToObject(response_root, "message", "Unknown Action");
+                }
+            } else {
+                cJSON_AddStringToObject(response_root, "error", "Missing Action");
             }
-            else if (strcmp(resource, "status") == 0) {
-                handle_resource_status(response_root);
-            }
-            else if (strcmp(resource, "all") == 0) {
-                handle_resource_battery(response_root);
-                handle_resource_encoder(response_root);
-                handle_resource_uptime(response_root);
-                handle_resource_status(response_root);
-            }
-            else {
-                cJSON_AddStringToObject(response_root, "error", "Unknown Resource");
-            }
-        }
-    } 
-    // Check if it's a SET request
-    else if (is_set) {
-        cJSON *action_item = cJSON_GetObjectItem(root, "action");
-        
-        if (cJSON_IsString(action_item) && (action_item->valuestring != NULL)) {
-            const char *action = action_item->valuestring;
-            ESP_LOGI(TAG, "API Command for action: %s", action);
-            cJSON_AddStringToObject(response_root, "action", action);
-            
-            if (strcmp(action, "play_sound") == 0) {
-                handle_action_play_sound(root, response_root);
-            } 
-            else if (strcmp(action, "set_mode") == 0) {
-                handle_action_set_mode(root, response_root);
-            }
-            else if (strcmp(action, "set_cal_mask") == 0) {
-                handle_action_set_cal_mask(root, response_root);
-            }
-            else {
-                cJSON_AddStringToObject(response_root, "status", "error");
-                cJSON_AddStringToObject(response_root, "message", "Unknown Action");
-            }
+        } else {
+            cJSON_AddStringToObject(response_root, "status", "error");
+            cJSON_AddStringToObject(response_root, "message", "Invalid 'op' value");
         }
     }
 
@@ -261,18 +251,13 @@ static void api_mqtt_callback(const char *topic, int topic_len, const char *data
 // =============================================================================
 
 esp_err_t mqtt_api_responder_init(void) {
-    esp_err_t err = mqtt_custom_client_register_topic_callback(CONFIG_MQTT_API_GET_TOPIC, api_mqtt_callback);
-    if (err == ESP_OK) {
-        err = mqtt_custom_client_register_topic_callback(CONFIG_MQTT_API_SET_TOPIC, api_mqtt_callback);
-    }
-    return err;
+    return mqtt_custom_client_register_topic_callback(CONFIG_MQTT_API_REQ_TOPIC, api_mqtt_callback);
 }
 
 esp_err_t mqtt_api_responder_subscribe(void) {
     if (!mqtt_custom_client_is_connected()) {
         return ESP_ERR_INVALID_STATE;
     }
-    int res1 = mqtt_custom_client_subscribe(CONFIG_MQTT_API_GET_TOPIC, 0);
-    int res2 = mqtt_custom_client_subscribe(CONFIG_MQTT_API_SET_TOPIC, 0);
-    return (res1 < 0 || res2 < 0) ? ESP_FAIL : ESP_OK;
+    int res = mqtt_custom_client_subscribe(CONFIG_MQTT_API_REQ_TOPIC, 0);
+    return (res < 0) ? ESP_FAIL : ESP_OK;
 }

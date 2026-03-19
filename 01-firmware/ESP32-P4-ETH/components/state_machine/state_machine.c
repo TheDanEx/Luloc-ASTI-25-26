@@ -25,13 +25,15 @@ static TickType_t g_state_start_time = 0;
  */
 static void publish_state_event(const char *event_msg)
 {
-    // Always log to serial monitor as requested
     ESP_LOGI(TAG, "STATE EVENT: %s", event_msg);
 
     if (mqtt_custom_client_is_connected()) {
-        int msg_id = mqtt_custom_client_publish("robot/events", event_msg, 0, 1, 0);
+        char json_payload[128];
+        snprintf(json_payload, sizeof(json_payload), "{\"event\":\"STATE_CHANGE\",\"msg\":\"%s\"}", event_msg);
+        
+        int msg_id = mqtt_custom_client_publish("robot/events", json_payload, 0, 1, 0);
         if (msg_id >= 0) {
-            ESP_LOGD(TAG, "Published event: %s (msg_id=%d)", event_msg, msg_id);
+            ESP_LOGD(TAG, "Published event JSON: %s (msg_id=%d)", json_payload, msg_id);
         }
     } else {
         ESP_LOGW(TAG, "MQTT not connected, event not published: %s", event_msg);

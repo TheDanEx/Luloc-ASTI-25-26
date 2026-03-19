@@ -12,6 +12,7 @@
 #include "freertos/semphr.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include <time.h>
 #include "mqtt_custom_client.h"
 #include "telemetry_manager.h"
 
@@ -23,6 +24,7 @@ static const char *TAG = "telemetry";
 typedef struct {
     char *key;
     char *value_str;
+    int64_t timestamp_ns;
 } field_t;
 
 typedef struct {
@@ -46,9 +48,14 @@ static void append_field_str(telemetry_obj_t *obj, const char *key, const char *
 {
     if (obj->field_count >= MAX_FIELDS) return;
 
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    int64_t timestamp_ns = (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
+
     // Allocate copy of key and value
     obj->fields[obj->field_count].key = strdup(key);
     obj->fields[obj->field_count].value_str = strdup(val_str);
+    obj->fields[obj->field_count].timestamp_ns = timestamp_ns;
     
     if (obj->fields[obj->field_count].key && obj->fields[obj->field_count].value_str) {
         obj->field_count++;
@@ -168,44 +175,43 @@ void telemetry_commit_point(telemetry_handle_t handle)
     xSemaphoreTake(obj->mutex, portMAX_DELAY);
     
     if (obj->field_count > 0) {
-        // Build Line Protocol String: measurement[,tags] field1=val1,field2=val2 timestamp_ns\n
-        char point_buf[256];
-        int offset = 0;
-
+        // Format: measurement[,tags] field=val timestamp\n
+        // Multi-line ILP to support independent field timestamps.
+        
 #ifdef CONFIG_TELEMETRY_ROBOT_NAME
         const char *global_robot_tag = "robot=" CONFIG_TELEMETRY_ROBOT_NAME;
 #else
         const char *global_robot_tag = "robot=unknown";
 #endif
 
-        if (obj->tags && strlen(obj->tags) > 0) {
-            offset = snprintf(point_buf, sizeof(point_buf), "%s,%s,%s ", obj->measurement, global_robot_tag, obj->tags);
-        } else {
-            offset = snprintf(point_buf, sizeof(point_buf), "%s,%s ", obj->measurement, global_robot_tag);
-        }
-        
         for (int i = 0; i < obj->field_count; i++) {
-            if (offset >= sizeof(point_buf) - 64) break; // Leave room for timestamp
-            if (i > 0) offset += snprintf(point_buf + offset, sizeof(point_buf) - offset, ",");
-            offset += snprintf(point_buf + offset, sizeof(point_buf) - offset, "%s=%s", obj->fields[i].key, obj->fields[i].value_str);
-        }
+            char line_buf[256];
+            int len = 0;
 
-        // Timestamp in nanoseconds (relative to boot)
-        int64_t timestamp_ns = esp_timer_get_time() * 1000LL;
-        offset += snprintf(point_buf + offset, sizeof(point_buf) - offset, " %lld\n", timestamp_ns);
+            if (obj->tags && strlen(obj->tags) > 0) {
+                len = snprintf(line_buf, sizeof(line_buf), "%s,%s,%s %s=%s %lld\n", 
+                              obj->measurement, global_robot_tag, obj->tags,
+                              obj->fields[i].key, obj->fields[i].value_str,
+                              obj->fields[i].timestamp_ns);
+            } else {
+                len = snprintf(line_buf, sizeof(line_buf), "%s,%s %s=%s %lld\n", 
+                              obj->measurement, global_robot_tag,
+                              obj->fields[i].key, obj->fields[i].value_str,
+                              obj->fields[i].timestamp_ns);
+            }
 
-        // Append to batch buffer if there's space
-        if (obj->batch_offset + offset < MAX_BUFFER_SIZE - 1) {
-            memcpy(obj->batch_buffer + obj->batch_offset, point_buf, offset);
-            obj->batch_offset += offset;
-            obj->batch_buffer[obj->batch_offset] = '\0';
-        }
+            // Append to batch buffer if there's space
+            if (obj->batch_offset + len < MAX_BUFFER_SIZE - 1) {
+                memcpy(obj->batch_buffer + obj->batch_offset, line_buf, len);
+                obj->batch_offset += len;
+                obj->batch_buffer[obj->batch_offset] = '\0';
+            }
 
-        // Clear temporary fields
-        for (int i = 0; i < obj->field_count; i++) {
+            // Free the memory for the field strings
             free(obj->fields[i].key);
             free(obj->fields[i].value_str);
         }
+        
         obj->field_count = 0;
     }
     
@@ -231,8 +237,7 @@ void telemetry_add_int(telemetry_handle_t handle, const char *key, int32_t value
     telemetry_obj_t *obj = (telemetry_obj_t *)handle;
     
     char val_str[32];
-    snprintf(val_str, sizeof(val_str), "%liH", value); // Influx Integer is represented with 'i'. Note: the AI instructions actually say use 'i' not 'H', wait, Influx takes 'i' to explicitly define an integer type: e.g. 42i
-    snprintf(val_str, sizeof(val_str), "%lii", value); 
+    snprintf(val_str, sizeof(val_str), "%li", value); 
     
     xSemaphoreTake(obj->mutex, portMAX_DELAY);
     append_field_str(obj, key, val_str);
@@ -245,6 +250,6 @@ void telemetry_add_bool(telemetry_handle_t handle, const char *key, bool value)
     telemetry_obj_t *obj = (telemetry_obj_t *)handle;
     
     xSemaphoreTake(obj->mutex, portMAX_DELAY);
-    append_field_str(obj, key, value ? "true" : "false"); // Influx booleans
+    append_field_str(handle, key, value ? "true" : "false");
     xSemaphoreGive(obj->mutex);
 }
