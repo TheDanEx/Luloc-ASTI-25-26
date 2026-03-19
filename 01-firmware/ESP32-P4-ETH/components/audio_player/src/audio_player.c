@@ -68,7 +68,9 @@ static sound_asset_t get_sound_asset(audio_sound_t sound) {
     return asset;
 }
 
-// --- Internal Functions ---
+// =============================================================================
+// Internal Helpers: Hardware Interface
+// =============================================================================
 
 static void gpio_pa_init(void)
 {
@@ -80,9 +82,13 @@ static void gpio_pa_init(void)
         .intr_type = GPIO_INTR_DISABLE
     };
     gpio_config(&io_conf);
-    gpio_set_level(GPIO_OUTPUT_PA, 1); // Enable PA
+    gpio_set_level(GPIO_OUTPUT_PA, 1); 
 }
 
+/**
+ * Initialize I2C for Codec communication.
+ * ES8311 requires I2C for register configuration (Volume, Sample Rate, etc).
+ */
 static esp_err_t i2c_init(void)
 {
     const i2c_config_t es_i2c_cfg = {
@@ -96,12 +102,15 @@ static esp_err_t i2c_init(void)
     return i2c_param_config(I2C_NUM, &es_i2c_cfg) ?: i2c_driver_install(I2C_NUM, I2C_MODE_MASTER, 0, 0, 0);
 }
 
+/**
+ * Configure the ES8311 Codec via I2C.
+ * Sets the clocking system to match the I2S stream (MCLK @ 384 * Fs).
+ */
 static esp_err_t codec_init(void)
 {
     es_handle = es8311_create(I2C_NUM, ES8311_ADDRRES_0);
-    if (!es_handle) {
-        return ESP_FAIL;
-    }
+    if (!es_handle) return ESP_FAIL;
+
     const es8311_clock_config_t es_clk = {
         .mclk_inverted = false,
         .sclk_inverted = false,
@@ -118,6 +127,11 @@ static esp_err_t codec_init(void)
     return ESP_OK;
 }
 
+/**
+ * Configure the I2S Peripheral (Audio Core).
+ * Uses Standard Mode (Philips) with 16-bit PCM Mono.
+ * High DMA descriptor count to prevent underruns during CPU-heavy tasks.
+ */
 static esp_err_t i2s_init(void)
 {
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM, I2S_ROLE_MASTER);
@@ -149,6 +163,14 @@ static esp_err_t i2s_init(void)
     return ESP_OK;
 }
 
+// =============================================================================
+// Internal Helpers: Task Management
+// =============================================================================
+
+/**
+ * Worker thread for synchronous audio playback.
+ * Transfers raw PCM data from Flash/RAM to the I2S DMA buffers.
+ */
 static void play_task(void *args)
 {
     sound_asset_t *asset = (sound_asset_t *)args;
@@ -169,8 +191,14 @@ static void play_task(void *args)
     vTaskDelete(NULL);
 }
 
-// --- Public API ---
+// =============================================================================
+// Public API: System Lifecycle
+// =============================================================================
 
+/**
+ * Global initialization for the audio subsystem.
+ * Performs PA, I2C, Codec, and I2S configuration in sequence.
+ */
 esp_err_t audio_player_init(void)
 {
     static bool initialized = false;
@@ -187,12 +215,23 @@ esp_err_t audio_player_init(void)
     return ESP_OK;
 }
 
+// =============================================================================
+// Public API: Playback Control
+// =============================================================================
+
+/**
+ * Play a specific sound using its default volume profile.
+ */
 esp_err_t audio_player_play(audio_sound_t sound)
 {
     sound_asset_t asset = get_sound_asset(sound);
     return audio_player_play_vol(sound, asset.volume);
 }
 
+/**
+ * Play a sound with custom volume override.
+ * Logic: Checks if a task is already running to prevent concurrent I2S access.
+ */
 esp_err_t audio_player_play_vol(audio_sound_t sound, uint8_t volume)
 {
     if (play_task_handle != NULL) {
@@ -206,9 +245,7 @@ esp_err_t audio_player_play_vol(audio_sound_t sound, uint8_t volume)
     }
 
     sound_asset_t asset = get_sound_asset(sound);
-    if (asset.start == NULL) {
-        return ESP_ERR_NOT_FOUND;
-    }
+    if (asset.start == NULL) return ESP_ERR_NOT_FOUND;
 
     sound_asset_t *task_arg = malloc(sizeof(sound_asset_t));
     *task_arg = asset;

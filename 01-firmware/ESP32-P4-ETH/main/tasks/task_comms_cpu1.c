@@ -58,34 +58,25 @@ static telemetry_handle_t tel_odometry = NULL;
 static telemetry_handle_t tel_system = NULL;
 
 // =============================================================================
-// MQTT Callbacks
+// Helper: Data Collection
 // =============================================================================
 
-static void mqtt_cmd_callback(const char *topic, int topic_len, const char *data, int data_len)
-{
-    char command_str[64] = {0};
-    int copy_len = (data_len < sizeof(command_str) - 1) ? data_len : (sizeof(command_str) - 1);
-    strncpy(command_str, data, copy_len);
-    
-    ESP_LOGI(TAG, "MQTT Command received: '%s'", command_str);
-    ESP_LOGW(TAG, "Legacy string commands are deprecated. Use JSON API.");
-}
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
+/**
+ * Capture high-frequency metrics from local sensors.
+ * This function handles odometry calculations and system telemetry 
+ * batching before committing points to the asynchronous reporter.
+ */
 static void collect_high_freq_sensor_data(void)
 {
     shared_memory_t* shm = shared_memory_get();
 
+    // Wheel Odometry Sync
     if (encoder_left) {
         float speed = encoder_sensor_get_speed(encoder_left);
         float distance = encoder_sensor_get_distance(encoder_left);
         telemetry_add_float(tel_odometry, "velIZ", speed);
         telemetry_add_float(tel_odometry, "posIZ", distance);
         
-        // Update Shared Memory
         xSemaphoreTake(shm->mutex, portMAX_DELAY);
         shm->sensors.motor_speed_left = speed;
         shm->sensors.motor_distance_left = distance;
@@ -98,7 +89,6 @@ static void collect_high_freq_sensor_data(void)
         telemetry_add_float(tel_odometry, "velDR", speed);
         telemetry_add_float(tel_odometry, "posDR", distance);
         
-        // Update Shared Memory
         xSemaphoreTake(shm->mutex, portMAX_DELAY);
         shm->sensors.motor_speed_right = speed;
         shm->sensors.motor_distance_right = distance;
@@ -109,6 +99,7 @@ static void collect_high_freq_sensor_data(void)
         telemetry_commit_point(tel_odometry);
     }
 
+    // System Metrics & State
     test_sensor_data_t sys_data;
     if (test_sensor_read(&sys_data) == ESP_OK) {
         telemetry_add_int(tel_system, "uptime_sec", sys_data.uptime_sec);
@@ -122,7 +113,7 @@ static void collect_high_freq_sensor_data(void)
 }
 
 // =============================================================================
-// Public API
+// Public API: Lifecycle
 // =============================================================================
 
 void task_comms_cpu1_init_queue(void)
@@ -146,14 +137,24 @@ bool task_comms_cpu1_is_ready(void)
 // Main Task Implementation
 // =============================================================================
 
+/**
+ * Communications and Telemetry Hub (CPU 1).
+ * Responsibilities:
+ * 1. Maintain MQTT connectivity and topic subscriptions.
+ * 2. Manage high-level responders (API, PID Tuning).
+ * 3. Sample and batch high-frequency sensor telemetry (Odometry).
+ * 4. Coordinate inter-core command routing.
+ */
 static void task_comms_cpu1(void *arg)
 {
     task_comms_cpu1_init_queue();
     
+    // Block until network is physically ready
     while (!ethernet_is_connected()) {
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 
+    // Initialize MQTT Client
     if (mqtt_custom_client_init() != ESP_OK) {
         ESP_LOGE(TAG, "MQTT client initialization failed");
         mqtt_initialized = false;
@@ -161,6 +162,7 @@ static void task_comms_cpu1(void *arg)
     }
     mqtt_initialized = true;
 
+    // Initialize Wheel Encoders
     encoder_sensor_config_t enc_l_cfg = {
         .pin_a = ENCODER_LEFT_PIN_A,
         .pin_b = ENCODER_LEFT_PIN_B,
@@ -183,11 +185,13 @@ static void task_comms_cpu1(void *arg)
 
     perf_mon_init();
     
+    // Setup Telemetry Batches
     tel_odometry = telemetry_create("robot/telemetry/odometry", "odometry", 5000);
     tel_system   = telemetry_create("robot/telemetry/system", "system", 5000);
 
     vTaskDelay(pdMS_TO_TICKS(1000)); 
     
+    // Register Asynchronous Responders
     curvature_feedforward_register_callback();
     curvature_feedforward_subscribe();
     pid_tuner_init();
@@ -202,23 +206,24 @@ static void task_comms_cpu1(void *arg)
     while(1) {
         TickType_t current_tick = xTaskGetTickCount();
 
-        // 0. Synchronize MQTT Status with State Machine
+        // 1. MQTT Connectivity Sync
         bool current_mqtt_conn = mqtt_custom_client_is_connected();
         if (current_mqtt_conn != last_mqtt_conn) {
             state_machine_notify_mqtt_status(current_mqtt_conn);
             last_mqtt_conn = current_mqtt_conn;
         }
 
-        // 1. Inter-core Command Handling
+        // 2. Inter-core Command Handling
         uint8_t intercore_msg[CMD_QUEUE_ITEM_SIZE];
         if (xQueueReceive(command_queue, intercore_msg, 0) == pdTRUE) {
             ESP_LOGI(TAG, "Inter-core message: %s", (char*)intercore_msg);
         }
 
-        // 2. Periodic Sampling (1Hz)
+        // 3. Periodic Sampling Loop (1Hz)
         if ((current_tick - last_sampling_tick) >= pdMS_TO_TICKS(1000)) {
              if (mqtt_custom_client_is_connected()) {
                  shared_memory_set_mqtt_connected(true);
+                 // Resubscribe if connection was dropped and restored
                  curvature_feedforward_subscribe();
                  pid_tuner_subscribe();
                  mqtt_api_responder_subscribe();

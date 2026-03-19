@@ -34,9 +34,13 @@ static inline float clamp(float value, float min, float max) {
 }
 
 // =============================================================================
-// Public API
+// Public API: Lifecycle
 // =============================================================================
 
+/**
+ * Create a new velocity controller instance.
+ * Initializes PID state and motion profiling buffers.
+ */
 esp_err_t motor_velocity_ctrl_create(const motor_velocity_config_t *config, motor_velocity_ctrl_handle_t *out_handle) {
     if (config == NULL || out_handle == NULL) return ESP_ERR_INVALID_ARG;
 
@@ -58,12 +62,28 @@ esp_err_t motor_velocity_ctrl_create(const motor_velocity_config_t *config, moto
     return ESP_OK;
 }
 
+/**
+ * Destroy the controller and free memory.
+ */
 esp_err_t motor_velocity_ctrl_destroy(motor_velocity_ctrl_handle_t handle) {
     if (handle == NULL) return ESP_ERR_INVALID_ARG;
     free(handle);
     return ESP_OK;
 }
 
+// =============================================================================
+// Public API: Control Logic
+// =============================================================================
+
+/**
+ * Primary control loop update.
+ * performs: 
+ * 1. EMA Signal Filtering for noise reduction.
+ * 2. Acceleration Slew Rate Limiting (Ramping).
+ * 3. PID calculation using D-on-PV (Derivative on Process Variable) to avoid kicks.
+ * 4. Feed-Forward mapping + Deadband compensation.
+ * 5. Battery-aware PWM duty cycle conversion.
+ */
 esp_err_t motor_velocity_ctrl_update(motor_velocity_ctrl_handle_t handle, 
                                      const motor_velocity_input_t *input, 
                                      float delta_time_s,
@@ -134,6 +154,10 @@ esp_err_t motor_velocity_ctrl_update(motor_velocity_ctrl_handle_t handle,
     return ESP_OK;
 }
 
+/**
+ * Dynamic update of PID gains.
+ * Useful for online tuning via MQTT/LiveTuning.
+ */
 esp_err_t motor_velocity_ctrl_set_pid(motor_velocity_ctrl_handle_t handle, float kp, float ki, float kd) {
     if (handle == NULL) return ESP_ERR_INVALID_ARG;
     
@@ -146,6 +170,14 @@ esp_err_t motor_velocity_ctrl_set_pid(motor_velocity_ctrl_handle_t handle, float
     return ESP_OK;
 }
 
+// =============================================================================
+// Tools: Auto-Tuning / Sweeping
+// =============================================================================
+
+/**
+ * Target generator for PID auto-tuning.
+ * Cycles between two speeds configured via Kconfig to analyze step responses.
+ */
 float motor_velocity_ctrl_get_sweep_target(void) {
     static TickType_t sweep_last_toggle = 0;
     static bool sweep_phase_1 = true;

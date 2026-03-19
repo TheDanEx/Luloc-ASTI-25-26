@@ -7,32 +7,47 @@ static const char *TAG = "shrd_mem";
 static shared_memory_t g_shared_memory = {0};
 static bool g_initialized = false;
 
+// =============================================================================
+// Public API: Lifecycle
+// =============================================================================
+
+/**
+ * Initialize the shared memory singleton.
+ * Configures the FreeRTOS mutex for thread-safe access between CPU cores.
+ */
 void shared_memory_init(void)
 {
     if (g_initialized) {
         return;
     }
 
-    // Initialize mutex for thread-safe access
     g_shared_memory.mutex = xSemaphoreCreateMutex();
     if (g_shared_memory.mutex == NULL) {
         ESP_LOGE(TAG, "Failed to create mutex");
         return;
     }
 
-    // Initialize shared data to zero
+    // Default zero-state
     g_shared_memory.sensors = (robot_sensor_data_t){0};
     g_shared_memory.last_command = (robot_command_t){0};
     g_shared_memory.heartbeat_cpu0 = 0;
     g_shared_memory.heartbeat_cpu1 = 0;
     g_shared_memory.cpu0_alive = false;
     g_shared_memory.cpu1_alive = false;
-    g_shared_memory.calibration_motor_mask = 3; // Default: Both motors active during sweep
+    g_shared_memory.calibration_motor_mask = 3; 
 
     g_initialized = true;
     ESP_LOGI(TAG, "Shared memory initialized");
 }
 
+// =============================================================================
+// Public API: Sensor Data (CPU0 -> CPU1)
+// =============================================================================
+
+/**
+ * Update the global sensor snapshot.
+ * Called by CPU0 after a control loop iteration.
+ */
 bool shared_memory_write_sensors(const robot_sensor_data_t *data, TickType_t timeout)
 {
     if (!g_initialized || data == NULL) {
@@ -51,6 +66,10 @@ bool shared_memory_write_sensors(const robot_sensor_data_t *data, TickType_t tim
     return true;
 }
 
+/**
+ * Retrieve the latest sensor snapshot.
+ * Called by CPU1 for telemetry reporting and state estimation.
+ */
 bool shared_memory_read_sensors(robot_sensor_data_t *data, TickType_t timeout)
 {
     if (!g_initialized || data == NULL) {
@@ -68,6 +87,14 @@ bool shared_memory_read_sensors(robot_sensor_data_t *data, TickType_t timeout)
     return true;
 }
 
+// =============================================================================
+// Public API: Command Data (CPU1 -> CPU0)
+// =============================================================================
+
+/**
+ * Update the last received command.
+ * Called by CPU1 after receiving MQTT messages or API requests.
+ */
 bool shared_memory_write_command(const robot_command_t *cmd, TickType_t timeout)
 {
     if (!g_initialized || cmd == NULL) {
@@ -86,6 +113,10 @@ bool shared_memory_write_command(const robot_command_t *cmd, TickType_t timeout)
     return true;
 }
 
+/**
+ * Retrieve the pending control command.
+ * Called by CPU0 to execute instructions from the Comms core.
+ */
 bool shared_memory_read_command(robot_command_t *cmd, TickType_t timeout)
 {
     if (!g_initialized || cmd == NULL) {
@@ -102,6 +133,10 @@ bool shared_memory_read_command(robot_command_t *cmd, TickType_t timeout)
     xSemaphoreGive(g_shared_memory.mutex);
     return true;
 }
+
+// =============================================================================
+// Public API: Monitoring & Connectivity
+// =============================================================================
 
 void shared_memory_heartbeat_cpu0(void)
 {
@@ -154,6 +189,10 @@ bool shared_memory_get_mqtt_connected(void)
     return false;
 }
 
+/**
+ * Direct access to the shared structure (DANGER: use with caution).
+ * Prefer using the read/write methods to ensure mutex protection.
+ */
 shared_memory_t* shared_memory_get(void)
 {
     return g_initialized ? &g_shared_memory : NULL;

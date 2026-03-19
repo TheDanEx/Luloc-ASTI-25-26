@@ -5,6 +5,23 @@
 
 static const char *TAG = "LINE_FOLLOWER_CTRL";
 
+// =============================================================================
+// Private Helpers
+// =============================================================================
+
+/**
+ * Clamp a float value between min and max.
+ */
+static inline float clamp(float value, float min, float max) {
+    if (value < min) return min;
+    if (value > max) return max;
+    return value;
+}
+
+// =============================================================================
+// Types and Context
+// =============================================================================
+
 struct line_follower_ctrl_context_t {
     line_follower_config_t config;
     
@@ -16,10 +33,16 @@ struct line_follower_ctrl_context_t {
     float last_known_position; // To remember which side we lost the line from
 };
 
+// =============================================================================
+// Public API: Lifecycle
+// =============================================================================
+
+/**
+ * Initialize a new line follower controller.
+ * Configures PID gains, speed limits, and camera feed-forward weights.
+ */
 esp_err_t line_follower_ctrl_create(const line_follower_config_t* config, line_follower_ctrl_handle_t* out_handle) {
-    if (config == NULL || out_handle == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    if (config == NULL || out_handle == NULL) return ESP_ERR_INVALID_ARG;
 
     struct line_follower_ctrl_context_t* ctx = calloc(1, sizeof(struct line_follower_ctrl_context_t));
     if (ctx == NULL) {
@@ -28,11 +51,6 @@ esp_err_t line_follower_ctrl_create(const line_follower_config_t* config, line_f
     }
 
     ctx->config = *config;
-    
-    // Override with Kconfig if values are set to 0.0 but we want defaults
-    // Since config struct usually overrides Kconfig, we assume the user populated 
-    // it cleanly. Best practice is for app_main to read Kconfig and pass it here.
-
     ctx->integral = 0.0f;
     ctx->previous_error = 0.0f;
     ctx->last_known_position = 0.0f;
@@ -42,44 +60,44 @@ esp_err_t line_follower_ctrl_create(const line_follower_config_t* config, line_f
     return ESP_OK;
 }
 
+/**
+ * Teardown the controller instance.
+ */
 esp_err_t line_follower_ctrl_destroy(line_follower_ctrl_handle_t handle) {
-    if (handle == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    if (handle == NULL) return ESP_ERR_INVALID_ARG;
     free(handle);
     return ESP_OK;
 }
 
-// Helper inline function to limit values
-static inline float clamp(float value, float min, float max) {
-    if (value < min) return min;
-    if (value > max) return max;
-    return value;
-}
+// =============================================================================
+// Public API: Control Implementation
+// =============================================================================
 
+/**
+ * Main control loop for line following.
+ * Logic:
+ * 1. Lost-Line recovery: If no sensor detects the line, use last known side to spin-search.
+ * 2. PID Steering: Traditional proportional-integral-derivative based on sensor centroid.
+ * 3. Camera Feed-Forward: Blends predictive steering from a camera module for look-ahead curves.
+ * 4. Differential Drive Output: Converts steering commands to individual wheel target speeds.
+ */
 esp_err_t line_follower_ctrl_update(line_follower_ctrl_handle_t handle, 
-                                    const line_follower_input_t* input, 
-                                    line_follower_output_t* out_output,
-                                    float delta_time_s) {
-    if (handle == NULL || input == NULL || out_output == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
+                                     const line_follower_input_t* input, 
+                                     line_follower_output_t* out_output,
+                                     float delta_time_s) {
+    if (handle == NULL || input == NULL || out_output == NULL) return ESP_ERR_INVALID_ARG;
     
-    if (delta_time_s <= 0.0f) {
-        delta_time_s = 0.01f; // Prevent division by zero
-    }
+    if (delta_time_s <= 0.0f) delta_time_s = 0.01f;
 
     struct line_follower_ctrl_context_t* ctx = handle;
 
-    // 1. Check if we lost the line
+    // --- 1. Recovery Logic (Lost Line) ---
     if (!input->line_detected) {
         // Line is lost. Decide what to do based on the last known position.
-        
         ctx->integral = 0; // Reset anti-windup when lost
 
         if (ctx->last_known_position < -0.4f) {
             // Lost line to the extreme left. Spin to find it.
-            // Left motor goes backward, right goes forward.
             out_output->left_motor_speed = -ctx->config.base_speed;
             out_output->right_motor_speed = ctx->config.base_speed;
             ESP_LOGD(TAG, "Line lost to Left. Spinning left.");
@@ -93,63 +111,51 @@ esp_err_t line_follower_ctrl_update(line_follower_ctrl_handle_t handle,
             return ESP_OK;
         } 
         else {
-            // Lost the line while relatively centered.
+            // Gap/Intersection: Use camera ff or go straight
             // This happens at diamond crossings or track gaps ("Siga recto si puede").
-            // To be proactive, we STILL apply the camera's curvature feed-forward to 
-            // guess the path through the empty gap.
             float feed_forward = input->camera_curvature * ctx->config.camera_weight;
-            
-            out_output->left_motor_speed = ctx->config.base_speed + feed_forward;
-            out_output->right_motor_speed = ctx->config.base_speed - feed_forward;
-            
-            // Limit to max speed
-            out_output->left_motor_speed = clamp(out_output->left_motor_speed, -ctx->config.max_speed, ctx->config.max_speed);
-            out_output->right_motor_speed = clamp(out_output->right_motor_speed, -ctx->config.max_speed, ctx->config.max_speed);
+            out_output->left_motor_speed = clamp(ctx->config.base_speed + feed_forward, -ctx->config.max_speed, ctx->config.max_speed);
+            out_output->right_motor_speed = clamp(ctx->config.base_speed - feed_forward, -ctx->config.max_speed, ctx->config.max_speed);
             
             ESP_LOGD(TAG, "Line lost in center (intersection). Going straight/camera-guided.");
             return ESP_OK;
         }
     }
 
-    // 2. Line is detected. Update last known position.
+    // --- 2. Active Pursuit ---
     ctx->last_known_position = input->line_position;
-
-    // 3. Calculate Error (0 is center, -1 is left, 1 is right)
     float error = input->line_position;
     
-    // 4. Update PID terms
     ctx->integral += error * delta_time_s;
     float derivative = (error - ctx->previous_error) / delta_time_s;
     
-    // Calculate required steering generated by the Line Sensor
+    // Steering contributions
     float pid_steering = (ctx->config.kp * error) + 
                          (ctx->config.ki * ctx->integral) + 
                          (ctx->config.kd * derivative);
                          
-    // 5. Calculate Feed-Forward steering from the Camera
-    // Camera says "curve coming up", so we bias the steering before the line sensor 
-    // even sees the error.
     float feed_forward_steering = input->camera_curvature * ctx->config.camera_weight;
     
-    // 6. Combine all steerings
     float total_steering = pid_steering + feed_forward_steering;
     
-    // 7. Calculate final motor speeds (differential drive)
-    // If we need to steer Right (positive error), we speed up the left motor 
-    // and slow down the right motor.
+    // --- 3. Mixing & Saturation ---
     float left_speed = ctx->config.base_speed + total_steering;
     float right_speed = ctx->config.base_speed - total_steering;
 
-    // 8. Clamp speeds
     out_output->left_motor_speed = clamp(left_speed, -ctx->config.max_speed, ctx->config.max_speed);
     out_output->right_motor_speed = clamp(right_speed, -ctx->config.max_speed, ctx->config.max_speed);
 
-    // Save error for next cycle
     ctx->previous_error = error;
-
     return ESP_OK;
 }
 
+// =============================================================================
+// Public API: Configuration
+// =============================================================================
+
+/**
+ * Live update of steering PID constants.
+ */
 esp_err_t line_follower_ctrl_set_pid(line_follower_ctrl_handle_t handle, float kp, float ki, float kd) {
     if (handle == NULL) return ESP_ERR_INVALID_ARG;
     
@@ -158,11 +164,13 @@ esp_err_t line_follower_ctrl_set_pid(line_follower_ctrl_handle_t handle, float k
     ctx->config.ki = ki;
     ctx->config.kd = kd;
     
-    // Reset integral when tuning randomly
     ctx->integral = 0;
     return ESP_OK;
 }
 
+/**
+ * Adjust the influence of the camera-based predictive steering.
+ */
 esp_err_t line_follower_ctrl_set_camera_weight(line_follower_ctrl_handle_t handle, float weight) {
     if (handle == NULL) return ESP_ERR_INVALID_ARG;
     

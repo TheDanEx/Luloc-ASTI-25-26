@@ -14,7 +14,11 @@
 
 static const char *TAG = "rt_cntrl";
 
-// Motor Configuration (PINS: Iz: 47/48, Dr: 20/21)
+// =============================================================================
+// Motor Configuration
+// =============================================================================
+
+// Default HW configuration (PINS: Iz: 47/48, Dr: 20/21)
 static motor_driver_mcpwm_t motors = {
     .left  = { .in1 = GPIO_NUM_22, .in2 = GPIO_NUM_23},
     .right = { .in1 = GPIO_NUM_21, .in2 = GPIO_NUM_20},
@@ -26,13 +30,24 @@ static motor_driver_mcpwm_t motors = {
     .brake_on_stop = true,
 };
 
+// =============================================================================
+// Real-Time Control Task
+// =============================================================================
 
+/**
+ * RT Control Loop (CPU 0).
+ * Responsibilities:
+ * 1. Maintain velocity control (PID) for both wheels.
+ * 2. Execute mode-specific logic (Calibration, Line Following, etc).
+ * 3. Update shared memory state for other tasks.
+ * Frequency: 100 Hz (10ms)
+ */
 static void task_rtcontrol_cpu0(void *arg)
 {
     ESP_LOGI(TAG, "Control loop running");
     motor_mcpwm_init(&motors);
     
-    // Configuración base leída de Kconfig (Cargada desde NVS si hay Live Tuning)
+    // Base configuration from Kconfig (Updated via NVS/MQTT Live Tuning)
     motor_velocity_config_t cfg_l = {
         .kp              = atof(CONFIG_VELOCITY_CTRL_DEFAULT_KP),
         .ki              = atof(CONFIG_VELOCITY_CTRL_DEFAULT_KI),
@@ -61,7 +76,7 @@ static void task_rtcontrol_cpu0(void *arg)
 
         xSemaphoreTake(shm->mutex, portMAX_DELAY);
 
-        // Update PID live tuning si hay cambios desde MQTT
+        // Update PID live tuning if changes received from MQTT
         for (int i = 0; i < 2; i++) {
             if (shm->motor_pids[i].updated_flag) {
                 motor_velocity_ctrl_set_pid((i == 0) ? ctrl_left : ctrl_right, 
@@ -71,25 +86,29 @@ static void task_rtcontrol_cpu0(void *arg)
                 shm->motor_pids[i].updated_flag = false;
             }
         }
-
-        // Leer Telemetría local (si fuera necesario explícitamente aquí, o se delega al modo)
         
         xSemaphoreGive(shm->mutex);
 
-        // --- ENRUTAMIENTO DE MODOS (Router Pattern) ---
+        // =====================================================================
+        // Mode Routing (Router Pattern)
+        // =====================================================================
         if (ctx->current_mode == MODE_CALIBRATE_MOTORS || ctx->current_mode == MODE_CALIBRATE_LINE) {
             
-            // Delegamos la lógica al módulo de calibración dinámico
+            // Delegate logic to the dynamic calibration module
             mode_calibrate_execute(&motors, ctrl_left, ctrl_right, dt);
             
         } else {
-            // Placeholder global: Por defecto, si el modo no está mapeado aún, frenamos.
+            // Safety fallback: If mode not handled, stop motors.
             motor_mcpwm_stop(&motors);
         }
 
         vTaskDelay(poll_rate);
     }
 }
+
+// =============================================================================
+// Public API
+// =============================================================================
 
 void task_rtcontrol_cpu0_start(void)
 {

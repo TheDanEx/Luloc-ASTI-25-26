@@ -56,14 +56,21 @@ static float s_current_lsb  = 0.0f;
 static float s_power_lsb    = 0.0f;
 
 // =============================================================================
-// Helper Functions
+// Internal Helpers
 // =============================================================================
 
+/**
+ * Write a 16-bit word to a device register via I2C.
+ * Uses big-endian byte order as required by INA226.
+ */
 static esp_err_t write_reg(uint8_t reg, uint16_t value) {
     uint8_t buf[3] = { reg, (uint8_t)(value >> 8), (uint8_t)(value & 0xFF) };
     return i2c_master_write_to_device(s_i2c_port, DEFAULT_I2C_ADDR, buf, 3, pdMS_TO_TICKS(I2C_TIMEOUT_MS));
 }
 
+/**
+ * Read a 16-bit word from a device register via I2C.
+ */
 static esp_err_t read_reg(uint8_t reg, uint16_t *value) {
     if (!value) return ESP_ERR_INVALID_ARG;
     uint8_t buf[2] = {0};
@@ -73,9 +80,13 @@ static esp_err_t read_reg(uint8_t reg, uint16_t *value) {
 }
 
 // =============================================================================
-// Public API
+// Public API: Lifecycle
 // =============================================================================
 
+/**
+ * Initialize the INA226 power monitor.
+ * Configures shunt resistance, expected current range, and sampling averaging.
+ */
 esp_err_t ina_init(void) {
     if (s_initialized) return ESP_OK;
 
@@ -107,6 +118,10 @@ esp_err_t ina_init(void) {
     return ESP_OK;
 }
 
+// =============================================================================
+// Public API: Metrics
+// =============================================================================
+
 esp_err_t ina_read_voltage(float *voltage_mv) {
     if (!voltage_mv || !s_initialized) return ESP_ERR_INVALID_STATE;
     uint16_t raw_val;
@@ -131,6 +146,9 @@ esp_err_t ina_read_power(float *power_mw) {
     return ret;
 }
 
+/**
+ * Perform a full capture of power metrics and optionally trigger safety alerts.
+ */
 esp_err_t ina_read(ina_data_t *data, bool check_alerts) {
     if (!data) return ESP_ERR_INVALID_ARG;
     esp_err_t ret = ina_read_voltage(&data->voltage_mv);
@@ -141,6 +159,14 @@ esp_err_t ina_read(ina_data_t *data, bool check_alerts) {
     return (ret == ESP_OK) ? ESP_OK : ESP_FAIL;
 }
 
+// =============================================================================
+// Public API: Safety
+// =============================================================================
+
+/**
+ * Evaluate current power metrics against safety thresholds.
+ * Triggers audible alerts and warning logs if thresholds are breached.
+ */
 esp_err_t ina_check_alerts(void) {
     if (!s_initialized) return ESP_ERR_INVALID_STATE;
 
