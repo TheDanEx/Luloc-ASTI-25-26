@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define CURVATURE_FF_TOPIC "robot/config/curvature"
+#define CURVATURE_FF_TOPIC "robot/vision/curvature"
 
 /**
  * Register MQTT callback for curvature topic. Safe to call multiple times.
