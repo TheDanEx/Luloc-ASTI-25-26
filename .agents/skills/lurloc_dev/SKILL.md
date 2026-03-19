@@ -33,7 +33,19 @@ All telemetry data must follow the **Influx Line Protocol (ILP)** and be batched
 - **Format:** `measurement,tag=val field=val timestamp_ns`.
 - **Independency:** Each variable capture must have its own timestamp, even if batched in the same MQTT payload.
 
-## 4. Documentation Mastery (`03-docs/`)
+## 4. MQTT Communication Hierarchy
+
+All project topics must follow the `robot/` root and adhere to this structure:
+
+- **Telemetry:** `robot/telemetry/<measurement>` (ILP format).
+- **API Request:** `robot/api/request` (Unified JSON GET/SET).
+- **API Response:** `robot/api/response` (Standardized JSON output).
+- **Logging:** `robot/logs/<level>` (error, warn, info, debug).
+- **Debug:** `robot/debug` (Sandbox for raw developer testing).
+- **Events:** `robot/events` (Asynchronous status changes).
+- **Config:** `robot/config/<subsystem>` (NVS parameter tuning).
+
+## 5. Documentation Mastery (`03-docs/`)
 
 You are the **Guardian of Knowledge**. Code and documentation are two sides of the same coin.
 
