@@ -35,6 +35,23 @@ typedef struct {
 } motor_velocity_input_t;
 
 /**
+ * @brief Diagnostic data for PID analysis.
+ */
+typedef struct {
+    float target_ramped;    // Target after acceleration ramping (m/s)
+    float error;            // P contribution base (m/s)
+    
+    // Voltage contributions (V)
+    float feed_forward_v;   // Voltage from Feed-Forward (model-based)
+    float p_v;             // Voltage from Proportional term
+    float i_v;             // Voltage from Integral term
+    float d_v;             // Voltage from Derivative term
+    
+    float final_v;          // Total target voltage (sum, saturated)
+    float pwm_duty;         // Resulting PWM % (-100 to 100)
+} motor_velocity_diag_t;
+
+/**
  * @brief Create a velocity controller instance for a single motor.
  * @param config Pointer to configuration parameters.
  * @param out_handle Pointer to store the new handle.
@@ -63,22 +80,13 @@ esp_err_t motor_velocity_ctrl_destroy(motor_velocity_ctrl_handle_t handle);
 esp_err_t motor_velocity_ctrl_update(motor_velocity_ctrl_handle_t handle, 
                                      const motor_velocity_input_t *input, 
                                      float delta_time_s,
-                                     float *out_pwm_duty);
+                                     float *out_pwm_duty,
+                                     motor_velocity_diag_t *out_diag);
 
 /**
  * @brief Update PID constants in real-time.
  */
 esp_err_t motor_velocity_ctrl_set_pid(motor_velocity_ctrl_handle_t handle, float kp, float ki, float kd);
-
-/**
- * @brief Gets the current auto-sweeping target velocity for Live Calibration mode.
- * 
- * Automatically switches between CONFIG_VELOCITY_CTRL_SWEEP_SPEED_1 and SPEED_2
- * based on the elapsed time and CONFIG_VELOCITY_CTRL_SWEEP_TIME_MS.
- * 
- * @return float The current target speed (m/s).
- */
-float motor_velocity_ctrl_get_sweep_target(void);
 
 #ifdef __cplusplus
 }

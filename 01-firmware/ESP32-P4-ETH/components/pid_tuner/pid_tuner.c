@@ -172,3 +172,23 @@ esp_err_t pid_tuner_subscribe(void) {
     int res = mqtt_custom_client_subscribe(CONFIG_PID_TUNER_MQTT_TOPIC, 0);
     return (res < 0) ? ESP_FAIL : ESP_OK;
 }
+
+bool pid_tuner_check_and_clear_update(uint8_t index, float *kp, float *ki, float *kd) {
+    if (index >= 2) return false;
+    
+    shared_memory_t* shm = shared_memory_get();
+    bool updated = false;
+
+    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+        if (shm->motor_pids[index].updated_flag) {
+            *kp = shm->motor_pids[index].kp;
+            *ki = shm->motor_pids[index].ki;
+            *kd = shm->motor_pids[index].kd;
+            shm->motor_pids[index].updated_flag = false;
+            updated = true;
+        }
+        xSemaphoreGive(shm->mutex);
+    }
+    
+    return updated;
+}

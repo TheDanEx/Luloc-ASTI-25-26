@@ -40,6 +40,16 @@ esp_err_t pid_tuner_register_callback(void);
  */
 esp_err_t pid_tuner_subscribe(void);
 
+/**
+ * @brief Check if a live PID update is pending and retrieve values.
+ * @param index Motor index (0=Left, 1=Right)
+ * @param kp out: Updated Kp
+ * @param ki out: Updated Ki
+ * @param kd out: Updated Kd
+ * @return true if update was pending (and now cleared), false otherwise.
+ */
+bool pid_tuner_check_and_clear_update(uint8_t index, float *kp, float *ki, float *kd);
+
 #ifdef __cplusplus
 }
 #endif

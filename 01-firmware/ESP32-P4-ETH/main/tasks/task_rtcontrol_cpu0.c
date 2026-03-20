@@ -7,9 +7,8 @@
 #include "motor_velocity_ctrl.h"
 #include "pid_tuner.h"
 #include "shared_memory.h"
-#include "mode_calibrate.h"
+#include "modes.h"
 #include <stdlib.h>
-
 #include "telemetry_manager.h"
 
 static const char *TAG = "rt_cntrl";
@@ -67,40 +66,22 @@ static void task_rtcontrol_cpu0(void *arg)
     motor_velocity_ctrl_create(&cfg_l, &ctrl_left);
     motor_velocity_ctrl_create(&cfg_r, &ctrl_right);
 
+    modes_init();
+
     const float dt = 0.01f; // 10ms = 100 Hz
     const TickType_t poll_rate = pdMS_TO_TICKS(10); 
 
     while(1) {
-        robot_state_context_t* ctx = state_machine_get_context();
-        shared_memory_t* shm = shared_memory_get();
-
-        xSemaphoreTake(shm->mutex, portMAX_DELAY);
-
-        // Update PID live tuning if changes received from MQTT
+        // 1. Update PID live tuning if changes received from MQTT
         for (int i = 0; i < 2; i++) {
-            if (shm->motor_pids[i].updated_flag) {
-                motor_velocity_ctrl_set_pid((i == 0) ? ctrl_left : ctrl_right, 
-                                          shm->motor_pids[i].kp, 
-                                          shm->motor_pids[i].ki, 
-                                          shm->motor_pids[i].kd);
-                shm->motor_pids[i].updated_flag = false;
+            float kp, ki, kd;
+            if (pid_tuner_check_and_clear_update(i, &kp, &ki, &kd)) {
+                motor_velocity_ctrl_set_pid((i == 0) ? ctrl_left : ctrl_right, kp, ki, kd);
             }
         }
-        
-        xSemaphoreGive(shm->mutex);
 
-        // =====================================================================
-        // Mode Routing (Router Pattern)
-        // =====================================================================
-        if (ctx->current_mode == MODE_CALIBRATE_MOTORS || ctx->current_mode == MODE_CALIBRATE_LINE) {
-            
-            // Delegate logic to the dynamic calibration module
-            mode_calibrate_execute(&motors, ctrl_left, ctrl_right, dt);
-            
-        } else {
-            // Safety fallback: If mode not handled, stop motors.
-            motor_mcpwm_stop(&motors);
-        }
+        // 2. Execute Mode (Router Pattern / Dispatcher)
+        modes_execute(&motors, ctrl_left, ctrl_right, dt);
 
         vTaskDelay(poll_rate);
     }

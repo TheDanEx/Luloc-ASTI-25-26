@@ -44,3 +44,44 @@ config ROBOT_USE_ETHERNET
     endif
 
 endmenu
+
+menu "Luloc-ASTI: 1. Follow Line Configuration"
+
+    config FOLLOW_LINE_KP
+        string "Line Follower: Kp (Proportional)"
+        default "1.0"
+        help
+            Proportional gain for the line follower steering PID.
+
+    config FOLLOW_LINE_KI
+        string "Line Follower: Ki (Integral)"
+        default "0.0"
+        help
+            Integral gain for the line follower steering PID.
+
+    config FOLLOW_LINE_KD
+        string "Line Follower: Kd (Derivative)"
+        default "0.1"
+        help
+            Derivative gain for the line follower steering PID.
+
+    config FOLLOW_LINE_BASE_SPEED
+        string "Line Follower: Base Speed (m/s)"
+        default "0.4"
+        help
+            Default straight-line speed for the robot.
+
+    config FOLLOW_LINE_MAX_SPEED
+        string "Line Follower: Max Speed (m/s)"
+        default "0.8"
+        help
+            Absolute maximum speed for any motor during steering.
+
+    config FOLLOW_LINE_FF_WEIGHT
+        string "Line Follower: FF Weight (0.0 to 1.0)"
+        default "0.5"
+        help
+            Weighting factor for the curvature feed-forward multiplier. 
+            0.0 = Ignore FF, 1.0 = Full application of FF.
+
+endmenu

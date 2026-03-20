@@ -22,7 +22,7 @@
 #include "encoder_sensor.h"
 #include "telemetry_manager.h"
 #include "ina226_sensor.h"
-#include "curvature_feedforward.h"
+#include "ina226_sensor.h"
 #include "pid_tuner.h"
 #include "mqtt_api_responder.h"
 #include "driver/gpio.h"
@@ -104,10 +104,6 @@ static void collect_high_freq_sensor_data(void)
     if (test_sensor_read(&sys_data) == ESP_OK) {
         telemetry_add_int(tel_system, "uptime_sec", sys_data.uptime_sec);
         telemetry_add_int(tel_system, "uptime_ms", sys_data.uptime_ms);
-        
-        if (curvature_feedforward_has_value()) {
-            telemetry_add_float(tel_system, "curvatura_ff", curvature_feedforward_get_value());
-        }
         telemetry_commit_point(tel_system);
     }
 }
@@ -192,8 +188,6 @@ static void task_comms_cpu1(void *arg)
     vTaskDelay(pdMS_TO_TICKS(1000)); 
     
     // Register Asynchronous Responders
-    curvature_feedforward_register_callback();
-    curvature_feedforward_subscribe();
     pid_tuner_init();
     pid_tuner_register_callback();
     pid_tuner_subscribe();
@@ -224,7 +218,6 @@ static void task_comms_cpu1(void *arg)
              if (mqtt_custom_client_is_connected()) {
                  shared_memory_set_mqtt_connected(true);
                  // Resubscribe if connection was dropped and restored
-                 curvature_feedforward_subscribe();
                  pid_tuner_subscribe();
                  mqtt_api_responder_subscribe();
              } else {

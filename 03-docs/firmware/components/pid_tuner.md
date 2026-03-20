@@ -35,6 +35,7 @@ Exporta silenciosamente a la RAM protegida por Mutex una bandera booleana `shm->
 - `esp_err_t pid_tuner_init(void)`: Inicializa NVS.
 - `esp_err_t pid_tuner_load_motor_pid(float *kp, float *ki, float *kd)`: Rellena los punteros con los valores residentes en Flash.
 - `esp_err_t pid_tuner_save_motor_pid(...)`: Realiza un Flush seguro a NVS.
+- `bool pid_tuner_check_and_clear_update(uint8_t index, float *kp, float *ki, float *kd)`: Consulta si hay una actualización pendiente desde MQTT y devuelve los valores. Se encarga internamente de la sincronización Mutex.
 - `esp_err_t pid_tuner_subscribe(void)`: Obliga al cliente MQTT a escuchar la API.
 
 ## Puntos Críticos y Depuración
@@ -71,17 +72,11 @@ void task_motors(void* arg) {
     motor_velocity_ctrl_create(&m_config, &ctrl_left);
 
     while(1) {
-        shared_memory_t* shm = shared_memory_get();
-        xSemaphoreTake(shm->mutex, portMAX_DELAY);
-
         // ¡Avisa si por MQTT acaba de llegar un tuning live!
-        if (shm->live_pid.updated_flag) {
-            motor_velocity_ctrl_set_pid(ctrl_left, 
-                shm->live_pid.kp, shm->live_pid.ki, shm->live_pid.kd);
-            
-            shm->live_pid.updated_flag = false; // Consumido
+        float kp, ki, kd;
+        if (pid_tuner_check_and_clear_update(0, &kp, &ki, &kd)) {
+            motor_velocity_ctrl_set_pid(ctrl_left, kp, ki, kd);
         }
-        xSemaphoreGive(shm->mutex);
 
         // [...] Update Matemático [...]
         vTaskDelay(pdMS_TO_TICKS(10));
