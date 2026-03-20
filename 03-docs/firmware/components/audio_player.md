@@ -25,3 +25,26 @@ Se inicializa una vez al arrancar (`audio_player_init()`). Proveedor de funcione
 ## Puntos Críticos y Depuración
 - **I2S Under-run:** Si el sistema general se satura o la tarea tiene baja prioridad, el bus I2S puede quedarse sin datos generando ruidos o cortes.
 - **Buses bloqueados:** Problemas I2C durante la inicialización del codec (Pull-ups faltantes) que podrían fallar la inicialización en frío.
+
+## Ejemplo de Uso e Instanciación
+```c
+#include "audio_player.h"
+
+// Durante el arranque del sistema (system_init.c o app_main.c)
+void init_peripherals(void) {
+    // Inicializar Codec y Bus I2S
+    esp_err_t err = audio_player_init();
+    if (err == ESP_OK) {
+        // Reproducir sonido de bienvenida (bloqueante o asíncrono según implementación subyacente)
+        audio_player_play(STARTUP);
+    }
+}
+
+// Más tarde, dentro del lazo de control o monitor de batería
+void check_battery(void) {
+    if (get_battery_level() < 10.0f) {
+        // Lanzar advertencia de batería baja al 80% de volumen máximo
+        audio_player_play_vol(BATTERY_LOW, 80);
+    }
+}
+```

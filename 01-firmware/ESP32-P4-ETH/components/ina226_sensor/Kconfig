@@ -1,0 +1,110 @@
+menu "Luloc-ASTI: 2. Sensors - INA226 Power Monitor"
+
+    config INA226_I2C_PORT
+        int "I2C Port Number"
+        default 0
+        help
+            The I2C port used to communicate with the INA226.
+
+    config INA226_I2C_SDA_PIN
+        int "I2C SDA Pin"
+        default 7
+        help
+            The GPIO mapped to the I2C Data line. 
+            Default 7 for ESP32-P4.
+
+    config INA226_I2C_SCL_PIN
+        int "I2C SCL Pin"
+        default 8
+        help
+            The GPIO mapped to the I2C Clock line.
+
+    config INA226_I2C_CLOCK_SPEED_HZ
+        int "I2C Clock Speed (Hz)"
+        default 400000
+        help
+            I2C Bus speed. Default is 400kHz.
+
+    config INA226_SHUNT_OHMS
+        string "Shunt Resistor Value (Ohms)"
+        default "0.01"
+        help
+            Value of the shunt resistor mounted on the INA226 board.
+            For 4S LiPo with DC motors, 0.01 ohm for high current.
+
+    config INA226_MAX_EXPECTED_AMPS
+        string "Maximum Expected Amps (A)"
+        default "10.0"
+        help
+            Used to calculate the internal LSB scaling for the INA226.
+            For a 4S LiPo robot with 2 DC motors, up to 10A burst is realistic.
+
+    config INA226_POLLING_RATE_HZ
+        int "Polling Rate in LP Task (Hz)"
+        default 5
+        help
+            How many times per second the low-power CPU reads the sensor
+            and updates shared memory.
+
+    config INA226_TELEMETRY_RATE_MS
+        int "MQTT Telemetry Rate (ms)"
+        default 1000
+        help
+            How often the batched data is physically transmitted over MQTT.
+
+    config INA226_MQTT_TOPIC
+        string "MQTT Telemetry Topic"
+        default "robot/telemetry/power"
+        help
+            Topic name for the InfluxDB Line Protocol power payloads.
+
+    menu "Power Alerts (Audible)"
+        config INA226_ALERTS_ENABLED
+            bool "Enable Audible Power Alerts"
+            default y
+            help
+                Enable/Disable the battery low and overcurrent audio alerts.
+
+        config INA226_ALERT_VOLTAGE_THRESHOLD_MV
+            int "Low Voltage Threshold (mV)"
+            default 14000
+            help
+                Alert when battery voltage drops below this value. 
+                For 4S LiPo: 14000mV (3.5V/cell) is a safe warning level.
+
+        config INA226_ALERT_CURRENT_THRESHOLD_MA
+            int "High Current Threshold (mA)"
+            default 8000
+            help
+                Alert when total current consumption exceeds this value.
+                Useful to detect motor stalls or shorts.
+
+        choice INA226_LOW_VOLTAGE_SOUND
+            prompt "Sound for Low Voltage"
+            default INA226_LOW_VOLTAGE_SOUND_BATTERY_LOW
+            depends on INA226_ALERTS_ENABLED
+            help
+                Which sound to play when battery is low.
+
+            config INA226_LOW_VOLTAGE_SOUND_BATTERY_LOW
+                bool "BATTERY_LOW"
+            config INA226_LOW_VOLTAGE_SOUND_STARTUP
+                bool "STARTUP"
+        endchoice
+
+        choice INA226_HIGH_CURRENT_SOUND
+            prompt "Sound for High Current"
+            default INA226_HIGH_CURRENT_SOUND_BATTERY_LOW
+            depends on INA226_ALERTS_ENABLED
+            help
+                Which sound to play when current is high.
+
+            config INA226_HIGH_CURRENT_SOUND_BATTERY_LOW
+                bool "BATTERY_LOW"
+            config INA226_HIGH_CURRENT_SOUND_STARTUP
+                bool "STARTUP"
+        endchoice
+
+    endmenu
+
+endmenu

@@ -1,8 +1,4 @@
-menu "Robot Configuration"
-
-config ROBOT_CONTROL_PERIOD_MS
-    int "Control loop period (ms)"
-    default 10
+menu "Luloc-ASTI: 0. Main Configuration"
 
 config ROBOT_USE_ETHERNET
     bool "Enable Ethernet"
@@ -49,88 +45,43 @@ config ROBOT_USE_ETHERNET
 
 endmenu
 
-menu "ETH Configuration"
-    config EXAMPLE_ETH_DEINIT_AFTER_S
-        int "Stop and deinit Ethernet after elapsing number of secs"
-        range -1 300
-        default -1
+menu "Luloc-ASTI: 1. Follow Line Configuration"
+
+    config FOLLOW_LINE_KP
+        string "Line Follower: Kp (Proportional)"
+        default "1.0"
         help
-            This option is for demonstration purposes only to demonstrate deinitialization of the Ethernet driver.
-            Set to -1 to not deinitialize.
-endmenu
+            Proportional gain for the line follower steering PID.
 
-menu "MQTT Configuration"
-    config BROKER_URL
-        string "Broker URL"
-        default "mqtt://192.168.42.15:51111"
+    config FOLLOW_LINE_KI
+        string "Line Follower: Ki (Integral)"
+        default "0.0"
         help
-            URL of the mqtt broker to which the esp32 will connect
-    
-    config BROKER_URL_FROM_STDIN
-        bool "Read Broker URL from stdin"
-        default n
+            Integral gain for the line follower steering PID.
+
+    config FOLLOW_LINE_KD
+        string "Line Follower: Kd (Derivative)"
+        default "0.1"
         help
-            If this option is enabled, the broker URL can be input via stdin
-endmenu
+            Derivative gain for the line follower steering PID.
 
-menu "Sound Configuration"
-
-    choice EXAMPLE_MODE
-        prompt "Example mode"
-        default EXAMPLE_MODE_MUSIC
+    config FOLLOW_LINE_BASE_SPEED
+        string "Line Follower: Base Speed (m/s)"
+        default "0.4"
         help
-            Select example work mode
+            Default straight-line speed for the robot.
 
-        config EXAMPLE_MODE_MUSIC
-            bool "music"
-    endchoice
-
-    choice EXAMPLE_SELECT_MIC_GAIN
-        prompt "Set MIC gain"
-        depends on EXAMPLE_MODE_ECHO
-        default MIC_GAIN_18DB
+    config FOLLOW_LINE_MAX_SPEED
+        string "Line Follower: Max Speed (m/s)"
+        default "0.8"
         help
-            Select mic gain for echo mode
+            Absolute maximum speed for any motor during steering.
 
-        config MIC_GAIN_0DB
-            bool "0dB"
-        config MIC_GAIN_6DB
-            bool "6dB"
-        config MIC_GAIN_12DB
-            bool "12dB"
-        config MIC_GAIN_18DB
-            bool "18dB"
-        config MIC_GAIN_24DB
-            bool "24dB"
-        config MIC_GAIN_30DB
-            bool "30dB"
-        config MIC_GAIN_36DB
-            bool "36dB"
-        config MIC_GAIN_42DB
-            bool "42dB"
-    endchoice
-
-    config EXAMPLE_MIC_GAIN
-        int
-        default 0 if MIC_GAIN_0DB
-        default 1 if MIC_GAIN_6DB
-        default 2 if MIC_GAIN_12DB
-        default 3 if MIC_GAIN_18DB
-        default 4 if MIC_GAIN_24DB
-        default 5 if MIC_GAIN_30DB
-        default 6 if MIC_GAIN_36DB
-        default 7 if MIC_GAIN_42DB
-
-    config EXAMPLE_VOICE_VOLUME
-        int "Voice volume"
-        range 0 100
-        default 60
+    config FOLLOW_LINE_FF_WEIGHT
+        string "Line Follower: FF Weight (0.0 to 1.0)"
+        default "0.5"
         help
-            Set voice volume
+            Weighting factor for the curvature feed-forward multiplier. 
+            0.0 = Ignore FF, 1.0 = Full application of FF.
 
-    config EXAMPLE_BSP
-        bool "Enable Board Support Package (BSP) support"
-        default n
-        help
-            Use BSP to setup all hardware settings. Specific board must be selected in main/idf_component.yml file.
 endmenu

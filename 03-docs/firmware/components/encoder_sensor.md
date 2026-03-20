@@ -30,3 +30,35 @@ Se consulta cíclicamente (típicamente desde un bucle principal de control) con
 ## Puntos Críticos y Depuración
 - **Pérdida de pulsos:** A velocidades muy altas, los glitches o ruido eléctrico pueden falsear datos del PCNT, arruinando el PID o SLAM. Considerar filtros Glitch por hardware de ESP32.
 - **Desbordamiento numérico (Overflow):** Si el contador base llega a su límite, debe ser reseteado transparentemente o afectará severamente los sumatorios de distancia recorrida.
+
+## Ejemplo de Uso e Instanciación
+```c
+#include "encoder_sensor.h"
+#include "driver/gpio.h"
+
+// 1. Configuración de parámetros físicos del encoder
+encoder_sensor_config_t config_rueda_izq = {
+    .pin_a = GPIO_NUM_4,          // Canal A
+    .pin_b = GPIO_NUM_5,          // Canal B
+    .ppr = 360,                   // Pulsos por revolución pura del encoder
+    .gear_ratio = 34.0f,          // Relación de la caja reductora (ej 34:1)
+    .wheel_diameter_m = 0.065f,   // Diámetro físico de la rueda en metros
+    .reverse = false              // Sentido de giro directo
+};
+
+// 2. Inicialización en la Tarea de Control (ej. task_comms_cpu1.c)
+encoder_sensor_handle_t encoder_izquierdo;
+
+void main_task(void *pvParameters) {
+    encoder_izquierdo = encoder_sensor_init(&config_rueda_izq);
+
+    while (1) {
+        // 3. Extracción de Telemetría pura a ~100Hz
+        float vel_lineal = encoder_sensor_get_speed(encoder_izquierdo);
+        float odometria_total = encoder_sensor_get_distance(encoder_izquierdo);
+
+        // Envío por Telemetría ILP o uso en PID...
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+```

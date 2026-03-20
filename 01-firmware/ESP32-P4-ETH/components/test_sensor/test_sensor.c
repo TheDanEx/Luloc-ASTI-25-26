@@ -14,8 +14,13 @@ static const char *TAG = "test_sensor";
 // Boot time reference (microseconds)
 static int64_t boot_time_us = 0;
 
+// =============================================================================
+// Public API: Lifecycle
+// =============================================================================
+
 /**
- * @brief Initialize test sensor
+ * Initialize the uptime-based virtual sensor.
+ * Captures the boot-time reference using the ESP high-resolution timer.
  */
 esp_err_t test_sensor_init(void)
 {
@@ -24,14 +29,17 @@ esp_err_t test_sensor_init(void)
         return ESP_OK;
     }
 
-    // Get current time as reference point (when ESP booted)
     boot_time_us = esp_timer_get_time();
-    
     return ESP_OK;
 }
 
+// =============================================================================
+// Public API: Data Acquisition
+// =============================================================================
+
 /**
- * @brief Get current sensor reading (uptime)
+ * Perform a full read of the uptime metrics.
+ * Populates millisecond, second, and minute variants for telemetry diversity.
  */
 esp_err_t test_sensor_read(test_sensor_data_t *data)
 {
@@ -44,11 +52,9 @@ esp_err_t test_sensor_read(test_sensor_data_t *data)
         return ESP_FAIL;
     }
 
-    // Calculate elapsed time since boot
     int64_t current_time_us = esp_timer_get_time();
     int64_t elapsed_us = current_time_us - boot_time_us;
 
-    // Convert to different units
     data->uptime_ms = elapsed_us / 1000;
     data->uptime_sec = elapsed_us / 1000000;
     data->uptime_min = (elapsed_us / 1000000) / 60;
@@ -59,9 +65,6 @@ esp_err_t test_sensor_read(test_sensor_data_t *data)
     return ESP_OK;
 }
 
-/**
- * @brief Get uptime in milliseconds
- */
 uint32_t test_sensor_get_uptime_ms(void)
 {
     if (boot_time_us == 0) {
@@ -74,9 +77,6 @@ uint32_t test_sensor_get_uptime_ms(void)
     return (uint32_t)(elapsed_us / 1000);
 }
 
-/**
- * @brief Get uptime in seconds
- */
 uint32_t test_sensor_get_uptime_sec(void)
 {
     if (boot_time_us == 0) {
@@ -89,15 +89,17 @@ uint32_t test_sensor_get_uptime_sec(void)
     return (uint32_t)(elapsed_us / 1000000);
 }
 
+// =============================================================================
+// Public API: Formatting
+// =============================================================================
+
 /**
- * @brief Get uptime as formatted string
+ * Generate a human-readable HH:MM:SS string of the current uptime.
+ * Useful for debugging logs and MQTT status messages.
  */
 const char *test_sensor_get_uptime_str(char *buffer, size_t buffer_size)
 {
-    if (buffer == NULL || buffer_size < 16) {
-        return "ERROR";
-    }
-
+    if (buffer == NULL || buffer_size < 16) return "ERROR";
     if (boot_time_us == 0) {
         snprintf(buffer, buffer_size, "NOT_INITIALIZED");
         return buffer;

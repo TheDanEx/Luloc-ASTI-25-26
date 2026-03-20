@@ -64,11 +64,17 @@ esp_err_t perf_mon_get_task_info_json(char *buffer, size_t max_len);
 esp_err_t perf_mon_update(void);
 
 /**
- * @brief Get the last updated report in JSON format
+ * @brief Get the last updated report in Influx Line Protocol (ILP) format
  * 
- * Format: [{"task":"name", "core":"0", "usage":12.5}, ...]
+ * Generates one line per task and one line per core.
+ * Format: cpu_usage,task=name,core=0 usage=12.5 <timestamp_ns>\n
+ * 
+ * @param buffer Buffer to store ILP string
+ * @param max_len Size of buffer
+ * @param timestamp_ns Timestamp to append to each line
+ * @return ESP_OK on success
  */
-esp_err_t perf_mon_get_report_json(char *buffer, size_t max_len);
+esp_err_t perf_mon_get_report_ilp(char *buffer, size_t max_len, int64_t timestamp_ns);
 
 /**
  * @brief Print the last updated report to console

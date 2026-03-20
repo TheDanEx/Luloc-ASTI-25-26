@@ -12,7 +12,6 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 
-// Components
 #include "mqtt_custom_client.h"
 #include "state_machine.h"
 #include "shared_memory.h"
@@ -22,7 +21,10 @@
 #include "ethernet.h"
 #include "encoder_sensor.h"
 #include "telemetry_manager.h"
-#include "curvature_feedforward.h"
+#include "ina226_sensor.h"
+#include "ina226_sensor.h"
+#include "pid_tuner.h"
+#include "mqtt_api_responder.h"
 #include "driver/gpio.h"
 
 #include "task_comms_cpu1.h"
@@ -36,148 +38,84 @@ static const char *TAG = "comms_c1";
 #define CMD_QUEUE_ITEM_SIZE     256
 #define POLL_INTERVAL_MS        10
 
-// Encoder Configuration
-#define ENC_PIN_A               GPIO_NUM_18
-#define ENC_PIN_B               GPIO_NUM_19
-#define ENC_PPR_MOTOR           11
-#define ENC_WHEEL_DIA_M         0.068f  // 6.3 cm
-#define ENC_GEAR_RATIO          21.3f   // 73:1 reduction
+#define ENCODER_LEFT_PIN_A      33
+#define ENCODER_LEFT_PIN_B      46
+#define ENCODER_RIGHT_PIN_A     27
+#define ENCODER_RIGHT_PIN_B     32
+#define ENCODER_PPR             11
+#define WHEEL_DIAMETER_M        0.068f
+#define GEAR_RATIO              21.3f
 
 // =============================================================================
 // Static Variables
 // =============================================================================
 static QueueHandle_t command_queue = NULL;
 static volatile bool mqtt_initialized = false;
-static encoder_sensor_handle_t encoder_handle = NULL;
+static encoder_sensor_handle_t encoder_left = NULL;
+static encoder_sensor_handle_t encoder_right = NULL;
 
-// Telemetry Handles
 static telemetry_handle_t tel_odometry = NULL;
 static telemetry_handle_t tel_system = NULL;
 
 // =============================================================================
-// Helper Function Prototypes
-// =============================================================================
-static void handle_mqtt_command(const char *cmd_str);
-static void mqtt_cmd_callback(const char *topic, int topic_len, const char *data, int data_len);
-static void collect_sensor_data(void);
-
-// =============================================================================
-// MQTT Callbacks & Command Handling
+// Helper: Data Collection
 // =============================================================================
 
-static void handle_mqtt_command(const char *cmd_str)
+/**
+ * Capture high-frequency metrics from local sensors.
+ * This function handles odometry calculations and system telemetry 
+ * batching before committing points to the asynchronous reporter.
+ */
+static void collect_high_freq_sensor_data(void)
 {
-    int mode_id = -1;
-    int sound_id = 0;
-    int volume = -1;
+    shared_memory_t* shm = shared_memory_get();
 
-    // 1. Mode Change
-    if (strncmp(cmd_str, "CMD_MODE:", 9) == 0) {
-        if (sscanf(cmd_str, "CMD_MODE:%d", &mode_id) == 1) {
-            if (mode_id >= MODE_NONE && mode_id < MODE_COUNT) {
-                if (state_machine_request_mode((robot_mode_t)mode_id)) {
-                    ESP_LOGI(TAG, "Mode changed to: %d", mode_id);
-                    // Events are sporadic, sending manually is fine or could make an event telemetry
-                    char event_json[128];
-                    snprintf(event_json, sizeof(event_json), 
-                            "{\"event\":\"MODE_CHANGE\",\"mode\":%d,\"mode_str\":\"%s\"}", 
-                             mode_id, get_mode_name((robot_mode_t)mode_id));
-                    mqtt_custom_client_publish("robot/events", event_json, 0, 1, 0);
-                } else {
-                    ESP_LOGW(TAG, "Mode change rejected: %d", mode_id);
-                    mqtt_custom_client_publish("robot/events", "{\"error\":\"MODE_CHANGE_REJECTED\"}", 0, 1, 0);
-                }
-            }
-        }
-    } 
-    // 2. Named Modes
-    else if (strncmp(cmd_str, "MODE_AUTONOMOUS", 15) == 0) {
-        state_machine_request_mode(MODE_AUTONOMOUS_PATH);
-    } else if (strncmp(cmd_str, "MODE_REMOTE_DRIVE", 17) == 0) {
-        state_machine_request_mode(MODE_REMOTE_DRIVE);
-    } else if (strncmp(cmd_str, "MODE_TELEMETRY_STREAM", 21) == 0) {
-        state_machine_request_mode(MODE_TELEMETRY_STREAM);
-    } 
-    // 3. Sound
-    else if (strncmp(cmd_str, "CMD_PLAY_SOUND", 14) == 0) {
-        if (sscanf(cmd_str, "CMD_PLAY_SOUND:%d:%d", &sound_id, &volume) == 2) {
-             if (sound_id >= 0 && sound_id < SOUND_MAX) {
-                 audio_player_play_vol((audio_sound_t)sound_id, (uint8_t)volume);
-                 ESP_LOGI(TAG, "Playing sound %d at vol %d", sound_id, volume);
-             }
-        } else if (sscanf(cmd_str, "CMD_PLAY_SOUND:%d", &sound_id) == 1) {
-             if (sound_id >= 0 && sound_id < SOUND_MAX) {
-                 audio_player_play((audio_sound_t)sound_id);
-                 ESP_LOGI(TAG, "Playing sound %d", sound_id);
-             }
-        }
-    } else {
-        ESP_LOGW(TAG, "Unknown command: %s", cmd_str);
-    }
-}
-
-static void mqtt_cmd_callback(const char *topic, int topic_len, const char *data, int data_len)
-{
-    char cmd_str[64] = {0};
-    int copy_len = (data_len < sizeof(cmd_str) - 1) ? data_len : (sizeof(cmd_str) - 1);
-    
-    strncpy(cmd_str, data, copy_len);
-    cmd_str[copy_len] = '\0';
-    
-    ESP_LOGI(TAG, "MQTT Cmd: '%s'", cmd_str);
-    handle_mqtt_command(cmd_str);
-}
-
-// =============================================================================
-// Data Collection
-// =============================================================================
-
-static void collect_sensor_data(void)
-{
-    // 1. Encoder Data (Odometry)
-    if (encoder_handle) {
-        float speed = encoder_sensor_get_speed(encoder_handle);
-        float distance = encoder_sensor_get_distance(encoder_handle);
-        
-        // Push to telemetry: field=val
+    // Wheel Odometry Sync
+    if (encoder_left) {
+        float speed = encoder_sensor_get_speed(encoder_left);
+        float distance = encoder_sensor_get_distance(encoder_left);
         telemetry_add_float(tel_odometry, "velIZ", speed);
         telemetry_add_float(tel_odometry, "posIZ", distance);
         
-        // Also print to serial for offline debugging
-        ESP_LOGI(TAG, "Encoder: speed=%.3f m/s, distance=%.3f m", speed, distance);
+        xSemaphoreTake(shm->mutex, portMAX_DELAY);
+        shm->sensors.motor_speed_left = speed;
+        shm->sensors.motor_distance_left = distance;
+        xSemaphoreGive(shm->mutex);
     }
 
-    // 2. System Data
-    test_sensor_data_t sensor_data;
-    if (test_sensor_read(&sensor_data) == ESP_OK) {
-        telemetry_add_int(tel_system, "uptime_sec", sensor_data.uptime_sec);
-        telemetry_add_int(tel_system, "uptime_ms", sensor_data.uptime_ms);
+    if (encoder_right) {
+        float speed = encoder_sensor_get_speed(encoder_right);
+        float distance = encoder_sensor_get_distance(encoder_right);
+        telemetry_add_float(tel_odometry, "velDR", speed);
+        telemetry_add_float(tel_odometry, "posDR", distance);
+        
+        xSemaphoreTake(shm->mutex, portMAX_DELAY);
+        shm->sensors.motor_speed_right = speed;
+        shm->sensors.motor_distance_right = distance;
+        xSemaphoreGive(shm->mutex);
     }
 
-    if (curvature_feedforward_has_value()) {
-        telemetry_add_float(tel_system, "curvatura_ff", curvature_feedforward_get_value());
+    if (encoder_left || encoder_right) {
+        telemetry_commit_point(tel_odometry);
     }
-    
-    // 3. Performance Data
-    // Perf mon generates its own complex report, but we could add summary metrics here
-    // or keep using its internal json reporter if complex nested data is needed.
-    // For Influx, flat fields are better.
-    if (perf_mon_update() == ESP_OK) {
-        // Example: telemetry_add_float(tel_system, "cpu0_usage", perf_val);
+
+    // System Metrics & State
+    test_sensor_data_t sys_data;
+    if (test_sensor_read(&sys_data) == ESP_OK) {
+        telemetry_add_int(tel_system, "uptime_sec", sys_data.uptime_sec);
+        telemetry_add_int(tel_system, "uptime_ms", sys_data.uptime_ms);
+        telemetry_commit_point(tel_system);
     }
 }
 
 // =============================================================================
-// Public API
+// Public API: Lifecycle
 // =============================================================================
 
 void task_comms_cpu1_init_queue(void)
 {
     if (command_queue == NULL) {
         command_queue = xQueueCreate(CMD_QUEUE_SIZE, CMD_QUEUE_ITEM_SIZE);
-        if (command_queue == NULL) {
-            ESP_LOGE(TAG, "Failed to create command queue");
-        }
     }
 }
 
@@ -192,96 +130,112 @@ bool task_comms_cpu1_is_ready(void)
 }
 
 // =============================================================================
-// Main Task
+// Main Task Implementation
 // =============================================================================
 
+/**
+ * Communications and Telemetry Hub (CPU 1).
+ * Responsibilities:
+ * 1. Maintain MQTT connectivity and topic subscriptions.
+ * 2. Manage high-level responders (API, PID Tuning).
+ * 3. Sample and batch high-frequency sensor telemetry (Odometry).
+ * 4. Coordinate inter-core command routing.
+ */
 static void task_comms_cpu1(void *arg)
 {
-    // 1. Initialization
     task_comms_cpu1_init_queue();
-    ESP_LOGI(TAG, "Comms task started, waiting for Ethernet link...");
-
+    
+    // Block until network is physically ready
     while (!ethernet_is_connected()) {
         vTaskDelay(pdMS_TO_TICKS(500));
     }
-    ESP_LOGI(TAG, "Ethernet connected. Initializing subsystems...");
 
-    // MQTT
+    // Initialize MQTT Client
     if (mqtt_custom_client_init() != ESP_OK) {
-        ESP_LOGE(TAG, "FATAL: MQTT Init Failed");
+        ESP_LOGE(TAG, "MQTT client initialization failed");
         mqtt_initialized = false;
         vTaskDelete(NULL);
     }
     mqtt_initialized = true;
 
-    // Encoder
-    encoder_sensor_config_t enc_config = {
-        .pin_a = ENC_PIN_A,
-        .pin_b = ENC_PIN_B,
-        .ppr = ENC_PPR_MOTOR,
-        .wheel_diameter_m = ENC_WHEEL_DIA_M,
-        .gear_ratio = ENC_GEAR_RATIO,
+    // Initialize Wheel Encoders
+    encoder_sensor_config_t enc_l_cfg = {
+        .pin_a = ENCODER_LEFT_PIN_A,
+        .pin_b = ENCODER_LEFT_PIN_B,
+        .ppr = ENCODER_PPR,
+        .wheel_diameter_m = WHEEL_DIAMETER_M,
+        .gear_ratio = GEAR_RATIO,
         .reverse_direction = false
     };
-    encoder_handle = encoder_sensor_init(&enc_config);
-    if (!encoder_handle) {
-        ESP_LOGE(TAG, "Failed to init Encoder Sensor");
-    }
+    encoder_left = encoder_sensor_init(&enc_l_cfg);
 
-    // Performance Monitor
+    encoder_sensor_config_t enc_r_cfg = {
+        .pin_a = ENCODER_RIGHT_PIN_A,
+        .pin_b = ENCODER_RIGHT_PIN_B,
+        .ppr = ENCODER_PPR,
+        .wheel_diameter_m = WHEEL_DIAMETER_M,
+        .gear_ratio = GEAR_RATIO,
+        .reverse_direction = false
+    };
+    encoder_right = encoder_sensor_init(&enc_r_cfg);
+
     perf_mon_init();
-
-    // Setup Telemetries (InfluxDB Line Protocol)
-    // Topic: robot/odometry, Measurement: odometry, Interval: 5000ms
-    tel_odometry = telemetry_create("robot/odometry", "odometry", 5000);
     
-    // Topic: robot/telemetry, Measurement: system, Interval: 5000ms
-    tel_system = telemetry_create("robot/telemetry", "system", 5000);
+    // Setup Telemetry Batches
+    tel_odometry = telemetry_create("robot/telemetry/odometry", "odometry", 5000);
+    tel_system   = telemetry_create("robot/telemetry/system", "system", 5000);
 
-    // Subscriptions
     vTaskDelay(pdMS_TO_TICKS(1000)); 
-    mqtt_custom_client_subscribe("robot/cmd", 1);
-    mqtt_custom_client_register_topic_callback("robot/cmd", mqtt_cmd_callback);
-    curvature_feedforward_register_callback();
-    curvature_feedforward_subscribe();
+    
+    // Register Asynchronous Responders
+    pid_tuner_init();
+    pid_tuner_register_callback();
+    pid_tuner_subscribe();
+    mqtt_api_responder_init();
+    mqtt_api_responder_subscribe();
 
-    ESP_LOGI(TAG, "Comms Task Running on Core %d", xPortGetCoreID());
-
-    // 2. Main Loop
-    TickType_t last_sample_time = 0;
-    const TickType_t sample_interval_ticks = pdMS_TO_TICKS(1000); // 1s sampling rate
+    TickType_t last_sampling_tick = 0;
+    bool last_mqtt_conn = false;
 
     while(1) {
-        TickType_t now = xTaskGetTickCount();
+        TickType_t current_tick = xTaskGetTickCount();
 
-        // Process Commands
-        uint8_t command_buffer[CMD_QUEUE_ITEM_SIZE];
-        if (xQueueReceive(command_queue, command_buffer, 0) == pdTRUE) {
-            ESP_LOGI(TAG, "Inter-core msg: %s", (char*)command_buffer);
+        // 1. MQTT Connectivity Sync
+        bool current_mqtt_conn = mqtt_custom_client_is_connected();
+        if (current_mqtt_conn != last_mqtt_conn) {
+            state_machine_notify_mqtt_status(current_mqtt_conn);
+            last_mqtt_conn = current_mqtt_conn;
         }
 
-        // Sampling (Push data to telemetry buffers)
-        // Note: Telemetries will flush asynchronously on their own timer
-        if ((now - last_sample_time) >= sample_interval_ticks) {
+        // 2. Inter-core Command Handling
+        uint8_t intercore_msg[CMD_QUEUE_ITEM_SIZE];
+        if (xQueueReceive(command_queue, intercore_msg, 0) == pdTRUE) {
+            ESP_LOGI(TAG, "Inter-core message: %s", (char*)intercore_msg);
+        }
+
+        // 3. Periodic Sampling Loop (1Hz)
+        if ((current_tick - last_sampling_tick) >= pdMS_TO_TICKS(1000)) {
              if (mqtt_custom_client_is_connected()) {
                  shared_memory_set_mqtt_connected(true);
-                 if (curvature_feedforward_subscribe() != ESP_OK) {
-                     // Keep retrying silently while broker/client stabilizes.
-                 }
+                 // Resubscribe if connection was dropped and restored
+                 pid_tuner_subscribe();
+                 mqtt_api_responder_subscribe();
              } else {
                  shared_memory_set_mqtt_connected(false);
              }
-
-             collect_sensor_data();
-             last_sample_time = now;
+             collect_high_freq_sensor_data();
+             last_sampling_tick = current_tick;
         }
 
         vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));
     }
 }
 
+// =============================================================================
+// Task Start Wrapper
+// =============================================================================
+
 void task_comms_cpu1_start(void)
 {
-    // Core 1, Priority 5
     xTaskCreatePinnedToCore(task_comms_cpu1, "comms_cpu1", 8192, NULL, 10, NULL, 1);
 }

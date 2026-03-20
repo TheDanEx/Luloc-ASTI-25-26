@@ -49,9 +49,9 @@ void state_machine_notify_mqtt_status(bool connected);
 
 /**
  * Request state transition to new mode
- * Returns true if transition allowed, false if blocked
+ * Returns true if transition allowed (or forced), false if blocked
  */
-bool state_machine_request_mode(robot_mode_t new_mode);
+bool state_machine_request_mode(robot_mode_t new_mode, bool force);
 
 /**
  * Get current state context

@@ -7,8 +7,13 @@ Agente puente ultra-ligero actuando como ETL en tiempo real (Extracción, Transf
 Depende estrictamente de múltiples orígenes: Ficheros de configuración locales montados `05-telemetry/telegraf:/etc/telegraf` (ro), scripts dinámicos, lectura agresiva de `/sys/class/thermal` del Host para reportar calor propio. Y lo más vital: sólo inicia si el Healthcheck de InfluxDB devuelve `service_healthy`.
 
 ## Interfaces de E/S (Inputs/Outputs)
-- **Hardware:** Volumen mapeado crudo hacia los registros térmicos internos de CPU de Raspberry Pi o SBC (`/sys/class/thermal`).
-- **Software:** Subscriptor silente total en Mosquitto, Ingestor agresivo a través del end-point HTTP Batch de InfluxDB `8086` mediante el Token Secreto.
+- **Hardware:** Volumen mapeado hacia `/sys/class/thermal` del Host.
+- **Software (MQTT Inputs):**
+  - `robot/telemetry/#`: Formato **Influx Line Protocol (ILP)** con precisión de nanosegundos (19 dígitos).
+  - `robot/events`: Formato **JSON** para eventos críticos.
+  - `robot/logs/#`: Formato **JSON** para logs remotos estructurados.
+  - `robot/performance`: Formato JSON (Legacy/Task stats).
+- **Software (Outputs):** Ingestor agresivo hacia InfluxDB `8086` mediante el API v2 Batch.
 
 ## Flujo de Ejecución Lógico
 Dependiendo del plugin habilitado en su `telegraf.conf` escondido en la carpeta montada, el demonio arranca y captura todos los tópicos relevantes de `robot/#`. Intercepta los strings en crudo con su Input MQTT, los agiliza en memoria y cada ciclo de milisegundos (`TELEGRAF_COLLECTION_INTERVAL`) formatea todo al protocolo de línea de Influx e inserta ráfagas TCP sobre el puerto 8086 limitando la apertura de transacciones por evento evitando ahogamientos.

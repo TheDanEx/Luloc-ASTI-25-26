@@ -22,3 +22,38 @@ Evaluación continua. Cada bucle maestro llama a `update()`. Internamente si "AU
 
 ## Puntos Críticos y Depuración
 - **Loop Irrecuperable en "ERROR":** Transición abrupta forzada si se pierde la red en pleno movimiento. Depurar esto es vital: al reactivarse el MQTT no debe saltar disparado (el "Heartbeat / Timeout" de comandos ha de caducar antes u ocasionará accidentes por comandos retenidos / retransmitidos en rediseños). No requiere intervenciones pero debe ser bien documentado en frontends.
+
+## Ejemplo de Uso e Instanciación
+```c
+#include "state_machine.h"
+
+// 1. Inicialización en el arranque temprano
+void system_boot(void) {
+    state_machine_init(); // Set a estado INIT y relojes a 0
+}
+
+// 2. Evento red - Desde la Tarea MQTT o Ethernet (Core 1)
+void on_mqtt_connect(void) {
+    state_machine_notify_mqtt_status(true);
+    // Solicitamos entrar en modo teleoperado
+    state_machine_request_mode(MODE_REMOTE_CONTROLLED);
+}
+
+// 3. Bucle de Control PID (Core 0)
+void pid_task(void *pvParameters) {
+    while(1) {
+        // Cómputo constante de transiciones y Timeouts
+        robot_state_t actual = state_machine_update();
+
+        // Validar seguridad perimetral antes de activar PWM Motores
+        if (actual == STATE_ERROR) {
+            motor_mcpwm_brake(drv_motores); // Fallo de red, detención absoluta
+        } else if (actual == STATE_REMOTE_CONTROLLED || state_machine_is_autonomous_safe()) {
+            // El robot tiene permitida la movilidad.
+            execute_pid_loop();
+        }
+        
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+```
