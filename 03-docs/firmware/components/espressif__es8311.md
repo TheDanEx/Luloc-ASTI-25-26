@@ -29,3 +29,34 @@ Se configura en el arranque tras levantar los buses del ESP32. Debe mandarse una
 ## Puntos Críticos y Depuración
 - **Reloj Inestable:** Todo sonido dependerá enteramente de la pureza de MCLK generado. Si ESP-IDF o el software cambian las divisiones APLL dinámicamente, generarán chasquidos, agudos, o caídas completas del audio (silencio total o Under-run repetitivo).
 - **Dirección I2C Externa:** El ES8311 tiene pines de "Chip Enable" que varían la dirección de I2C. Mal alambrado bloqueará completamente el componente sin mostrar actividad I2C.
+
+## Ejemplo de Uso e Instanciación
+```c
+#include "espressif__es8311.h"
+
+// Dentro del inicializador de audio maestro (ej. en audio_player.c)
+void startup_audio_codec(void) {
+    // 1. Instanciar manejador apuntando al BUS I2C 0 y la dirección esclava del ES8311
+    es8311_handle_t es8311_dev = es8311_create(I2C_NUM_0, ES8311_ADDRRES_0);
+    
+    // 2. Configurar relojes I2S que estamos inyectando
+    es8311_clock_config_t clk_cfg = {
+        .mclk_from_mclk_pin = true,
+        .mclk_inverted = false,
+        .sclk_inverted = false,
+        .sample_frequency = 44100 // Calidad CD estandar
+    };
+
+    // 3. Inicializar hardware internamente vía I2C (16 bits In/Out)
+    es_err_t err = es8311_init(es8311_dev, &clk_cfg, ES8311_RESOLUTION_16, ES8311_RESOLUTION_16);
+    
+    if (err == ES_OK) {
+        // Poner el volumen de los altavoces a un 70%
+        int vol_real;
+        es8311_voice_volume_set(es8311_dev, 70, &vol_real);
+        
+        // Quitar mute y dejar pasar el tráfico DMA I2S directo a los altavoces
+        es8311_voice_mute(es8311_dev, false);
+    }
+}
+```

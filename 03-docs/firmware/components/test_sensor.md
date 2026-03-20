@@ -22,3 +22,32 @@ Funciona independientemente pidiendo valores pasivos no-bloqueantes cada vez que
 
 ## Puntos Críticos y Depuración
 - Prácticamente exento de fallos. El uso de `esp_timer_get_time()` previene desbordamientos de 32 bits tradicionales en `delay()` de Arduino (Tardaría centurias en sobrepasar los 64bits reales).
+
+## Ejemplo de Uso e Instanciación
+```c
+#include "test_sensor.h"
+#include "esp_log.h"
+
+// 1. Tarea de diagnóstico de Vida (Heartbeat) - Core 0 o 1
+void system_vitality_task(void *pvParameters) {
+    // Inicializar reloj subyacente si no estaba arrancado
+    test_sensor_init();
+    
+    char buffer_tiempo[32];
+    test_sensor_data_t datos_tiempo;
+
+    while(1) {
+        // Retraso de 1 minuto
+        vTaskDelay(pdMS_TO_TICKS(60000));
+
+        // 2. Extraer formateado crudo en structs
+        test_sensor_read(&datos_tiempo);
+
+        // 3. Extraer visualmente
+        test_sensor_get_uptime_str(buffer_tiempo, sizeof(buffer_tiempo));
+
+        ESP_LOGI("HEARTBEAT", "El robot sigue vivo. Uptime: %s (Total: %llu MS)", 
+                 buffer_tiempo, datos_tiempo.milliseconds);
+    }
+}
+```

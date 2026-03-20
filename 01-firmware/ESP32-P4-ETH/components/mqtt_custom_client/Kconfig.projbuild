@@ -1,15 +1,8 @@
-menu "MQTT Custom Client Configuration"
+menu "Luloc-ASTI: 1. Communications - MQTT Client"
     config BROKER_URL
         string "Broker URL"
         default "mqtt://192.168.42.15:51111"
         help
             URL of the mqtt broker to which the esp32 will connect.
             Format: mqtt://host:port or mqtts://host:port for TLS
-    
-    config BROKER_URL_FROM_STDIN
-        bool "Read Broker URL from stdin"
-        default n
-        help
-            If this option is enabled, the broker URL can be input via stdin.
-            Useful for testing different brokers without recompilation.
 endmenu

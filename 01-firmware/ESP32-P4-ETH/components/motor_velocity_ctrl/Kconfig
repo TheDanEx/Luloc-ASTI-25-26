@@ -1,0 +1,72 @@
+menu "Luloc-ASTI: 3. Control & Motors - Motor Velocity"
+
+    config VELOCITY_CTRL_DEFAULT_KP
+        string "Default Proportional Gain (Kp)"
+        default "0.5"
+
+    config VELOCITY_CTRL_DEFAULT_KI
+        string "Default Integral Gain (Ki)"
+        default "0.1"
+
+    config VELOCITY_CTRL_DEFAULT_KD
+        string "Default Derivative Gain (Kd)"
+        default "0.05"
+
+    config VELOCITY_CTRL_MAX_BATTERY_MV
+        string "Reference Max Battery Voltage (mV)"
+        default "16800.0"
+        help
+            Used for feed-forward calculations. For a 4S Lipo this is 16800mV.
+            If the battery drops to 14V, the controller will automatically boost
+            the base PWM to match the performance of a 16.8V battery.
+
+    menu "Live Calibration Sweeper"
+        config VELOCITY_CTRL_SWEEP_SPEED_1
+            string "Sweep Target Speed 1 (m/s)"
+            default "0.5"
+            help
+                First speed step injected when MODE_CALIBRATE_MOTORS is active.
+
+        config VELOCITY_CTRL_SWEEP_SPEED_2
+            string "Sweep Target Speed 2 (m/s)"
+            default "-0.5"
+            help
+                Second alternating speed step. Can be negative for reverse testing.
+
+        config VELOCITY_CTRL_SWEEP_TIME_MS
+            int "Sweep Step Duration (ms)"
+            default 3000
+            help
+                Time in milliseconds each speed step is maintained before swapping.
+    endmenu
+
+    config VELOCITY_CTRL_MAX_MOTOR_SPEED_MS
+        string "Max Motor Speed (m/s) at Max Battery Voltage"
+        default "1.5"
+        help
+            Theoretical or measured linear speed (m/s) the robot reaches when 
+            exactly Max Battery Voltage (e.g. 16800mV) is applied at 100% PWM.
+            This builds the Feed-Forward map.
+
+    config VEL_CTRL_DEADBAND_V
+        string "Motor Deadband Voltage (V)"
+        default "1.2"
+        help
+            Minimum voltage required to overcome static friction and start moving.
+            This is added as an offset to the controller output.
+
+    config VEL_CTRL_ACCEL_LIMIT
+        string "Acceleration Limit (m/s^2)"
+        default "2.0"
+        help
+            Maximum allowed change in target speed per second to protect motors 
+            and reduce current spikes.
+
+    config VEL_CTRL_EMA_ALPHA
+        string "Encoder EMA Filter Alpha (0.0 - 1.0)"
+        default "0.3"
+        help
+            Smoothing factor for the encoder speed. 
+            lower = smoother/delayed, higher = noisier/faster.
+
+endmenu

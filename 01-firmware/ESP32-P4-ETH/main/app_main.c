@@ -9,19 +9,32 @@
 #include "task_comms_cpu1.h"
 #include "task_monitor_lowpower_cpu1.h"
 
+// =============================================================================
+// Application Entry Point
+// =============================================================================
+
+/**
+ * Main entrance to the Lurloc firmware.
+ * Responsibilities:
+ * 1. Initialize low-level system services.
+ * 2. Launch concurrent RTOS tasks pinned to specific cores.
+ */
 void app_main(void)
 {
+    // Initialize shared services, network and hardware drivers
     system_init();
 
+    // Start communication task on CPU 1 (handles MQTT, logs, etc)
     task_comms_cpu1_start();
     printf("[CPU%d] %-40s [ OK ]\n", 1, "Started Comms Task");
 
     vTaskDelay(pdMS_TO_TICKS(100));
 
+    // Start real-time control loop on CPU 0 (PID, Sensors, Odometry)
     task_rtcontrol_cpu0_start();
     printf("[CPU%d] %-40s [ OK ]\n", 0, "Started RT Control");
 
-    // Secondary monitor task: keep disabled unless needed.
-    // task_monitor_lowpower_cpu1_start();
-    // printf("[CPU%d] %-40s [ OK ]\n", 1, "Started Monitor Task");
+    // Start monitoring and safety task on CPU 1
+    task_monitor_lowpower_cpu1_start();
+    printf("[CPU%d] %-40s [ OK ]\n", 1, "Started Monitor Task");
 }

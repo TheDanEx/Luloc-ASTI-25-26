@@ -12,13 +12,23 @@
  */
 
 typedef struct {
-    // Sensor data from CPU0 (motor, encoder, etc.)
-    float motor_speed;          // RPM or rad/s
-    float motor_current;        // mA
-    float battery_voltage;      // mV
-    float temperature;          // °C
-    int32_t encoder_count;      // Ticks
-    uint32_t timestamp_ms;      // Local timestamp
+    // Sensor data (motor, encoder, etc.)
+    float motor_speed_left;      // m/s
+    float motor_speed_right;     // m/s
+    float motor_distance_left;   // m
+    float motor_distance_right;  // m
+    
+    float robot_current;         // mA
+    float battery_voltage;       // mV
+    float temperature;           // °C
+    
+    // Line Sensor
+    bool  line_detected;
+    float line_position;         // Normalize or meters
+    
+    int32_t encoder_count_left;  // Ticks
+    int32_t encoder_count_right; // Ticks
+    uint32_t timestamp_ms;       // Local timestamp
 } robot_sensor_data_t;
 
 typedef struct {
@@ -30,9 +40,27 @@ typedef struct {
 } robot_command_t;
 
 typedef struct {
+    float target_speed_left;
+    float target_speed_right;
+    uint32_t last_update_ms;
+} shared_teleop_config_t;
+
+typedef struct {
+    float kp;
+    float ki;
+    float kd;
+    bool updated_flag;
+} shared_pid_config_t;
+
+typedef struct {
     // Core shared state
     robot_sensor_data_t sensors;
     robot_command_t last_command;
+    
+    shared_teleop_config_t teleop;     // Teleoperation targets
+    shared_pid_config_t motor_pids[2]; // 0=Left, 1=Right
+    uint8_t calibration_motor_mask;    // bitmask: 1=Left, 2=Right, 3=Both
+
     uint32_t heartbeat_cpu0;    // CPU0 heartbeat counter
     uint32_t heartbeat_cpu1;    // CPU1 heartbeat counter
     bool cpu0_alive;

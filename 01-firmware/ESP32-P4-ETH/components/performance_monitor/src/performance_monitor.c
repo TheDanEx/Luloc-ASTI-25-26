@@ -193,19 +193,23 @@ void perf_mon_print_report(void)
     printf("\n");
 }
 
-esp_err_t perf_mon_get_report_json(char *buffer, size_t max_len)
+esp_err_t perf_mon_get_report_ilp(char *buffer, size_t max_len, int64_t timestamp_ns)
 {
     if (buffer == NULL || max_len == 0) return ESP_ERR_INVALID_ARG;
     if (s_records == NULL) {
-        snprintf(buffer, max_len, "[]");
+        buffer[0] = '\0';
         return ESP_OK;
     }
 
     size_t offset = 0;
-    int written = snprintf(buffer + offset, max_len - offset, "[");
-    if (written < 0 || (size_t)written >= max_len - offset) return ESP_FAIL;
-    offset += written;
+    
+#ifdef CONFIG_TELEMETRY_ROBOT_NAME
+    const char *robot_name = CONFIG_TELEMETRY_ROBOT_NAME;
+#else
+    const char *robot_name = "unknown";
+#endif
 
+    // 1. Individual Task Stats
     for (size_t i = 0; i < s_record_count; i++) {
         char core_str[12];
         int cid = s_records[i].core_id;
@@ -215,43 +219,25 @@ esp_err_t perf_mon_get_report_json(char *buffer, size_t max_len)
         else if (cid == -1 || cid == 2147483647) strcpy(core_str, "ANY");
         else snprintf(core_str, sizeof(core_str), "%d", cid);
 
-        written = snprintf(buffer + offset, max_len - offset, 
-                           "{\"task\":\"%s\",\"core\":\"%s\",\"usage\":%.1f}",
-                           s_records[i].name, core_str, s_records[i].usage_pct);
+        int written = snprintf(buffer + offset, max_len - offset, 
+                               "cpu_usage,task=%s,core=%s,robot=%s usage=%.1f %lld\n",
+                               s_records[i].name, core_str, robot_name, s_records[i].usage_pct, timestamp_ns);
         
         if (written < 0 || (size_t)written >= max_len - offset) break;
         offset += written;
-
-        if (i < s_record_count - 1) {
-            written = snprintf(buffer + offset, max_len - offset, ",");
-            if (written < 0 || (size_t)written >= max_len - offset) break;
-            offset += written;
-        }
     }
 
-    // Append Total CPU Load Summaries
+    // 2. Global Core Summaries
     if (offset < max_len - 1) {
-        // Add comma after last task
-        if (s_record_count > 0) {
-            written = snprintf(buffer + offset, max_len - offset, ",");
-            if (written > 0) offset += written;
-        }
-
-        // TOTAL_CPU0
-        written = snprintf(buffer + offset, max_len - offset, 
-                           "{\"task\":\"CPU0\",\"core\":\"0\",\"usage\":%.1f},",
-                           100.0f - s_core0_idle);
-        if (written > 0) offset += written;
-
-        // TOTAL_CPU1 (no trailing comma)
-        written = snprintf(buffer + offset, max_len - offset, 
-                           "{\"task\":\"CPU1\",\"core\":\"1\",\"usage\":%.1f}",
-                           100.0f - s_core1_idle);
+        int written = snprintf(buffer + offset, max_len - offset, 
+                               "cpu_usage,task=TOTAL_CPU0,core=0,robot=%s usage=%.1f %lld\n"
+                               "cpu_usage,task=TOTAL_CPU1,core=1,robot=%s usage=%.1f %lld\n",
+                               robot_name, 100.0f - s_core0_idle, timestamp_ns,
+                               robot_name, 100.0f - s_core1_idle, timestamp_ns);
         if (written > 0) offset += written;
     }
 
-    if (offset < max_len - 1) {
-        buffer[offset++] = ']';
+    if (offset < max_len) {
         buffer[offset] = '\0';
     } else {
         buffer[max_len - 1] = '\0';

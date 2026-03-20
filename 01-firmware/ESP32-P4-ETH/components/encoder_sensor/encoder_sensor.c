@@ -40,13 +40,14 @@ typedef struct {
     bool is_initialized;
 } encoder_sensor_context_t;
 
-/* =============================================================================
- * INTERNAL HELPER FUNCTIONS
- * ========================================================================== */
+// =============================================================================
+// Internal Helpers
+// =============================================================================
 
 /**
- * @brief Reads the hardware 16-bit PCNT counter and accumulates the delta into 
- *        the 64-bit software counter to prevent overflow.
+ * Sync software accumulator with hardware counter.
+ * Reads the 16-bit PCNT hardware register and adds the delta to a 64-bit 
+ * software counter to prevent overflow and handle direction switching.
  */
 static void update_distance_accumulator(encoder_sensor_context_t *ctx)
 {
@@ -63,10 +64,14 @@ static void update_distance_accumulator(encoder_sensor_context_t *ctx)
     ctx->last_hardware_pcnt_value = current_hardware_value;
 }
 
-/* =============================================================================
- * PUBLIC API IMPLEMENTATION
- * ========================================================================== */
+// =============================================================================
+// Public API: Lifecycle
+// =============================================================================
 
+/**
+ * Initialize a new quadrature encoder instance using the ESP32 Pulse Counter (PCNT).
+ * This configuration uses X4 decoding (counting both edges of both A and B phases).
+ */
 encoder_sensor_handle_t encoder_sensor_init(const encoder_sensor_config_t *config)
 {
     if (config == NULL) return NULL;
@@ -76,10 +81,10 @@ encoder_sensor_handle_t encoder_sensor_init(const encoder_sensor_config_t *confi
 
     memcpy(&ctx->config, config, sizeof(encoder_sensor_config_t));
     
-    ESP_LOGI(TAG, "Initializing PCNT-Only Encoder: Pins A=%d, B=%d, PPR=%d", 
+    ESP_LOGI(TAG, "Initializing PCNT Encoder: Pins A=%d, B=%d, PPR=%d", 
              config->pin_a, config->pin_b, config->ppr);
 
-    // 0. Base GPIO Configuration
+    // GPIO Config: High-impedance inputs for the encoder signals
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << config->pin_a) | (1ULL << config->pin_b),
         .mode = GPIO_MODE_INPUT,
@@ -89,7 +94,7 @@ encoder_sensor_handle_t encoder_sensor_init(const encoder_sensor_config_t *confi
     };
     gpio_config(&io_conf);
 
-    // 1. PCNT Configuration (Quadrature X4)
+    // Initializate PCNT unit
     pcnt_unit_config_t unit_config = {
         .high_limit = 32767,
         .low_limit = -32768,
@@ -102,7 +107,7 @@ encoder_sensor_handle_t encoder_sensor_init(const encoder_sensor_config_t *confi
     pcnt_chan_config_t chan_b_config = {.edge_gpio_num = config->pin_b, .level_gpio_num = config->pin_a};
     ESP_ERROR_CHECK(pcnt_new_channel(ctx->pcnt_unit, &chan_b_config, &ctx->pcnt_chan_b));
 
-    // Configure standard quadrature decoding
+    // Configure Quadrature X4 decoding actions
     pcnt_channel_set_edge_action(ctx->pcnt_chan_a, PCNT_CHANNEL_EDGE_ACTION_DECREASE, PCNT_CHANNEL_EDGE_ACTION_INCREASE);
     pcnt_channel_set_level_action(ctx->pcnt_chan_a, PCNT_CHANNEL_LEVEL_ACTION_KEEP, PCNT_CHANNEL_LEVEL_ACTION_INVERSE);
     pcnt_channel_set_edge_action(ctx->pcnt_chan_b, PCNT_CHANNEL_EDGE_ACTION_INCREASE, PCNT_CHANNEL_EDGE_ACTION_DECREASE);
@@ -112,7 +117,6 @@ encoder_sensor_handle_t encoder_sensor_init(const encoder_sensor_config_t *confi
     pcnt_unit_clear_count(ctx->pcnt_unit);
     pcnt_unit_start(ctx->pcnt_unit);
 
-    // Initialize speed tracking timestamps
     ctx->last_speed_time_us = esp_timer_get_time();
     ctx->last_speed_distance_counts = 0;
 
@@ -120,6 +124,9 @@ encoder_sensor_handle_t encoder_sensor_init(const encoder_sensor_config_t *confi
     return (encoder_sensor_handle_t)ctx;
 }
 
+/**
+ * Clean up hardware resources and free memory.
+ */
 esp_err_t encoder_sensor_deinit(encoder_sensor_handle_t handle)
 {
     if (handle == NULL) return ESP_ERR_INVALID_ARG;
@@ -135,6 +142,14 @@ esp_err_t encoder_sensor_deinit(encoder_sensor_handle_t handle)
     return ESP_OK;
 }
 
+// =============================================================================
+// Public API: Metrics
+// =============================================================================
+
+/**
+ * Get total distance traveled in meters.
+ * Performs physical conversion using wheel diameter and gear ratio.
+ */
 float encoder_sensor_get_distance(encoder_sensor_handle_t handle)
 {
     if (handle == NULL) return 0.0f;
@@ -153,6 +168,9 @@ float encoder_sensor_get_distance(encoder_sensor_handle_t handle)
     return (float)(wheel_revolutions * M_PI * ctx->config.wheel_diameter_m);
 }
 
+/**
+ * Reset horizontal travel counter.
+ */
 esp_err_t encoder_sensor_reset_distance(encoder_sensor_handle_t handle)
 {
     if (handle == NULL) return ESP_ERR_INVALID_ARG;
@@ -161,13 +179,17 @@ esp_err_t encoder_sensor_reset_distance(encoder_sensor_handle_t handle)
     update_distance_accumulator(ctx);
     ctx->accumulated_distance_counts = 0;
     
-    // Reset speed trackers so the next speed calculation doesn't jump
+    // Prevent speed spike on next calculation
     ctx->last_speed_distance_counts = 0;
     ctx->last_speed_time_us = esp_timer_get_time();
     
     return ESP_OK;
 }
 
+/**
+ * Get current angular velocity converted to linear speed (m/s).
+ * Uses a time-delta approach for precision.
+ */
 float encoder_sensor_get_speed(encoder_sensor_handle_t handle)
 {
     if (handle == NULL) return 0.0f;
@@ -179,7 +201,6 @@ float encoder_sensor_get_speed(encoder_sensor_handle_t handle)
     
     int64_t delta_time_us = current_time_us - ctx->last_speed_time_us;
     
-    // Prevent division by zero or too high frequency calls causing precision issues
     if (delta_time_us <= 0) {
         return 0.0f;
     }
@@ -191,7 +212,7 @@ float encoder_sensor_get_speed(encoder_sensor_handle_t handle)
     
     double elapsed_time_seconds = (double)delta_time_us / 1000000.0;
     
-    // Convert counts to meters
+    // Convert pulses to distance
     double counts_per_motor_revolution = (double)(ctx->config.ppr * 4);
     double motor_revolutions = (double)delta_counts / counts_per_motor_revolution;
     
@@ -202,6 +223,6 @@ float encoder_sensor_get_speed(encoder_sensor_handle_t handle)
 
     double distance_meters = wheel_revolutions * M_PI * ctx->config.wheel_diameter_m;
     
-    // Velocity = distance / time
+    // V = d / t
     return (float)(distance_meters / elapsed_time_seconds);
 }

@@ -1,0 +1,24 @@
+menu "Luloc-ASTI: 1. Communications - MQTT API Responder"
+
+    config MQTT_API_GET_TOPIC
+        string "MQTT Subscription Topic for API Requests (GET)"
+        default "robot/api/get"
+        help
+            The component subscribes to this topic to receive JSON queries
+            e.g. {"resource": "battery"}
+
+    config MQTT_API_SET_TOPIC
+        string "MQTT Subscription Topic for API Commands (SET)"
+        default "robot/api/set"
+        help
+            The component subscribes to this topic to receive JSON commands
+            e.g. {"action": "play_sound", "sound_id": 1, "volume": 100}
+
+    config MQTT_API_RESP_TOPIC
+        string "MQTT Publish Topic for API Responses"
+        default "robot/api/response"
+        help
+            The component will publish the JSON answer to this topic
+            e.g. {"battery_mv": 12500, "motor_current_ma": 420.5}
+
+endmenu
