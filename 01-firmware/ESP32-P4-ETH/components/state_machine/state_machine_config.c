@@ -71,11 +71,14 @@ const size_t transition_table_size = sizeof(transition_table) / sizeof(transitio
  */
 const mode_config_t mode_config_table[] = {
     { .mode = MODE_NONE,                .requires_mqtt = false, .sensor_mask = SENSOR_NONE },
-    { .mode = MODE_AUTONOMOUS_PATH,     .requires_mqtt = false, .sensor_mask = SENSOR_ODOMETRY | SENSOR_LiDAR },
+    { .mode = MODE_AUTONOMOUS_PATH,     .requires_mqtt = false, .sensor_mask = SENSOR_ODOMETRY | SENSOR_LiDAR | SENSOR_LINE },
     { .mode = MODE_AUTONOMOUS_OBSTACLE, .requires_mqtt = false, .sensor_mask = SENSOR_LiDAR },
     { .mode = MODE_REMOTE_DRIVE,        .requires_mqtt = true,  .sensor_mask = SENSOR_ODOMETRY },
     // Telemetry stream uses SENSOR_TEST for this initial test
     { .mode = MODE_TELEMETRY_STREAM,    .requires_mqtt = true,  .sensor_mask = SENSOR_TEST },
+    // Calibration Modes
+    { .mode = MODE_CALIBRATE_MOTORS,    .requires_mqtt = true,  .sensor_mask = SENSOR_ODOMETRY },
+    { .mode = MODE_CALIBRATE_LINE,      .requires_mqtt = true,  .sensor_mask = SENSOR_ODOMETRY | SENSOR_LINE },
 };
 
 const size_t mode_config_table_size = sizeof(mode_config_table) / sizeof(mode_config_table[0]);
@@ -111,6 +114,8 @@ const char* get_mode_name(robot_mode_t mode) {
         case MODE_AUTONOMOUS_OBSTACLE: return "AUTO_OBSTACLE";
         case MODE_REMOTE_DRIVE: return "REMOTE";
         case MODE_TELEMETRY_STREAM: return "TELEMETRY";
+        case MODE_CALIBRATE_MOTORS: return "CALIB_MOTORS";
+        case MODE_CALIBRATE_LINE: return "CALIB_LINE";
         default: return "UNKNOWN";
     }
 }

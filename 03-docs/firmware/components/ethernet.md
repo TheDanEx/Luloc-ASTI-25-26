@@ -23,3 +23,28 @@ Arranque central tras NVS. Lanza event handlers de conectividad y mantiene una m
 ## Puntos Críticos y Depuración
 - **Desconexión Súbita:** Si el cable se desconecta, se deben limpiar conexiones MQTT y sockets para re-establecimiento automático.
 - **Auto-Nego Fallida:** Error grave en la inicialización si el PHY no reporta link. Depende extremadamente de un correcto pin-mapping y reloj de 50Mhz de RMII persistente.
+
+## Ejemplo de Uso e Instanciación
+```c
+#include "ethernet.h"
+#include "esp_log.h"
+
+// Dentro del arranque maestro del Kernel (app_main.c)
+void app_main(void) {
+    // 1. Inicializar la pila TCP/IP, LwIP y los eventos
+    esp_err_t ret = ethernet_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE("MAIN", "Fallo catastrófico al arrancar hardware de red MAC/PHY");
+        return;
+    }
+
+    // 2. Poll / Bucle para esperar conexión antes de lanzar tareas altas
+    ESP_LOGI("MAIN", "Esperando cable Ethernet y Asignación de IP...");
+    while(!ethernet_is_connected()) {
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+
+    ESP_LOGI("MAIN", "¡Red local lista! Desplegando MQTT y Tareas Core...");
+    // Lanzar tareas dependientes TCP/IP (MQTT, Cámaras, etc.)
+}
+```
