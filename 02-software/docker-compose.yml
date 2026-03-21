@@ -27,6 +27,25 @@ services:
   #   environment:
   #     - ROS_DOMAIN_ID=13
 
+  # ===============================
+  # PTP GRANDMASTER CLOCK
+  # ===============================
+  ptp_master:
+    image: debian:bookworm-slim
+    container_name: ptp_master
+    restart: unless-stopped
+    command: >
+      sh -c "apt-get update && apt-get install -y linuxptp && 
+             phc_ctl eth0 set && 
+             ptp4l -i eth0 -4 -m -H -l 6"
+    network_mode: "host" 
+    privileged: false
+    cap_add:
+      - SYS_TIME
+      - NET_ADMIN
+    devices:
+      - "/dev/ptp0:/dev/ptp0"
+
   message-broker:
     image: eclipse-mosquitto:2
     container_name: mosquitto

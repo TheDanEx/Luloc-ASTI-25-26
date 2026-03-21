@@ -39,7 +39,7 @@ static motor_driver_mcpwm_t motors = {
  * 1. Maintain velocity control (PID) for both wheels.
  * 2. Execute mode-specific logic (Calibration, Line Following, etc).
  * 3. Update shared memory state for other tasks.
- * Frequency: 100 Hz (10ms)
+ * Frequency: 500 Hz (2ms)
  */
 static void task_rtcontrol_cpu0(void *arg)
 {
@@ -68,8 +68,8 @@ static void task_rtcontrol_cpu0(void *arg)
 
     modes_init();
 
-    const float dt = 0.01f; // 10ms = 100 Hz
-    const TickType_t poll_rate = pdMS_TO_TICKS(10); 
+    const float dt = (float)CONFIG_ROBOT_CONTROL_PERIOD_MS / 1000.0f;
+    const TickType_t poll_rate = pdMS_TO_TICKS(CONFIG_ROBOT_CONTROL_PERIOD_MS); 
 
     while(1) {
         // 1. Update PID live tuning if changes received from MQTT

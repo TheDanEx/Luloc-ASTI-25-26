@@ -26,6 +26,7 @@
 #include "pid_tuner.h"
 #include "mqtt_api_responder.h"
 #include "driver/gpio.h"
+#include "ptp_client.h"
 
 #include "task_comms_cpu1.h"
 
@@ -150,6 +151,8 @@ static void task_comms_cpu1(void *arg)
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 
+    ptp_client_init();
+
     // Initialize MQTT Client
     if (mqtt_custom_client_init() != ESP_OK) {
         ESP_LOGE(TAG, "MQTT client initialization failed");
@@ -182,8 +185,8 @@ static void task_comms_cpu1(void *arg)
     perf_mon_init();
     
     // Setup Telemetry Batches
-    tel_odometry = telemetry_create("robot/telemetry/odometry", "odometry", 5000);
-    tel_system   = telemetry_create("robot/telemetry/system", "system", 5000);
+    tel_odometry = telemetry_create("robot/telemetry/odometry", "odometry", CONFIG_TELEMETRY_INTERVAL_ODOMETRY_MS);
+    tel_system   = telemetry_create("robot/telemetry/system", "system", CONFIG_TELEMETRY_INTERVAL_SYSTEM_MS);
 
     vTaskDelay(pdMS_TO_TICKS(1000)); 
     
