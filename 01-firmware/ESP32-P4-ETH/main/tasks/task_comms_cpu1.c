@@ -47,6 +47,7 @@ static volatile bool mqtt_initialized = false;
 
 static telemetry_handle_t tel_odometry = NULL;
 static telemetry_handle_t tel_system = NULL;
+static telemetry_handle_t tel_line = NULL;
 
 // =============================================================================
 // Helper: Data Collection
@@ -75,6 +76,46 @@ static void collect_high_freq_sensor_data(void)
     telemetry_add_float(tel_odometry, "velDR", speed_r);
     telemetry_add_float(tel_odometry, "posDR", dist_r);
     telemetry_commit_point(tel_odometry);
+
+    // Line Sensor Telemetry
+    float err_line, norm[8], kp, ki, kd, target_l, target_r;
+    uint16_t min_vals[8], max_vals[8];
+    bool detected, is_cal;
+
+    xSemaphoreTake(shm->mutex, portMAX_DELAY);
+    err_line = shm->sensors.line_position;
+    detected = shm->sensors.line_detected;
+    is_cal   = shm->sensors.line_is_calibrated;
+    target_l = shm->sensors.target_speed_left;
+    target_r = shm->sensors.target_speed_right;
+    kp = shm->line_pid.kp;
+    ki = shm->line_pid.ki;
+    kd = shm->line_pid.kd;
+    memcpy(norm, shm->sensors.line_norm, 8 * sizeof(float));
+    memcpy(min_vals, shm->sensors.line_min, 8 * sizeof(uint16_t));
+    memcpy(max_vals, shm->sensors.line_max, 8 * sizeof(uint16_t));
+    xSemaphoreGive(shm->mutex);
+
+    telemetry_add_float(tel_line, "err", err_line);
+    telemetry_add_float(tel_line, "target_l", target_l);
+    telemetry_add_float(tel_line, "target_r", target_r);
+    telemetry_add_int(tel_line, "det", detected ? 1 : 0);
+    telemetry_add_int(tel_line, "is_cal", is_cal ? 1 : 0);
+    telemetry_add_float(tel_line, "kp", kp);
+    telemetry_add_float(tel_line, "ki", ki);
+    telemetry_add_float(tel_line, "kd", kd);
+
+    // Add individual sensor values
+    char key[8];
+    for (int i = 0; i < 8; i++) {
+        snprintf(key, sizeof(key), "s%d", i);
+        telemetry_add_float(tel_line, key, norm[i]);
+        snprintf(key, sizeof(key), "min%d", i);
+        telemetry_add_int(tel_line, key, min_vals[i]);
+        snprintf(key, sizeof(key), "max%d", i);
+        telemetry_add_int(tel_line, key, max_vals[i]);
+    }
+    telemetry_commit_point(tel_line);
 
     // System Metrics & State
     test_sensor_data_t sys_data;
@@ -143,6 +184,7 @@ static void task_comms_cpu1(void *arg)
     // Setup Telemetry Batches
     tel_odometry = telemetry_create("robot/telemetry/odometry", "odometry", CONFIG_TELEMETRY_INTERVAL_ODOMETRY_MS);
     tel_system   = telemetry_create("robot/telemetry/system", "system", CONFIG_TELEMETRY_INTERVAL_SYSTEM_MS);
+    tel_line     = telemetry_create("robot/telemetry/line", "line_sensor", 50); // 20Hz Debug
 
     vTaskDelay(pdMS_TO_TICKS(1000)); 
     
@@ -185,6 +227,9 @@ static void task_comms_cpu1(void *arg)
 
              last_sampling_tick = current_tick;
         }
+
+        // 4. High-Frequency Sampling Call
+        collect_high_freq_sensor_data();
 
         vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));
     }
