@@ -70,7 +70,7 @@ static void enter(void) {
     s_sweep_config.manual_mode = false;
 
     if (cal_telemetry == NULL) {
-        cal_telemetry = telemetry_create("robot/telemetry/calibration", "motor_cal", 100);
+        cal_telemetry = telemetry_create("robot/telemetry/calibration", "motor_cal", CONFIG_TELEMETRY_INTERVAL_CALIBRATION_MS);
     }
     mqtt_custom_client_register_topic_callback(CALIBRATION_CONFIG_TOPIC, mqtt_cal_callback);
     if (mqtt_custom_client_is_connected()) {

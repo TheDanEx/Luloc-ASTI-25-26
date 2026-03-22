@@ -27,6 +27,25 @@ services:
   #   environment:
   #     - ROS_DOMAIN_ID=13
 
+  # ===============================
+  # PTP GRANDMASTER CLOCK
+  # ===============================
+  ptp_master:
+    image: debian:bookworm-slim
+    container_name: ptp_master
+    restart: unless-stopped
+    command: >
+      sh -c "apt-get update && apt-get install -y linuxptp && 
+             phc_ctl eth0 set && 
+             ptp4l -i eth0 -4 -m -H -l 6"
+    network_mode: "host" 
+    privileged: false
+    cap_add:
+      - SYS_TIME
+      - NET_ADMIN
+    devices:
+      - "/dev/ptp0:/dev/ptp0"
+
   message-broker:
     image: eclipse-mosquitto:2
     container_name: mosquitto
@@ -67,17 +86,19 @@ services:
     image: telegraf
     container_name: telegraf
     hostname: telegraf
+    network_mode: "host"
     restart: unless-stopped
     depends_on:
       influx-db:
         condition: service_healthy
     environment:
-      - INFLUXDB_HOST=${INFLUXDB_HOST}
+      # Forzamos IP local ya que 'network_mode: host' ignora el DNS del puente interno de Docker
+      - INFLUXDB_HOST=127.0.0.1
       - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
       - INFLUXDB_ORG=${INFLUXDB_ORG}
       - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
       - TELEGRAF_COLLECTION_INTERVAL=${TELEGRAF_COLLECTION_INTERVAL}
-      - HOSTNAME=telegraf
+      - HOSTNAME=${HOSTNAME:-telegraf_host}
     volumes:
       - ./05-telemetry/telegraf:/etc/telegraf
       - ./05-telemetry/telegraf/scripts:/etc/telegraf/scripts:ro

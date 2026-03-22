@@ -36,6 +36,7 @@ typedef struct {
     // Speed State
     int64_t last_speed_distance_counts;
     int64_t last_speed_time_us;
+    float last_returned_speed;
     
     bool is_initialized;
 } encoder_sensor_context_t;
@@ -51,10 +52,10 @@ typedef struct {
  */
 static void update_distance_accumulator(encoder_sensor_context_t *ctx)
 {
-    int current_hardware_value = 0;
+    int current_hardware_value = ctx->last_hardware_pcnt_value; // Fallback to avoid -100m/s spikes if ESP_FAIL
     pcnt_unit_get_count(ctx->pcnt_unit, &current_hardware_value);
     
-    int delta = current_hardware_value - ctx->last_hardware_pcnt_value;
+    int16_t delta = (int16_t)(current_hardware_value - ctx->last_hardware_pcnt_value);
     
     if (ctx->config.reverse_direction) {
         delta = -delta;
@@ -113,12 +114,19 @@ encoder_sensor_handle_t encoder_sensor_init(const encoder_sensor_config_t *confi
     pcnt_channel_set_edge_action(ctx->pcnt_chan_b, PCNT_CHANNEL_EDGE_ACTION_INCREASE, PCNT_CHANNEL_EDGE_ACTION_DECREASE);
     pcnt_channel_set_level_action(ctx->pcnt_chan_b, PCNT_CHANNEL_LEVEL_ACTION_KEEP, PCNT_CHANNEL_LEVEL_ACTION_INVERSE);
 
+    // Apply Silicon Glitch Filter (1000ns) to aggressively reject DC Motor EMF noise
+    pcnt_glitch_filter_config_t filter_config = {
+        .max_glitch_ns = 1000,
+    };
+    pcnt_unit_set_glitch_filter(ctx->pcnt_unit, &filter_config);
+
     pcnt_unit_enable(ctx->pcnt_unit);
     pcnt_unit_clear_count(ctx->pcnt_unit);
     pcnt_unit_start(ctx->pcnt_unit);
 
     ctx->last_speed_time_us = esp_timer_get_time();
     ctx->last_speed_distance_counts = 0;
+    ctx->last_returned_speed = 0.0f;
 
     ctx->is_initialized = true;
     return (encoder_sensor_handle_t)ctx;
@@ -201,8 +209,9 @@ float encoder_sensor_get_speed(encoder_sensor_handle_t handle)
     
     int64_t delta_time_us = current_time_us - ctx->last_speed_time_us;
     
-    if (delta_time_us <= 0) {
-        return 0.0f;
+    // Prevent mathematical explosions (divide by near-zero) from RTOS jitter
+    if (delta_time_us < 1000) {
+        return ctx->last_returned_speed;
     }
     
     int64_t delta_counts = current_counts - ctx->last_speed_distance_counts;
@@ -224,5 +233,14 @@ float encoder_sensor_get_speed(encoder_sensor_handle_t handle)
     double distance_meters = wheel_revolutions * M_PI * ctx->config.wheel_diameter_m;
     
     // V = d / t
-    return (float)(distance_meters / elapsed_time_seconds);
+    float speed = (float)(distance_meters / elapsed_time_seconds);
+    
+    // Despike Filter: Physical limits constraint. The wheels physically max out around 1.0 m/s.
+    // Anything radically outside (like -100 m/s) is a blind hardware anomaly/wrap event.
+    if (speed > 15.0f || speed < -15.0f) {
+        speed = ctx->last_returned_speed; // Discard garbage, retain last physics frame
+    }
+    
+    ctx->last_returned_speed = speed;
+    return speed;
 }

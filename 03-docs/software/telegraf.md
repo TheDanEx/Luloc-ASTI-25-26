@@ -8,6 +8,7 @@ Depende estrictamente de múltiples orígenes: Ficheros de configuración locale
 
 ## Interfaces de E/S (Inputs/Outputs)
 - **Hardware:** Volumen mapeado hacia `/sys/class/thermal` del Host.
+- **Host (Local Inputs):** Captura de métricas nativas del sistema (CPU, Memoria, Disco, y tráfico de red segmentado en Ethernet `eth*`/`en*` y Wi-Fi `wlan*`/`wl*`).
 - **Software (MQTT Inputs):**
   - `robot/telemetry/#`: Formato **Influx Line Protocol (ILP)** con precisión de nanosegundos (19 dígitos).
   - `robot/events`: Formato **JSON** para eventos críticos.

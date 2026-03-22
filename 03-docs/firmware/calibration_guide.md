@@ -38,6 +38,12 @@ Envíe las ganancias al tópico `robot/config/motors`. Puede especificar el moto
 {"motor": "left", "kp": 1.2, "ki": 0.1, "kd": 0.05}
 ```
 
+> [!WARNING]
+> **Matemáticas PID a 500 Hz (dt = 0.002s)**
+> Dado que este lazo de control se ejecuta a ultra-alta frecuencia (2ms), el tiempo `dt` afecta drásticamente a las constantes `Ki` y `Kd` en la ecuación de corrección de voltaje:
+> * **Integral (`Ki`)**: El error se *multiplica* por `0.002`. Acumular voltaje es un proceso increíblemente lento. Para que la Integral actúe de forma notable en menos de un segundo, **`Ki` debe ser gigantesca** (ej: `50.0`, `100.0` o `500.0`).
+> * **Derivativa (`Kd`)**: El cambio de velocidad se *divide* por `0.002` (equivale a multiplicar físicamente la aceleración por 500). Una ínfima vibración del encoder genera derivadas masivas. Para evitar bloqueos o que el motor "se vuelva loco" inyectando picos de -100V de PWM, **`Kd` debe ser microscópica** (ej: `0.001`, `0.005`, o máximo `0.01`).
+
 ### Análisis de Telemetría Avanzada
 Observe el tópico `robot/telemetry/calibration` (Grafana). Ahora el sistema desglosa el origen de cada milivoltio aplicado al motor:
 *   **`v_ff`**: Voltaje base (Feed-Forward + Deadband).

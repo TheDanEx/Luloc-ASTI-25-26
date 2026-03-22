@@ -12,6 +12,8 @@ struct motor_velocity_ctrl_context_t {
     float prev_filtered_speed;
     float current_filtered_speed;
     float ramped_target_speed;
+    float filtered_derivative;
+    float last_out_pwm;
 };
 
 static inline float clamp(float value, float min, float max) {
@@ -62,14 +64,21 @@ esp_err_t motor_velocity_ctrl_update(motor_velocity_ctrl_handle_t handle,
     if (fabsf(ctx->ramped_target_speed) < 0.001f) {
         ctx->integral = 0.0f;
     } else {
-        ctx->integral += error * delta_time_s;
-        ctx->integral = clamp(ctx->integral, -5.0f, 5.0f);
+        // Smart Anti-Windup: Pause integration if we are far from the target (e.g. accelerating hard)
+        // This prevents the "overshoot hump" from accumulating too much phantom voltage.
+        if (fabsf(error) < 0.3f) {
+            ctx->integral += error * delta_time_s;
+            ctx->integral = clamp(ctx->integral, -5.0f, 5.0f);
+        }
     }
-    float derivative = (ctx->current_filtered_speed - ctx->prev_filtered_speed) / delta_time_s;
+    
+    // Low-Pass Filter on the Derivative to kill the 500Hz quantization noise
+    float raw_derivative = (ctx->current_filtered_speed - ctx->prev_filtered_speed) / delta_time_s;
+    ctx->filtered_derivative = (0.2f * raw_derivative) + (0.8f * ctx->filtered_derivative);
     
     float p_v = ctx->config.kp * error;
     float i_v = ctx->config.ki * ctx->integral;
-    float d_v = -(ctx->config.kd * derivative); // D-on-PV (Negative because PV increasing means reducing output)
+    float d_v = -(ctx->config.kd * ctx->filtered_derivative); // Smoothed D-on-PV
     float pid_voltage = p_v + i_v + d_v;
 
     // 4. Feed-Forward & Deadband
@@ -81,12 +90,23 @@ esp_err_t motor_velocity_ctrl_update(motor_velocity_ctrl_handle_t handle,
     }
     float target_voltage_v = ff_voltage + pid_voltage;
 
-    // 5. Saturation & PWM
+    // 5. Saturation & Raw PWM
     if (fabsf(target_voltage_v) > battery_v) {
         target_voltage_v = (target_voltage_v > 0) ? battery_v : -battery_v;
     }
-    *out_pwm_duty = (target_voltage_v / battery_v) * 100.0f;
-    *out_pwm_duty = clamp(*out_pwm_duty, -100.0f, 100.0f);
+    float raw_pwm_duty = (target_voltage_v / battery_v) * 100.0f;
+    raw_pwm_duty = clamp(raw_pwm_duty, -100.0f, 100.0f);
+
+    // 6. Slew Rate Limiter (Max PWM Delta per Cycle)
+    // Constraint: 500.0% PWM change per second. (At 2ms cycle = max 1.0% jump per frame).
+    float max_pwm_step = 500.0f * delta_time_s;
+    float pwm_diff = raw_pwm_duty - ctx->last_out_pwm;
+    
+    // Si la diferencia excede el límite permitido por frame, la frenamos
+    float limited_pwm_duty = ctx->last_out_pwm + clamp(pwm_diff, -max_pwm_step, max_pwm_step);
+    
+    *out_pwm_duty = limited_pwm_duty;
+    ctx->last_out_pwm = limited_pwm_duty;
 
     // 6. Fill Diagnostics
     if (out_diag) {
@@ -97,7 +117,7 @@ esp_err_t motor_velocity_ctrl_update(motor_velocity_ctrl_handle_t handle,
         out_diag->i_v = i_v;
         out_diag->d_v = d_v;
         out_diag->final_v = target_voltage_v;
-        out_diag->pwm_duty = *out_pwm_duty;
+        out_diag->pwm_duty = limited_pwm_duty;
     }
 
     return ESP_OK;
@@ -110,5 +130,6 @@ esp_err_t motor_velocity_ctrl_set_pid(motor_velocity_ctrl_handle_t handle, float
     ctx->config.ki = ki;
     ctx->config.kd = kd;
     ctx->integral = 0.0f;
+    ctx->filtered_derivative = 0.0f;
     return ESP_OK;
 }
