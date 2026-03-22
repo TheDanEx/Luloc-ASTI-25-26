@@ -36,6 +36,8 @@ idf_component_register(
         pid_tuner
         mqtt_api_responder
         motor_velocity_ctrl
+        ptp_client
+        line_sensor
     PRIV_REQUIRES
         nvs_flash
         esp_event

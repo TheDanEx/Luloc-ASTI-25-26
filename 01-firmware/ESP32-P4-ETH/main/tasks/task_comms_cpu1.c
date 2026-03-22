@@ -26,6 +26,7 @@
 #include "pid_tuner.h"
 #include "mqtt_api_responder.h"
 #include "driver/gpio.h"
+#include "ptp_client.h"
 
 #include "task_comms_cpu1.h"
 
@@ -38,24 +39,15 @@ static const char *TAG = "comms_c1";
 #define CMD_QUEUE_ITEM_SIZE     256
 #define POLL_INTERVAL_MS        10
 
-#define ENCODER_LEFT_PIN_A      33
-#define ENCODER_LEFT_PIN_B      46
-#define ENCODER_RIGHT_PIN_A     27
-#define ENCODER_RIGHT_PIN_B     32
-#define ENCODER_PPR             11
-#define WHEEL_DIAMETER_M        0.068f
-#define GEAR_RATIO              21.3f
-
 // =============================================================================
 // Static Variables
 // =============================================================================
 static QueueHandle_t command_queue = NULL;
 static volatile bool mqtt_initialized = false;
-static encoder_sensor_handle_t encoder_left = NULL;
-static encoder_sensor_handle_t encoder_right = NULL;
 
 static telemetry_handle_t tel_odometry = NULL;
 static telemetry_handle_t tel_system = NULL;
+static telemetry_handle_t tel_line = NULL;
 
 // =============================================================================
 // Helper: Data Collection
@@ -70,34 +62,60 @@ static void collect_high_freq_sensor_data(void)
 {
     shared_memory_t* shm = shared_memory_get();
 
-    // Wheel Odometry Sync
-    if (encoder_left) {
-        float speed = encoder_sensor_get_speed(encoder_left);
-        float distance = encoder_sensor_get_distance(encoder_left);
-        telemetry_add_float(tel_odometry, "velIZ", speed);
-        telemetry_add_float(tel_odometry, "posIZ", distance);
-        
-        xSemaphoreTake(shm->mutex, portMAX_DELAY);
-        shm->sensors.motor_speed_left = speed;
-        shm->sensors.motor_distance_left = distance;
-        xSemaphoreGive(shm->mutex);
-    }
+    // Wheel Odometry Sync (Reading from SHM populated by CPU0)
+    float speed_l, dist_l, speed_r, dist_r;
+    xSemaphoreTake(shm->mutex, portMAX_DELAY);
+    speed_l = shm->sensors.motor_speed_left;
+    dist_l  = shm->sensors.motor_distance_left;
+    speed_r = shm->sensors.motor_speed_right;
+    dist_r  = shm->sensors.motor_distance_right;
+    xSemaphoreGive(shm->mutex);
 
-    if (encoder_right) {
-        float speed = encoder_sensor_get_speed(encoder_right);
-        float distance = encoder_sensor_get_distance(encoder_right);
-        telemetry_add_float(tel_odometry, "velDR", speed);
-        telemetry_add_float(tel_odometry, "posDR", distance);
-        
-        xSemaphoreTake(shm->mutex, portMAX_DELAY);
-        shm->sensors.motor_speed_right = speed;
-        shm->sensors.motor_distance_right = distance;
-        xSemaphoreGive(shm->mutex);
-    }
+    telemetry_add_float(tel_odometry, "velIZ", speed_l);
+    telemetry_add_float(tel_odometry, "posIZ", dist_l);
+    telemetry_add_float(tel_odometry, "velDR", speed_r);
+    telemetry_add_float(tel_odometry, "posDR", dist_r);
+    telemetry_commit_point(tel_odometry);
 
-    if (encoder_left || encoder_right) {
-        telemetry_commit_point(tel_odometry);
+    // Line Sensor Telemetry
+    float err_line, norm[8], kp, ki, kd, target_l, target_r;
+    uint16_t min_vals[8], max_vals[8];
+    bool detected, is_cal;
+
+    xSemaphoreTake(shm->mutex, portMAX_DELAY);
+    err_line = shm->sensors.line_position;
+    detected = shm->sensors.line_detected;
+    is_cal   = shm->sensors.line_is_calibrated;
+    target_l = shm->sensors.target_speed_left;
+    target_r = shm->sensors.target_speed_right;
+    kp = shm->line_pid.kp;
+    ki = shm->line_pid.ki;
+    kd = shm->line_pid.kd;
+    memcpy(norm, shm->sensors.line_norm, 8 * sizeof(float));
+    memcpy(min_vals, shm->sensors.line_min, 8 * sizeof(uint16_t));
+    memcpy(max_vals, shm->sensors.line_max, 8 * sizeof(uint16_t));
+    xSemaphoreGive(shm->mutex);
+
+    telemetry_add_float(tel_line, "err", err_line);
+    telemetry_add_float(tel_line, "target_l", target_l);
+    telemetry_add_float(tel_line, "target_r", target_r);
+    telemetry_add_int(tel_line, "det", detected ? 1 : 0);
+    telemetry_add_int(tel_line, "is_cal", is_cal ? 1 : 0);
+    telemetry_add_float(tel_line, "kp", kp);
+    telemetry_add_float(tel_line, "ki", ki);
+    telemetry_add_float(tel_line, "kd", kd);
+
+    // Add individual sensor values
+    char key[8];
+    for (int i = 0; i < 8; i++) {
+        snprintf(key, sizeof(key), "s%d", i);
+        telemetry_add_float(tel_line, key, norm[i]);
+        snprintf(key, sizeof(key), "min%d", i);
+        telemetry_add_int(tel_line, key, min_vals[i]);
+        snprintf(key, sizeof(key), "max%d", i);
+        telemetry_add_int(tel_line, key, max_vals[i]);
     }
+    telemetry_commit_point(tel_line);
 
     // System Metrics & State
     test_sensor_data_t sys_data;
@@ -150,6 +168,8 @@ static void task_comms_cpu1(void *arg)
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 
+    ptp_client_init();
+
     // Initialize MQTT Client
     if (mqtt_custom_client_init() != ESP_OK) {
         ESP_LOGE(TAG, "MQTT client initialization failed");
@@ -158,32 +178,13 @@ static void task_comms_cpu1(void *arg)
     }
     mqtt_initialized = true;
 
-    // Initialize Wheel Encoders
-    encoder_sensor_config_t enc_l_cfg = {
-        .pin_a = ENCODER_LEFT_PIN_A,
-        .pin_b = ENCODER_LEFT_PIN_B,
-        .ppr = ENCODER_PPR,
-        .wheel_diameter_m = WHEEL_DIAMETER_M,
-        .gear_ratio = GEAR_RATIO,
-        .reverse_direction = false
-    };
-    encoder_left = encoder_sensor_init(&enc_l_cfg);
-
-    encoder_sensor_config_t enc_r_cfg = {
-        .pin_a = ENCODER_RIGHT_PIN_A,
-        .pin_b = ENCODER_RIGHT_PIN_B,
-        .ppr = ENCODER_PPR,
-        .wheel_diameter_m = WHEEL_DIAMETER_M,
-        .gear_ratio = GEAR_RATIO,
-        .reverse_direction = false
-    };
-    encoder_right = encoder_sensor_init(&enc_r_cfg);
 
     perf_mon_init();
     
     // Setup Telemetry Batches
-    tel_odometry = telemetry_create("robot/telemetry/odometry", "odometry", 5000);
-    tel_system   = telemetry_create("robot/telemetry/system", "system", 5000);
+    tel_odometry = telemetry_create("robot/telemetry/odometry", "odometry", CONFIG_TELEMETRY_INTERVAL_ODOMETRY_MS);
+    tel_system   = telemetry_create("robot/telemetry/system", "system", CONFIG_TELEMETRY_INTERVAL_SYSTEM_MS);
+    tel_line     = telemetry_create("robot/telemetry/line", "line_sensor", 50); // 20Hz Debug
 
     vTaskDelay(pdMS_TO_TICKS(1000)); 
     
@@ -223,9 +224,12 @@ static void task_comms_cpu1(void *arg)
              } else {
                  shared_memory_set_mqtt_connected(false);
              }
-             collect_high_freq_sensor_data();
+
              last_sampling_tick = current_tick;
         }
+
+        // 4. High-Frequency Sampling Call
+        collect_high_freq_sensor_data();
 
         vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));
     }
