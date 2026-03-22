@@ -45,6 +45,17 @@ static void mqtt_config_callback(const char *topic, int topic_len, const char *d
 
     if (s_logic) {
         follow_line_logic_set_config(s_logic, &s_current_config);
+        
+        // Sync to Shared Memory for Telemetry
+        shared_memory_t* shm = shared_memory_get();
+        if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+            shm->line_pid.kp = s_current_config.kp;
+            shm->line_pid.ki = s_current_config.ki;
+            shm->line_pid.kd = s_current_config.kd;
+            shm->line_pid.updated_flag = true;
+            xSemaphoreGive(shm->mutex);
+        }
+
         ESP_LOGI(TAG, "Dynamic Config Updated: P=%.2f I=%.2f D=%.2f Max=%.2f FFw=%.2f", 
                  s_current_config.kp, s_current_config.ki, s_current_config.kd, 
                  s_current_config.max_speed, s_ff_weight);
@@ -140,6 +151,13 @@ static void execute(motor_driver_mcpwm_t* motors,
     float pwm_l, pwm_r;
     motor_velocity_ctrl_update(ctrl_left,  &motor_l, dt_s, &pwm_l, NULL);
     motor_velocity_ctrl_update(ctrl_right, &motor_r, dt_s, &pwm_r, NULL);
+
+    // Sync Target Speeds to SHM for Telemetry
+    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+        shm->sensors.target_speed_left = output.left_motor_speed;
+        shm->sensors.target_speed_right = output.right_motor_speed;
+        xSemaphoreGive(shm->mutex);
+    }
 
     motor_mcpwm_set(motors, (int16_t)(pwm_l * 10.0f), (int16_t)(pwm_r * 10.0f));
 }

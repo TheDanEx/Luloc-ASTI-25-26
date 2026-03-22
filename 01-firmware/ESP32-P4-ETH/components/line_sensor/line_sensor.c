@@ -390,3 +390,15 @@ esp_err_t line_sensor_read(line_sensor_handle_t handle, line_sensor_data_t *out_
 
     return ESP_OK;
 }
+
+esp_err_t line_sensor_get_calibration_bounds(line_sensor_handle_t handle, uint16_t *out_min, uint16_t *out_max)
+{
+    if (handle == NULL || out_min == NULL || out_max == NULL) return ESP_ERR_INVALID_ARG;
+    struct line_sensor_context *ctx = (struct line_sensor_context *)handle;
+
+    if (xSemaphoreTake(ctx->mutex, pdMS_TO_TICKS(10)) != pdTRUE) return ESP_ERR_TIMEOUT;
+    memcpy(out_min, ctx->calib_min, ctx->config.num_sensors * sizeof(uint16_t));
+    memcpy(out_max, ctx->calib_max, ctx->config.num_sensors * sizeof(uint16_t));
+    xSemaphoreGive(ctx->mutex);
+    return ESP_OK;
+}

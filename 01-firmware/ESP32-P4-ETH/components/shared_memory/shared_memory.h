@@ -18,13 +18,20 @@ typedef struct {
     float motor_distance_left;   // m
     float motor_distance_right;  // m
     
+    float target_speed_left;     // m/s (PID Output)
+    float target_speed_right;    // m/s (PID Output)
+    
     float robot_current;         // mA
     float battery_voltage;       // mV
     float temperature;           // °C
     
-    // Line Sensor
+    // Line Sensor (Detailed)
     bool  line_detected;
-    float line_position;         // Normalize or meters
+    float line_position;         // Centroid (error)
+    float line_norm[8];          // Normalized values (0.0 - 1.0)
+    uint16_t line_min[8];        // Calibration Min
+    uint16_t line_max[8];        // Calibration Max
+    bool  line_is_calibrated;
     
     int32_t encoder_count_left;  // Ticks
     int32_t encoder_count_right; // Ticks
@@ -59,6 +66,7 @@ typedef struct {
     
     shared_teleop_config_t teleop;     // Teleoperation targets
     shared_pid_config_t motor_pids[2]; // 0=Left, 1=Right
+    shared_pid_config_t line_pid;      // Line following PD/PID
     uint8_t calibration_motor_mask;    // bitmask: 1=Left, 2=Right, 3=Both
 
     uint32_t heartbeat_cpu0;    // CPU0 heartbeat counter
