@@ -86,17 +86,19 @@ services:
     image: telegraf
     container_name: telegraf
     hostname: telegraf
+    network_mode: "host"
     restart: unless-stopped
     depends_on:
       influx-db:
         condition: service_healthy
     environment:
-      - INFLUXDB_HOST=${INFLUXDB_HOST}
+      # Forzamos IP local ya que 'network_mode: host' ignora el DNS del puente interno de Docker
+      - INFLUXDB_HOST=127.0.0.1
       - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
       - INFLUXDB_ORG=${INFLUXDB_ORG}
       - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
       - TELEGRAF_COLLECTION_INTERVAL=${TELEGRAF_COLLECTION_INTERVAL}
-      - HOSTNAME=telegraf
+      - HOSTNAME=${HOSTNAME:-telegraf_host}
     volumes:
       - ./05-telemetry/telegraf:/etc/telegraf
       - ./05-telemetry/telegraf/scripts:/etc/telegraf/scripts:ro

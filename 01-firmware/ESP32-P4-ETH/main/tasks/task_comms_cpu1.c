@@ -39,21 +39,11 @@ static const char *TAG = "comms_c1";
 #define CMD_QUEUE_ITEM_SIZE     256
 #define POLL_INTERVAL_MS        10
 
-#define ENCODER_LEFT_PIN_A      33
-#define ENCODER_LEFT_PIN_B      46
-#define ENCODER_RIGHT_PIN_A     27
-#define ENCODER_RIGHT_PIN_B     32
-#define ENCODER_PPR             11
-#define WHEEL_DIAMETER_M        0.068f
-#define GEAR_RATIO              21.3f
-
 // =============================================================================
 // Static Variables
 // =============================================================================
 static QueueHandle_t command_queue = NULL;
 static volatile bool mqtt_initialized = false;
-static encoder_sensor_handle_t encoder_left = NULL;
-static encoder_sensor_handle_t encoder_right = NULL;
 
 static telemetry_handle_t tel_odometry = NULL;
 static telemetry_handle_t tel_system = NULL;
@@ -71,34 +61,20 @@ static void collect_high_freq_sensor_data(void)
 {
     shared_memory_t* shm = shared_memory_get();
 
-    // Wheel Odometry Sync
-    if (encoder_left) {
-        float speed = encoder_sensor_get_speed(encoder_left);
-        float distance = encoder_sensor_get_distance(encoder_left);
-        telemetry_add_float(tel_odometry, "velIZ", speed);
-        telemetry_add_float(tel_odometry, "posIZ", distance);
-        
-        xSemaphoreTake(shm->mutex, portMAX_DELAY);
-        shm->sensors.motor_speed_left = speed;
-        shm->sensors.motor_distance_left = distance;
-        xSemaphoreGive(shm->mutex);
-    }
+    // Wheel Odometry Sync (Reading from SHM populated by CPU0)
+    float speed_l, dist_l, speed_r, dist_r;
+    xSemaphoreTake(shm->mutex, portMAX_DELAY);
+    speed_l = shm->sensors.motor_speed_left;
+    dist_l  = shm->sensors.motor_distance_left;
+    speed_r = shm->sensors.motor_speed_right;
+    dist_r  = shm->sensors.motor_distance_right;
+    xSemaphoreGive(shm->mutex);
 
-    if (encoder_right) {
-        float speed = encoder_sensor_get_speed(encoder_right);
-        float distance = encoder_sensor_get_distance(encoder_right);
-        telemetry_add_float(tel_odometry, "velDR", speed);
-        telemetry_add_float(tel_odometry, "posDR", distance);
-        
-        xSemaphoreTake(shm->mutex, portMAX_DELAY);
-        shm->sensors.motor_speed_right = speed;
-        shm->sensors.motor_distance_right = distance;
-        xSemaphoreGive(shm->mutex);
-    }
-
-    if (encoder_left || encoder_right) {
-        telemetry_commit_point(tel_odometry);
-    }
+    telemetry_add_float(tel_odometry, "velIZ", speed_l);
+    telemetry_add_float(tel_odometry, "posIZ", dist_l);
+    telemetry_add_float(tel_odometry, "velDR", speed_r);
+    telemetry_add_float(tel_odometry, "posDR", dist_r);
+    telemetry_commit_point(tel_odometry);
 
     // System Metrics & State
     test_sensor_data_t sys_data;
@@ -161,26 +137,6 @@ static void task_comms_cpu1(void *arg)
     }
     mqtt_initialized = true;
 
-    // Initialize Wheel Encoders
-    encoder_sensor_config_t enc_l_cfg = {
-        .pin_a = ENCODER_LEFT_PIN_A,
-        .pin_b = ENCODER_LEFT_PIN_B,
-        .ppr = ENCODER_PPR,
-        .wheel_diameter_m = WHEEL_DIAMETER_M,
-        .gear_ratio = GEAR_RATIO,
-        .reverse_direction = false
-    };
-    encoder_left = encoder_sensor_init(&enc_l_cfg);
-
-    encoder_sensor_config_t enc_r_cfg = {
-        .pin_a = ENCODER_RIGHT_PIN_A,
-        .pin_b = ENCODER_RIGHT_PIN_B,
-        .ppr = ENCODER_PPR,
-        .wheel_diameter_m = WHEEL_DIAMETER_M,
-        .gear_ratio = GEAR_RATIO,
-        .reverse_direction = false
-    };
-    encoder_right = encoder_sensor_init(&enc_r_cfg);
 
     perf_mon_init();
     
@@ -226,7 +182,7 @@ static void task_comms_cpu1(void *arg)
              } else {
                  shared_memory_set_mqtt_connected(false);
              }
-             collect_high_freq_sensor_data();
+
              last_sampling_tick = current_tick;
         }
 
