@@ -25,6 +25,8 @@ typedef struct {
     // Line Sensor
     bool  line_detected;
     float line_position;         // Normalize or meters
+    bool  line_calibrating;
+    bool  line_calibrated;
     
     int32_t encoder_count_left;  // Ticks
     int32_t encoder_count_right; // Ticks

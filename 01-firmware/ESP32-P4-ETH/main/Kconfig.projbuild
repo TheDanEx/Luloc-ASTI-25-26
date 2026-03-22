@@ -111,3 +111,61 @@ menu "Luloc-ASTI: 1. Follow Line Configuration"
             0.0 = Ignore FF, 1.0 = Full application of FF.
 
 endmenu
+
+menu "Luloc-ASTI: 1.1. Follow Line Sensor Mapping"
+
+    config LINE_ARRAY_SENSOR_COUNT
+        int "Line sensor count"
+        default 4
+        range 1 8
+        help
+            Number of active line sensors in the array.
+
+    config LINE_ARRAY_SENSOR_PITCH_MM
+        int "Line sensor pitch (mm)"
+        default 10
+        range 1 50
+        help
+            Physical spacing between adjacent line sensors, in millimeters.
+
+    config LINE_ARRAY_SENSOR_GPIO0
+        int "Line sensor 0 GPIO"
+        default 18
+        range 0 54
+
+    config LINE_ARRAY_SENSOR_GPIO1
+        int "Line sensor 1 GPIO"
+        default 17
+        range 0 54
+
+    config LINE_ARRAY_SENSOR_GPIO2
+        int "Line sensor 2 GPIO"
+        default 16
+        range 0 54
+
+    config LINE_ARRAY_SENSOR_GPIO3
+        int "Line sensor 3 GPIO"
+        default 19
+        range 0 54
+
+    config LINE_ARRAY_SENSOR_GPIO4
+        int "Line sensor 4 GPIO"
+        default 23
+        range 0 54
+
+    config LINE_ARRAY_SENSOR_GPIO5
+        int "Line sensor 5 GPIO"
+        default 21
+        range 0 54
+
+    config LINE_ARRAY_SENSOR_GPIO6
+        int "Line sensor 6 GPIO"
+        default 22
+        range 0 54
+
+    config LINE_ARRAY_SENSOR_GPIO7
+        int "Line sensor 7 GPIO"
+        default 20
+        range 0 54
+
+endmenu

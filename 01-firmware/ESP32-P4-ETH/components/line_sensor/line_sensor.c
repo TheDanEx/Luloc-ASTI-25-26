@@ -21,6 +21,9 @@ struct line_sensor_context {
     uint16_t *internal_raw_buffer;
     float *internal_norm_buffer;
     bool *internal_digital_buffer;
+
+    adc_channel_t *adc_channels_copy;
+    float *sensor_positions_copy;
     
     uint16_t *calib_min;
     uint16_t *calib_max;
@@ -52,7 +55,14 @@ static esp_err_t read_sensor_averaged(struct line_sensor_context *ctx, int senso
     
     for (int i = 0; i < ctx->config.oversample_count; i++) {
         esp_err_t err = adc_oneshot_read(ctx->adc_handle, ctx->config.adc_channels[sensor_idx], &raw_val);
-        if (err != ESP_OK) return err;
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "ADC read failed (unit=%d idx=%d ch=%d err=0x%x)",
+                     (int)ctx->config.adc_unit,
+                     sensor_idx,
+                     (int)ctx->config.adc_channels[sensor_idx],
+                     (unsigned int)err);
+            return err;
+        }
         accumulator += raw_val;
     }
     
@@ -121,6 +131,29 @@ line_sensor_handle_t line_sensor_init(const line_sensor_config_t *config)
     if (ctx == NULL) return NULL;
 
     memcpy(&ctx->config, config, sizeof(line_sensor_config_t));
+
+    // Deep-copy channel/position arrays to avoid dangling pointers.
+    ctx->adc_channels_copy = (adc_channel_t *)calloc(config->num_sensors, sizeof(adc_channel_t));
+    if (ctx->adc_channels_copy == NULL) {
+        free(ctx);
+        return NULL;
+    }
+    memcpy(ctx->adc_channels_copy, config->adc_channels, sizeof(adc_channel_t) * config->num_sensors);
+    ctx->config.adc_channels = ctx->adc_channels_copy;
+
+    if (config->sensor_positions_m != NULL) {
+        ctx->sensor_positions_copy = (float *)calloc(config->num_sensors, sizeof(float));
+        if (ctx->sensor_positions_copy == NULL) {
+            free(ctx->adc_channels_copy);
+            free(ctx);
+            return NULL;
+        }
+        memcpy(ctx->sensor_positions_copy, config->sensor_positions_m, sizeof(float) * config->num_sensors);
+        ctx->config.sensor_positions_m = ctx->sensor_positions_copy;
+    } else {
+        ctx->sensor_positions_copy = NULL;
+        ctx->config.sensor_positions_m = NULL;
+    }
     
     // Apply defaults from Kconfig if applicable
     if (ctx->config.oversample_count == 0) {
@@ -152,7 +185,7 @@ line_sensor_handle_t line_sensor_init(const line_sensor_config_t *config)
     ctx->calib_min = (uint16_t *)calloc(config->num_sensors, sizeof(uint16_t));
     ctx->calib_max = (uint16_t *)calloc(config->num_sensors, sizeof(uint16_t));
     
-    if (!ctx->internal_raw_buffer || !ctx->internal_norm_buffer || !ctx->internal_digital_buffer || !ctx->calib_min || !ctx->calib_max) {
+    if (!ctx->internal_raw_buffer || !ctx->internal_norm_buffer || !ctx->internal_digital_buffer || !ctx->calib_min || !ctx->calib_max || !ctx->adc_channels_copy) {
         ESP_LOGE(TAG, "Failed to allocate memory for sensor buffers");
         line_sensor_deinit((line_sensor_handle_t)ctx);
         return NULL;
@@ -181,13 +214,17 @@ line_sensor_handle_t line_sensor_init(const line_sensor_config_t *config)
     };
 
     for (int i = 0; i < config->num_sensors; i++) {
-        if (adc_oneshot_config_channel(ctx->adc_handle, config->adc_channels[i], &channel_config) != ESP_OK) {
-             ESP_LOGE(TAG, "Failed to config ADC channel for sensor %d", i);
+        esp_err_t cfg_err = adc_oneshot_config_channel(ctx->adc_handle, config->adc_channels[i], &channel_config);
+        if (cfg_err != ESP_OK) {
+             ESP_LOGE(TAG, "Failed to config ADC channel for sensor %d (unit=%d ch=%d err=0x%x)",
+                      i, (int)ctx->config.adc_unit, (int)config->adc_channels[i], (unsigned int)cfg_err);
+             line_sensor_deinit((line_sensor_handle_t)ctx);
+             return NULL;
         }
     }
 
-    ESP_LOGI(TAG, "Line Sensor Array initialized [%d sensors | Threshold: %d]", 
-             config->num_sensors, (int)ctx->config.calibration_threshold);
+    ESP_LOGI(TAG, "Line Sensor Array initialized [%d sensors | unit=%d | Threshold: %d]", 
+             config->num_sensors, (int)ctx->config.adc_unit, (int)ctx->config.calibration_threshold);
 
     ctx->is_initialized = true;
     return (line_sensor_handle_t)ctx;
@@ -214,6 +251,8 @@ esp_err_t line_sensor_deinit(line_sensor_handle_t handle)
     if (ctx->internal_digital_buffer) free(ctx->internal_digital_buffer);
     if (ctx->calib_min) free(ctx->calib_min);
     if (ctx->calib_max) free(ctx->calib_max);
+    if (ctx->adc_channels_copy) free(ctx->adc_channels_copy);
+    if (ctx->sensor_positions_copy) free(ctx->sensor_positions_copy);
     
     free(ctx);
     ESP_LOGI(TAG, "Line Sensor Array de-initialized");

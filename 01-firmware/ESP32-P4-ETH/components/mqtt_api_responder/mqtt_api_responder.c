@@ -81,10 +81,30 @@ static void handle_resource_uptime(cJSON *response_root) {
  */
 static void handle_resource_status(cJSON *response_root) {
     robot_state_context_t* ctx = state_machine_get_context();
+    shared_memory_t* shm = shared_memory_get();
+
+    bool line_detected = false;
+    float line_position = 0.0f;
+    bool line_calibrating = false;
+    bool line_calibrated = false;
+
+    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        line_detected = shm->sensors.line_detected;
+        line_position = shm->sensors.line_position;
+        line_calibrating = shm->sensors.line_calibrating;
+        line_calibrated = shm->sensors.line_calibrated;
+        xSemaphoreGive(shm->mutex);
+    }
+
     cJSON_AddNumberToObject(response_root, "state_id", ctx->current_state);
     cJSON_AddStringToObject(response_root, "state_str", get_state_name(ctx->current_state));
     cJSON_AddNumberToObject(response_root, "mode_id", ctx->current_mode);
     cJSON_AddStringToObject(response_root, "mode_str", get_mode_name(ctx->current_mode));
+
+    cJSON_AddBoolToObject(response_root, "line_detected", line_detected);
+    cJSON_AddNumberToObject(response_root, "line_position", line_position);
+    cJSON_AddBoolToObject(response_root, "line_calibrating", line_calibrating);
+    cJSON_AddBoolToObject(response_root, "line_calibrated", line_calibrated);
 }
 
 // =============================================================================

@@ -5,7 +5,7 @@
 #include "cJSON.h"
 #include "mqtt_custom_client.h"
 #include "shared_memory.h"
-
+#include "string.h"
 // =============================================================================
 // Definitions & Local State
 // =============================================================================
