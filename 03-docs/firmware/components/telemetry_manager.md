@@ -24,8 +24,8 @@ Depende del wrapper `mqtt_custom_client.h` para el transporte y de `esp_timer.h`
 - `telemetry_destroy(handle)`: Finaliza la tarea, libera los buffers y el handle.
 
 ## Puntos Críticos y Depuración
-- **Saturación del Buffer (SRAM Batching):** El buffer tiene un tamaño fijo (`MAX_BUFFER_SIZE = 2048`).
-- **Timestamps:** Se utilizan nanosegundos Unix (19 dígitos). Requiere sincronización horaria o el uso de `CLOCK_REALTIME` para alineación absoluta en InfluxDB.
+- **Saturación del Buffer (SRAM Batching a Alta Frecuencia):** El buffer ha sido incrementado drásticamente (`MAX_BUFFER_SIZE = 32768`) para aguantar velocidades PID de 500Hz sin colapsar entre envíos Kconfig de 20ms a 100ms.
+- **Timestamps:** Utiliza PTP de 19 dígitos generados localmente por la instancia inyectable de `ptp_client_init()`. Mantiene exactitud Nano sin invocar RTC OS.
 
 ## Ejemplo de Uso e Instanciación
 ```c

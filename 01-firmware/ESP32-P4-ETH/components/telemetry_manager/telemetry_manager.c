@@ -14,6 +14,7 @@
 #include "esp_timer.h"
 #include <time.h>
 #include "mqtt_custom_client.h"
+#include "ptp_client.h"
 #include "telemetry_manager.h"
 
 // =============================================================================
@@ -23,7 +24,7 @@
 static const char *TAG = "telemetry";
 
 #define MAX_FIELDS 16
-#define MAX_BUFFER_SIZE 4096
+#define MAX_BUFFER_SIZE 32768
 
 typedef struct {
     char *key;
@@ -58,9 +59,7 @@ static void append_field_str(telemetry_obj_t *obj, const char *key, const char *
 {
     if (obj->field_count >= MAX_FIELDS) return;
 
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    int64_t timestamp_ns = (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
+    int64_t timestamp_ns = get_ptp_timestamp_us() * 1000ULL;
 
     // Allocate copy of key and value
     obj->fields[obj->field_count].key = strdup(key);
