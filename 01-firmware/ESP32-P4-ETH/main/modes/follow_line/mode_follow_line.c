@@ -8,16 +8,21 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "telemetry_manager.h"
+#include <string.h>
+#include <stdlib.h>
+
 static const char *TAG = "MODE_FOLLOW_LINE";
 static follow_line_logic_handle_t s_logic = NULL;
+static telemetry_handle_t s_telemetry = NULL;
 static volatile float s_curvature_multiplier = 1.0f; // Default: No change
 
 // Default configuration from Kconfig
 static follow_line_logic_config_t s_current_config = {
-    .kp = 0.0f, .ki = 0.0f, .kd = 0.0f, .max_speed = 0.0f
+    .kp = 1.0f, .ki = 0.0f, .kd = 0.1f, .max_speed = 0.8f
 };
-static float s_base_speed_nominal = 0.0f;
-static float s_ff_weight = 0.0f;
+static float s_base_speed_nominal = 0.2f;
+static float s_ff_weight = 0.5f;
 
 #define CURVATURE_TOPIC "robot/vision/curvature"
 #define CONFIG_TOPIC    "robot/config/follow_line"
@@ -93,6 +98,11 @@ static void enter(void) {
     mqtt_custom_client_register_topic_callback(CURVATURE_TOPIC, mqtt_curvature_callback);
     mqtt_custom_client_register_topic_callback(CONFIG_TOPIC,    mqtt_config_callback);
     
+    // 3. Initialize Telemetry
+    if (s_telemetry == NULL) {
+        s_telemetry = telemetry_create("robot/telemetry/follow_line", "line_follower", CONFIG_TELEMETRY_INTERVAL_FOLLOW_LINE_MS);
+    }
+
     if (mqtt_custom_client_is_connected()) {
         mqtt_custom_client_subscribe(CURVATURE_TOPIC, 0);
         mqtt_custom_client_subscribe(CONFIG_TOPIC, 0);
@@ -142,6 +152,31 @@ static void execute(motor_driver_mcpwm_t* motors,
     motor_velocity_ctrl_update(ctrl_right, &motor_r, dt_s, &pwm_r, NULL);
 
     motor_mcpwm_set(motors, (int16_t)(pwm_l * 10.0f), (int16_t)(pwm_r * 10.0f));
+
+    // 5. Telemetry
+    if (s_telemetry) {
+        telemetry_add_float(s_telemetry, "line_pos",      line_pos);
+        telemetry_add_bool(s_telemetry,  "line_detected", detected);
+        telemetry_add_float(s_telemetry, "base_speed",    dynamic_base_speed);
+        telemetry_add_float(s_telemetry, "target_l",      output.left_motor_speed);
+        telemetry_add_float(s_telemetry, "target_r",      output.right_motor_speed);
+        telemetry_add_float(s_telemetry, "actual_l",      cur_l);
+        telemetry_add_float(s_telemetry, "actual_r",      cur_r);
+        telemetry_add_float(s_telemetry, "p_term",        output.p_term);
+        telemetry_add_float(s_telemetry, "i_term",        output.i_term);
+        telemetry_add_float(s_telemetry, "d_term",        output.d_term);
+        telemetry_add_float(s_telemetry, "steering",      output.raw_steering);
+
+        // Explicit per-motor PID effects (as requested)
+        telemetry_add_float(s_telemetry, "p_eff_l",      output.p_term);
+        telemetry_add_float(s_telemetry, "p_eff_r",     -output.p_term);
+        telemetry_add_float(s_telemetry, "i_eff_l",      output.i_term);
+        telemetry_add_float(s_telemetry, "i_eff_r",     -output.i_term);
+        telemetry_add_float(s_telemetry, "d_eff_l",      output.d_term);
+        telemetry_add_float(s_telemetry, "d_eff_r",     -output.d_term);
+
+        telemetry_commit_point(s_telemetry);
+    }
 }
 
 static void exit_mode(motor_driver_mcpwm_t* motors) {
@@ -149,6 +184,10 @@ static void exit_mode(motor_driver_mcpwm_t* motors) {
     if (s_logic) {
         follow_line_logic_destroy(s_logic);
         s_logic = NULL;
+    }
+    if (s_telemetry) {
+        telemetry_destroy(s_telemetry);
+        s_telemetry = NULL;
     }
     motor_mcpwm_stop(motors);
 }

@@ -52,6 +52,10 @@ esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
             out_output->left_motor_speed = input->base_speed;
             out_output->right_motor_speed = input->base_speed;
         }
+        out_output->p_term = 0;
+        out_output->i_term = 0;
+        out_output->d_term = 0;
+        out_output->raw_steering = 0;
         return ESP_OK;
     }
 
@@ -60,10 +64,19 @@ esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
     ctx->integral += error * dt_s;
     float derivative = (error - ctx->previous_error) / dt_s;
     
-    float total_steering = (ctx->config.kp * error) + (ctx->config.ki * ctx->integral) + (ctx->config.kd * derivative);
+    float p_term = ctx->config.kp * error;
+    float i_term = ctx->config.ki * ctx->integral;
+    float d_term = ctx->config.kd * derivative;
+    float total_steering = p_term + i_term + d_term;
     
     out_output->left_motor_speed = clamp(input->base_speed + total_steering, -ctx->config.max_speed, ctx->config.max_speed);
     out_output->right_motor_speed = clamp(input->base_speed - total_steering, -ctx->config.max_speed, ctx->config.max_speed);
+
+    // Diagnostics
+    out_output->p_term = p_term;
+    out_output->i_term = i_term;
+    out_output->d_term = d_term;
+    out_output->raw_steering = total_steering;
 
     ctx->previous_error = error;
     return ESP_OK;

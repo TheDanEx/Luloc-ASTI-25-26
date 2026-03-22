@@ -69,6 +69,12 @@ config ROBOT_USE_ETHERNET
         help
             Frequency to push CPU Load and general system heartbeat.
 
+    config TELEMETRY_INTERVAL_FOLLOW_LINE_MS
+        int "Telemetry: Follow Line Publish Interval (ms)"
+        default 50
+        help
+            Publish interval for line follower PID and sensor metrics (e.g., 50ms = 20Hz)
+
 endmenu
 
 menu "Luloc-ASTI: 1. Follow Line Configuration"
@@ -93,7 +99,7 @@ menu "Luloc-ASTI: 1. Follow Line Configuration"
 
     config FOLLOW_LINE_BASE_SPEED
         string "Line Follower: Base Speed (m/s)"
-        default "0.4"
+        default "0.2"
         help
             Default straight-line speed for the robot.
 

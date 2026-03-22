@@ -20,6 +20,12 @@ typedef struct {
 typedef struct {
     float left_motor_speed;
     float right_motor_speed;
+
+    // Diagnostics for telemetry
+    float p_term;
+    float i_term;
+    float d_term;
+    float raw_steering;
 } follow_line_logic_output_t;
 
 typedef struct follow_line_logic_context_t* follow_line_logic_handle_t;
