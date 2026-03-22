@@ -39,21 +39,13 @@ picam2.start()
 def frames():
     while True:
         frame = picam2.capture_array()  # (H,W,3) BGR uint8
-
-        # ---- Gris rápido (suficiente para visión) ----
+        threshold = 130   # ajustable
         gray = frame[:, :, 0]
-        
-        # ---- A PARTIR DE AQUÍ: skimage ----
-        # Ejemplo:
-        # mask = und < 60
-        # und = (mask.astype(np.uint8) * 255)
-        # Elegimos un umbral para "negro"
-        threshold = 60   # ajustable
-        # Máscara: Matriz de True y false. Donde es mas pequeño de 30, ponemos true, donde no, false.
-        mask = gray < threshold
-        # creamos una nueva matriz del mismo tamaño, pero todo a ceros
-        resultado = np.zeros_like(gray)
-        # en la matriz de ceros, ponemos a 255 los pixeles que estan a True en la mascara
+        green = frame[:, :, 1]
+        blue = frame[:, :, 0]
+        red = frame[:, :, 2]
+        mask = (blue < threshold) & (green < threshold) & (red < threshold)
+        resultado = np.zeros_like(green)
         resultado[mask] = 255
 
         resultado  = np.repeat(resultado[:, :, None], 3, axis=2)
@@ -67,14 +59,14 @@ def frames():
         )
         
         #puntos obtenidos mediante el script crearPerspectiva
-        puntos = [[293, 301],
-       [532, 281],
-       [171, 579],
-       [726, 513]]
+        puntos = [[301, 194],
+       [265, 398],
+       [566, 396],
+       [514, 186]]
 
         pts1 = np.float32(puntos)
-        pts2 = np.float32([[0,0],[OUT_H,0],[0,OUT_W],[OUT_H,OUT_W]])
-
+        # pts2 = np.float32([[0,0],[OUT_H,0],[0,OUT_W],[OUT_H,OUT_W]])
+        pts2 = np.float32([[0,0],[0,OUT_W],[OUT_H,OUT_W],[OUT_H,0]])
         tform = ProjectiveTransform()
         tform.estimate(pts1, pts2)
 
@@ -94,47 +86,66 @@ def frames():
         )
         
         shape = new_img.shape
-        n_partes_image = 10
+        n_partes_image = 17
         tam_parte = shape[0]//n_partes_image
         fin_parte = tam_parte
         origen_image = 0
         r = 4  # radio del punto
         puntos_linea = []
+        
         for i in range(n_partes_image):
             cx, cy = blobDetector(new_img[origen_image:fin_parte,:, 0])
             #print(f'{i} -> [{origen_image} : {fin_parte}]')
             cx_i = int(cx)
             cy_i = int(cy+origen_image)
-            puntos_linea.append((cx_i,cy_i))
-            draw2.ellipse(
-                [(cx_i - r, cy_i - r), (cx_i + r, cy_i + r)],
-                fill=(255, 0, 0)   # rojo
-            )
+            if cx_i == -1:
+                puntos_linea.append((-1, -1))
+            else:
+                puntos_linea.append((cx_i,cy_i))
+                draw2.ellipse(
+                    [(cx_i - r, cy_i - r), (cx_i + r, cy_i + r)],
+                    fill=(255, 0, 0)   # rojo
+                )
             origen_image = fin_parte
             fin_parte+=tam_parte
         
-        theta_prev = None
-        curvatura = 0
+        total_deviation = 0
+        total_weight = 0
 
         for i in range(1, len(puntos_linea)):
             x_last, y_last = puntos_linea[i-1]
             x_current, y_current = puntos_linea[i]
+            
+            # Peso decreciente para puntos más lejanos al robot (look-ahead)
+            # i=1 (lejos) -> weight ~ 0.94, i=16 (cerca) -> weight ~ 0.06
+            weight = (len(puntos_linea) - i) / len(puntos_linea)
+            total_weight += weight
 
-            theta = np.arctan2(y_current - y_last,
-                            x_current - x_last)
+            if x_last == -1 or x_current == -1:
+                # Pérdida de línea: penalización máxima (PI/2)
+                total_deviation += (np.pi / 2) * weight
+            elif x_current <= 1 or x_current >= OUT_W - 1:
+                # Fuera de bordes: penalización máxima
+                total_deviation += (np.pi / 2) * weight
+            else:
+                # Vector entre segmentos
+                dx = x_current - x_last
+                dy = y_current - y_last
+                
+                theta = np.arctan2(dy, dx)
+                # "Adelante" es pi/2 (vertical hacia abajo en la imagen procesada de arriba a abajo)
+                deviation = abs(theta - np.pi / 2)
+                total_deviation += deviation * weight
 
-            if theta_prev is not None:
-                dtheta = theta - theta_prev
+        # Promedio ponderado de la desviación (rango 0 a PI/2)
+        avg_deviation = total_deviation / total_weight if total_weight > 0 else (np.pi / 2)
 
-                # normalizar a [-pi, pi]
-                dtheta = (dtheta + np.pi) % (2*np.pi) - np.pi
-
-                weight = len(puntos_linea) - i
-                curvatura += abs(dtheta) * weight
-
-            theta_prev = theta
-
-        curvatura_feedforward = curvatura / len(puntos_linea)
+        # Multiplicador 0-2:
+        # - Desviación 0 (recta) -> 2.0
+        # - Desviación PI/4 (90 grados) -> 1.0
+        # - Desviación PI/2 (pérdida/perpendicular) -> 0.0
+        speed_multiplier = 2.0 * (1.0 - (avg_deviation / (np.pi / 2)))
+        curvatura_feedforward = max(0.0, min(2.0, speed_multiplier))
 
         mqtt_client.publish(
             MQTT_TOPIC_CURVATURA,
@@ -143,7 +154,7 @@ def frames():
             retain=False,
         )
 
-        text = f"curvatura= {curvatura_feedforward:.6f}"
+        text = f"speed_mult= {curvatura_feedforward:.6f}"
         draw2.text((20, 50), text, fill=(255, 0, 0),font=font)
 
 
