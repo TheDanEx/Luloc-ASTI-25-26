@@ -10,6 +10,8 @@ struct follow_line_logic_context_t {
     float integral;
     float previous_error;
     float last_known_position;
+    bool has_seen_line;
+    int8_t last_turn_dir; // -1 left, +1 right
 };
 
 static inline float clamp(float value, float min, float max) {
@@ -33,42 +35,71 @@ esp_err_t follow_line_logic_destroy(follow_line_logic_handle_t handle) {
     return ESP_OK;
 }
 
-esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle, 
-                                   const follow_line_logic_input_t* input, 
+esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
+                                   const follow_line_logic_input_t* input,
                                    follow_line_logic_output_t* out_output,
                                    float dt_s) {
     if (handle == NULL || input == NULL || out_output == NULL) return ESP_ERR_INVALID_ARG;
     struct follow_line_logic_context_t* ctx = handle;
 
     if (!input->line_detected) {
-        ctx->integral = 0;
-        if (ctx->last_known_position < -0.01f) {
-            out_output->left_motor_speed = -input->base_speed;
-            out_output->right_motor_speed = input->base_speed;
-        } else if (ctx->last_known_position > 0.01f) {
-            out_output->left_motor_speed = input->base_speed;
-            out_output->right_motor_speed = -input->base_speed;
-        } else {
-            out_output->left_motor_speed = input->base_speed;
-            out_output->right_motor_speed = input->base_speed;
+        ctx->integral = 0.0f;
+
+        // Safety: before first valid detection, do not drive blind.
+        if (!ctx->has_seen_line) {
+            out_output->left_motor_speed = 0.0f;
+            out_output->right_motor_speed = 0.0f;
+            out_output->p_term = 0.0f;
+            out_output->i_term = 0.0f;
+            out_output->d_term = 0.0f;
+            out_output->raw_steering = 0.0f;
+            return ESP_OK;
         }
-        out_output->p_term = 0;
-        out_output->i_term = 0;
-        out_output->d_term = 0;
-        out_output->raw_steering = 0;
+
+        // Search behavior: rotate toward the last side where the line was seen.
+        int8_t search_dir = ctx->last_turn_dir;
+        if (ctx->last_known_position < -0.1f) {
+            search_dir = -1;
+        } else if (ctx->last_known_position > 0.1f) {
+            search_dir = 1;
+        }
+        if (search_dir == 0) {
+            search_dir = 1;
+        }
+
+        float spin_speed = clamp(input->base_speed * 0.7f, 0.08f, ctx->config.max_speed);
+        out_output->left_motor_speed = (search_dir < 0) ? -spin_speed : spin_speed;
+        out_output->right_motor_speed = -out_output->left_motor_speed;
+
+        out_output->p_term = 0.0f;
+        out_output->i_term = 0.0f;
+        out_output->d_term = 0.0f;
+        out_output->raw_steering = 0.0f;
         return ESP_OK;
     }
 
+    ctx->has_seen_line = true;
     ctx->last_known_position = input->line_position;
+
+    float safe_dt = (dt_s > 0.0001f) ? dt_s : 0.0001f;
     float error = input->line_position;
-    ctx->integral += error * dt_s;
-    float derivative = (error - ctx->previous_error) / dt_s;
-    
+
+    ctx->integral += error * safe_dt;
+    ctx->integral = clamp(ctx->integral, -1.5f, 1.5f);
+
+    float derivative = (error - ctx->previous_error) / safe_dt;
+
+    if (error > 0.02f) {
+        ctx->last_turn_dir = 1;
+    } else if (error < -0.02f) {
+        ctx->last_turn_dir = -1;
+    }
+
     float p_term = ctx->config.kp * error;
     float i_term = ctx->config.ki * ctx->integral;
     float d_term = ctx->config.kd * derivative;
     float total_steering = p_term + i_term + d_term;
-    
+
     out_output->left_motor_speed = clamp(input->base_speed + total_steering, -ctx->config.max_speed, ctx->config.max_speed);
     out_output->right_motor_speed = clamp(input->base_speed - total_steering, -ctx->config.max_speed, ctx->config.max_speed);
 
@@ -86,6 +117,6 @@ esp_err_t follow_line_logic_set_config(follow_line_logic_handle_t handle, const 
     if (handle == NULL || config == NULL) return ESP_ERR_INVALID_ARG;
     struct follow_line_logic_context_t* ctx = handle;
     ctx->config = *config;
-    ctx->integral = 0; // Reset windup on config change
+    ctx->integral = 0.0f; // Reset windup on config change
     return ESP_OK;
 }

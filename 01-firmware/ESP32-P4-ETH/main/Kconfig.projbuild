@@ -154,24 +154,4 @@ menu "Luloc-ASTI: 1.1. Follow Line Sensor Mapping"
         default 19
         range 0 54
 
-    config LINE_ARRAY_SENSOR_GPIO4
-        int "Line sensor 4 GPIO"
-        default 23
-        range 0 54
-
-    config LINE_ARRAY_SENSOR_GPIO5
-        int "Line sensor 5 GPIO"
-        default 21
-        range 0 54
-
-    config LINE_ARRAY_SENSOR_GPIO6
-        int "Line sensor 6 GPIO"
-        default 22
-        range 0 54
-
-    config LINE_ARRAY_SENSOR_GPIO7
-        int "Line sensor 7 GPIO"
-        default 20
-        range 0 54
-
 endmenu

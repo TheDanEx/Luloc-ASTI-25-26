@@ -9,8 +9,6 @@
 #include <stdlib.h>
 
 #include "telemetry_manager.h"
-#include <string.h>
-#include <stdlib.h>
 
 static const char *TAG = "MODE_FOLLOW_LINE";
 static follow_line_logic_handle_t s_logic = NULL;
@@ -19,10 +17,11 @@ static volatile float s_curvature_multiplier = 1.0f; // Default: No change
 
 // Default configuration from Kconfig
 static follow_line_logic_config_t s_current_config = {
-    .kp = 1.0f, .ki = 0.0f, .kd = 0.1f, .max_speed = 0.8f
+    .kp = 0.0f, .ki = 0.0f, .kd = 0.0f, .max_speed = 0.0f
 };
-static float s_base_speed_nominal = 0.2f;
-static float s_ff_weight = 0.5f;
+static float s_base_speed_nominal = 0.0f;
+static float s_ff_weight = 0.0f;
+static bool s_defaults_loaded = false;
 
 #define CURVATURE_TOPIC "robot/vision/curvature"
 #define CONFIG_TOPIC    "robot/config/follow_line"
@@ -81,14 +80,19 @@ static void mqtt_curvature_callback(const char *topic, int topic_len, const char
 static void enter(void) {
     ESP_LOGI(TAG, "Entering FOLLOW_LINE mode");
     
-    // 0. Load values from Kconfig if not already set (first time)
-    if (s_current_config.kp == 0.0f && s_base_speed_nominal == 0.0f) {
+    // 0. Load defaults from Kconfig only once. Live MQTT config can override later.
+    if (!s_defaults_loaded) {
         s_current_config.kp = atof(CONFIG_FOLLOW_LINE_KP);
         s_current_config.ki = atof(CONFIG_FOLLOW_LINE_KI);
         s_current_config.kd = atof(CONFIG_FOLLOW_LINE_KD);
         s_current_config.max_speed = atof(CONFIG_FOLLOW_LINE_MAX_SPEED);
         s_base_speed_nominal = atof(CONFIG_FOLLOW_LINE_BASE_SPEED);
         s_ff_weight = atof(CONFIG_FOLLOW_LINE_FF_WEIGHT);
+        s_defaults_loaded = true;
+
+        ESP_LOGI(TAG, "Loaded default follow_line config: P=%.2f I=%.2f D=%.2f Base=%.2f Max=%.2f FFw=%.2f",
+                 s_current_config.kp, s_current_config.ki, s_current_config.kd,
+                 s_base_speed_nominal, s_current_config.max_speed, s_ff_weight);
     }
 
     // 1. Initialize logic with static or last known config
