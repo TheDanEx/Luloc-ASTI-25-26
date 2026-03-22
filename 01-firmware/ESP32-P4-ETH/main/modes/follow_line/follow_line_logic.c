@@ -42,10 +42,10 @@ esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
 
     if (!input->line_detected) {
         ctx->integral = 0;
-        if (ctx->last_known_position < -0.4f) {
+        if (ctx->last_known_position < -0.01f) {
             out_output->left_motor_speed = -input->base_speed;
             out_output->right_motor_speed = input->base_speed;
-        } else if (ctx->last_known_position > 0.4f) {
+        } else if (ctx->last_known_position > 0.01f) {
             out_output->left_motor_speed = input->base_speed;
             out_output->right_motor_speed = -input->base_speed;
         } else {
