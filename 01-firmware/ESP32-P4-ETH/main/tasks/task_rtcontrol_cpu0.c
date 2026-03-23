@@ -36,7 +36,7 @@ static const char *TAG = "rt_cntrl";
 #define LINE_SENSOR_NOISE_GATE   0.05f
 
 #ifndef CONFIG_LINE_ARRAY_SENSOR_COUNT
-#define CONFIG_LINE_ARRAY_SENSOR_COUNT 7
+#define CONFIG_LINE_ARRAY_SENSOR_COUNT 4
 #endif
 
 #ifndef CONFIG_LINE_ARRAY_SENSOR_GPIO0
@@ -158,16 +158,30 @@ static line_sensor_runtime_t init_line_sensor_runtime(void)
     line_sensor_runtime_t runtime = {0};
     runtime.adc1.unit = ADC_UNIT_1;
 
-    // Force safe ADC1-only mapping to avoid runtime channel mismatches.
-    const int configured_gpios[4] = {18, 17, 16, 19};
-    const int sensor_count = 4;
+    // Sensor index order follows sdkconfig GPIO slots: idx 0 = rightmost, idx N-1 = leftmost.
+    const int configured_gpios[] = {
+        CONFIG_LINE_ARRAY_SENSOR_GPIO0,
+        CONFIG_LINE_ARRAY_SENSOR_GPIO1,
+        CONFIG_LINE_ARRAY_SENSOR_GPIO2,
+        CONFIG_LINE_ARRAY_SENSOR_GPIO3,
+    };
+    const int max_configured = (int)(sizeof(configured_gpios) / sizeof(configured_gpios[0]));
+    int sensor_count = CONFIG_LINE_ARRAY_SENSOR_COUNT;
+    if (sensor_count < 1) {
+        sensor_count = 1;
+    }
+    if (sensor_count > max_configured) {
+        ESP_LOGW(TAG, "LINE_ARRAY_SENSOR_COUNT=%d exceeds GPIO entries (%d). Clamping.",
+                 sensor_count, max_configured);
+        sensor_count = max_configured;
+    }
 
     const float pitch_m = ((float)CONFIG_LINE_ARRAY_SENSOR_PITCH_MM) / 1000.0f;
     const float center = ((float)(sensor_count - 1)) * 0.5f;
 
     for (int i = 0; i < sensor_count; i++) {
         const int gpio = configured_gpios[i];
-        const float sensor_position = ((float)i - center) * pitch_m;
+        const float sensor_position = (center - (float)i) * pitch_m;
 
         adc_unit_t unit = ADC_UNIT_1;
         adc_channel_t channel = ADC_CHANNEL_0;
