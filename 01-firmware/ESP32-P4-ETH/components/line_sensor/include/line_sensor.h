@@ -35,7 +35,7 @@ typedef struct {
  * @brief Output data containing the processed line centroid and raw values
  */
 typedef struct {
-    float line_position_m;    // Centroid of the line in real metric units (meters)
+    float line_position_mm;   // Centroid of the line in real metric units (millimeters)
     bool line_detected;       // True if a line is currently seen by ANY sensor
     uint16_t *raw_values;     // Array of raw reflectance values
     float *normalized_values; // Array of normalized values (0.0 to 1.0)

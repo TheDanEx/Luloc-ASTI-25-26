@@ -24,7 +24,7 @@ typedef struct {
     
     // Line Sensor
     bool  line_detected;
-    float line_position;         // Normalize or meters
+    float line_position_mm;      // Centered position (mm)
     bool  line_calibrating;
     bool  line_calibrated;
     

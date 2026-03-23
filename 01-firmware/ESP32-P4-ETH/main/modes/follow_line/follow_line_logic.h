@@ -12,7 +12,7 @@ typedef struct {
 } follow_line_logic_config_t;
 
 typedef struct {
-    float line_position;
+    float line_position_mm;
     bool line_detected;
     float base_speed; // Dynamic base speed (e.g. slowed down for curves)
 } follow_line_logic_input_t;

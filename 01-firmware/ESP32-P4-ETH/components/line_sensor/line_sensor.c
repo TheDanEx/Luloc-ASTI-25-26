@@ -41,7 +41,7 @@ struct line_sensor_context {
 static const char *TAG = "line_sensor";
 
 // =============================================================================
-// Internal Helpers
+// INTERNAL HELPERS
 // =============================================================================
 
 /**
@@ -113,7 +113,7 @@ static void calibration_task(void *arg)
 }
 
 // =============================================================================
-// Public API: Lifecycle
+// PUBLIC API: LIFECYCLE
 // =============================================================================
 
 /**
@@ -260,7 +260,7 @@ esp_err_t line_sensor_deinit(line_sensor_handle_t handle)
 }
 
 // =============================================================================
-// Public API: Calibration
+// PUBLIC API: CALIBRATION
 // =============================================================================
 
 /**
@@ -322,7 +322,7 @@ bool line_sensor_is_calibrated(line_sensor_handle_t handle)
 }
 
 // =============================================================================
-// Public API: Data Acquisition
+// PUBLIC API: DATA ACQUISITION
 // =============================================================================
 
 /**
@@ -427,7 +427,7 @@ esp_err_t line_sensor_read(line_sensor_handle_t handle, line_sensor_data_t *out_
         // We just hold the last known float value.
     }
 
-    out_data->line_position_m = ctx->current_centroid;
+    out_data->line_position_mm = ctx->current_centroid;
     out_data->line_detected = any_detected;
     out_data->raw_values = ctx->internal_raw_buffer;
     out_data->normalized_values = ctx->internal_norm_buffer;

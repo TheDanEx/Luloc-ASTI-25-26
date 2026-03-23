@@ -20,6 +20,10 @@ static inline float clamp(float value, float min, float max) {
     return value;
 }
 
+// =============================================================================
+// PUBLIC API: LIFECYCLE
+// =============================================================================
+
 esp_err_t follow_line_logic_create(const follow_line_logic_config_t* config, follow_line_logic_handle_t* out_handle) {
     if (config == NULL || out_handle == NULL) return ESP_ERR_INVALID_ARG;
     struct follow_line_logic_context_t* ctx = calloc(1, sizeof(struct follow_line_logic_context_t));
@@ -34,6 +38,10 @@ esp_err_t follow_line_logic_destroy(follow_line_logic_handle_t handle) {
     free(handle);
     return ESP_OK;
 }
+
+// =============================================================================
+// PUBLIC API: EXECUTION
+// =============================================================================
 
 esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
                                    const follow_line_logic_input_t* input,
@@ -57,10 +65,11 @@ esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
         }
 
         // Search behavior: rotate toward the last side where the line was seen.
+        // Thresholds adjusted for millimeters (e.g. 10mm array half-width).
         int8_t search_dir = ctx->last_turn_dir;
-        if (ctx->last_known_position < -0.1f) {
+        if (ctx->last_known_position < -10.0f) {
             search_dir = -1;
-        } else if (ctx->last_known_position > 0.1f) {
+        } else if (ctx->last_known_position > 10.0f) {
             search_dir = 1;
         }
         if (search_dir == 0) {
@@ -79,19 +88,20 @@ esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
     }
 
     ctx->has_seen_line = true;
-    ctx->last_known_position = input->line_position;
+    ctx->last_known_position = input->line_position_mm;
 
     float safe_dt = (dt_s > 0.0001f) ? dt_s : 0.0001f;
-    float error = input->line_position;
+    float error = input->line_position_mm;
 
     ctx->integral += error * safe_dt;
     ctx->integral = clamp(ctx->integral, -1.5f, 1.5f);
 
     float derivative = (error - ctx->previous_error) / safe_dt;
 
-    if (error > 0.02f) {
+    // Hysteresis for turn direction memory
+    if (error > 2.0f) {
         ctx->last_turn_dir = 1;
-    } else if (error < -0.02f) {
+    } else if (error < -2.0f) {
         ctx->last_turn_dir = -1;
     }
 
@@ -112,6 +122,10 @@ esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
     ctx->previous_error = error;
     return ESP_OK;
 }
+
+// =============================================================================
+// PUBLIC API: CONFIGURATION
+// =============================================================================
 
 esp_err_t follow_line_logic_set_config(follow_line_logic_handle_t handle, const follow_line_logic_config_t* config) {
     if (handle == NULL || config == NULL) return ESP_ERR_INVALID_ARG;

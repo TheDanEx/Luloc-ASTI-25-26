@@ -109,7 +109,7 @@ typedef struct {
 typedef struct {
     line_sensor_bank_t adc1;
     line_sensor_bank_t adc2;
-    float last_line_position_m;
+    float last_line_position_mm;
 } line_sensor_runtime_t;
 
 static bool add_sensor_to_bank(line_sensor_bank_t *bank, adc_channel_t channel, float position_m)
@@ -175,12 +175,12 @@ static line_sensor_runtime_t init_line_sensor_runtime(void)
         sensor_count = max_configured;
     }
 
-    const float pitch_m = ((float)CONFIG_LINE_ARRAY_SENSOR_PITCH_MM) / 1000.0f;
+    const float pitch_mm = (float)CONFIG_LINE_ARRAY_SENSOR_PITCH_MM;
     const float center = ((float)(sensor_count - 1)) * 0.5f;
 
     for (int i = 0; i < sensor_count; i++) {
         const int gpio = configured_gpios[i];
-        const float sensor_position = (center - (float)i) * pitch_m;
+        const float sensor_position = (center - (float)i) * pitch_mm;
 
         adc_unit_t unit = ADC_UNIT_1;
         adc_channel_t channel = ADC_CHANNEL_0;
@@ -251,12 +251,11 @@ static void line_bank_accumulate(const line_sensor_bank_t *bank,
         return;
     }
 
-    // Use the centroid computed by the line_sensor component to avoid
-    // duplicating weighting logic with potentially different polarity assumptions.
+    // Use the centroid computed by the line_sensor component in millimeters.
     if (data.line_detected) {
         *out_detected = true;
         *acc_weight += 1.0f;
-        *acc_pos_weighted += data.line_position_m;
+        *acc_pos_weighted += data.line_position_mm;
     }
 }
 
@@ -335,7 +334,7 @@ static void task_rtcontrol_cpu0(void *arg)
         float distance_r_m = encoder_sensor_get_distance(encoder_right);
 
         bool line_detected = false;
-        float line_position = line_runtime.last_line_position_m;
+        float line_position = line_runtime.last_line_position_mm;
         bool line_calibrated = false;
 
         const bool has_any_line_bank = line_runtime.adc1.active;
@@ -362,7 +361,7 @@ static void task_rtcontrol_cpu0(void *arg)
 
             if (sum_w > 0.0f) {
                 line_position = sum_pos_w / sum_w;
-                line_runtime.last_line_position_m = line_position;
+                line_runtime.last_line_position_mm = line_position;
             }
 
             line_calibrated = line_bank_is_calibrated(&line_runtime.adc1);
@@ -375,7 +374,7 @@ static void task_rtcontrol_cpu0(void *arg)
             shm->sensors.motor_speed_right = speed_r_ms;
             shm->sensors.motor_distance_right = distance_r_m;
             shm->sensors.line_detected = line_detected;
-            shm->sensors.line_position = line_position;
+            shm->sensors.line_position_mm = line_position;
             shm->sensors.line_calibrating = line_calibration_running;
             shm->sensors.line_calibrated = line_calibrated;
             xSemaphoreGive(shm->mutex);
@@ -397,7 +396,7 @@ static void task_rtcontrol_cpu0(void *arg)
 }
 
 // =============================================================================
-// Public API
+// PUBLIC API
 // =============================================================================
 
 void task_rtcontrol_cpu0_start(void)

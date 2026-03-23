@@ -90,7 +90,7 @@ static void handle_resource_status(cJSON *response_root) {
 
     if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         line_detected = shm->sensors.line_detected;
-        line_position = shm->sensors.line_position;
+        line_position = shm->sensors.line_position_mm;
         line_calibrating = shm->sensors.line_calibrating;
         line_calibrated = shm->sensors.line_calibrated;
         xSemaphoreGive(shm->mutex);

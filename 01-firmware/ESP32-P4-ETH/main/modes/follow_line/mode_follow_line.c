@@ -124,7 +124,7 @@ static void execute(motor_driver_mcpwm_t* motors,
     
     // 1. Read Inputs
     xSemaphoreTake(shm->mutex, portMAX_DELAY);
-    float line_pos = shm->sensors.line_position;
+    float line_pos = shm->sensors.line_position_mm;
     bool detected = shm->sensors.line_detected;
     float bat_mv = shm->sensors.battery_voltage;
     float cur_l = shm->sensors.motor_speed_left;
@@ -138,7 +138,7 @@ static void execute(motor_driver_mcpwm_t* motors,
     float dynamic_base_speed = s_base_speed_nominal * effective_multiplier;
 
     follow_line_logic_input_t input = {
-        .line_position = line_pos,
+        .line_position_mm = line_pos,
         .line_detected = detected,
         .base_speed = dynamic_base_speed
     };
