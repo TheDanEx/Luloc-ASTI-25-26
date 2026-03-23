@@ -33,7 +33,6 @@ static const char *TAG = "rt_cntrl";
 // Line Sensor Constraints
 // =============================================================================
 #define LINE_SENSOR_MAX_CHANNELS 8
-#define LINE_SENSOR_NOISE_GATE   0.05f
 
 #ifndef CONFIG_LINE_ARRAY_SENSOR_COUNT
 #define CONFIG_LINE_ARRAY_SENSOR_COUNT 4
@@ -252,16 +251,12 @@ static void line_bank_accumulate(const line_sensor_bank_t *bank,
         return;
     }
 
+    // Use the centroid computed by the line_sensor component to avoid
+    // duplicating weighting logic with potentially different polarity assumptions.
     if (data.line_detected) {
         *out_detected = true;
-    }
-
-    for (int i = 0; i < bank->count; i++) {
-        const float w = data.normalized_values[i];
-        if (w > LINE_SENSOR_NOISE_GATE) {
-            *acc_weight += w;
-            *acc_pos_weighted += (w * bank->positions_m[i]);
-        }
+        *acc_weight += 1.0f;
+        *acc_pos_weighted += data.line_position_m;
     }
 }
 
