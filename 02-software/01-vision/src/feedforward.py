@@ -59,10 +59,10 @@ def frames():
         )
         
         #puntos obtenidos mediante el script crearPerspectiva
-        puntos = [[314, 298],
-       [270, 459],
-       [568, 464],
-       [515, 292]]
+        puntos = [[325, 242],
+       [262, 467],
+       [569, 467],
+       [523, 240]]
 
         pts1 = np.float32(puntos)
         # pts2 = np.float32([[0,0],[OUT_H,0],[0,OUT_W],[OUT_H,OUT_W]])
