@@ -67,13 +67,17 @@ esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
         // Search behavior: rotate toward the last side where the line was seen.
         // Thresholds adjusted for millimeters (e.g. 10mm array half-width).
         int8_t search_dir = ctx->last_turn_dir;
+        ESP_LOGI(TAG, "Last known position=%.3f",ctx->last_known_position);
         if (ctx->last_known_position < -10.0f) {
-            search_dir = -1;
-        } else if (ctx->last_known_position > 10.0f) {
             search_dir = 1;
+            //ESP_LOGI(TAG, "Giro derecha");
+        } else if (ctx->last_known_position > 10.0f) {
+            search_dir = -1;
+            //ESP_LOGI(TAG, "Giro izquierda buscando la linea");
         }
         if (search_dir == 0) {
             search_dir = 1;
+            //ESP_LOGI(TAG, "Giro derecha por default");
         }
 
         float spin_speed = clamp(input->base_speed * 0.7f, 0.08f, ctx->config.max_speed);

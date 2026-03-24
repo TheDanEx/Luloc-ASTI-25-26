@@ -41,7 +41,7 @@ struct line_sensor_context {
 static const char *TAG = "line_sensor";
 
 // =============================================================================
-// INTERNAL HELPERS
+// Internal Helpers
 // =============================================================================
 
 /**
@@ -113,7 +113,7 @@ static void calibration_task(void *arg)
 }
 
 // =============================================================================
-// PUBLIC API: LIFECYCLE
+// Public API: Lifecycle
 // =============================================================================
 
 /**
@@ -260,7 +260,7 @@ esp_err_t line_sensor_deinit(line_sensor_handle_t handle)
 }
 
 // =============================================================================
-// PUBLIC API: CALIBRATION
+// Public API: Calibration
 // =============================================================================
 
 /**
@@ -322,7 +322,7 @@ bool line_sensor_is_calibrated(line_sensor_handle_t handle)
 }
 
 // =============================================================================
-// PUBLIC API: DATA ACQUISITION
+// Public API: Data Acquisition
 // =============================================================================
 
 /**
@@ -393,29 +393,23 @@ esp_err_t line_sensor_read(line_sensor_handle_t handle, line_sensor_data_t *out_
 
     // We assume ctx->config.sensor_positions_m array exists and matches num_sensors
     for (int i = 0; i < ctx->config.num_sensors; i++) {
-        float reflectance = ctx->internal_norm_buffer[i];
-
-        #if CONFIG_LINE_SENSOR_LINE_IS_DARK
-        float line_signal = 1.0f - reflectance;
-        #else
-        float line_signal = reflectance;
-        #endif
-
+        float weight = ctx->internal_norm_buffer[i];
+        
         // Digital conversion (Boolean Array for state machine logic)
-        bool is_seeing_line = (line_signal > ctx->config.detection_threshold);
+        bool is_seeing_line = (weight > ctx->config.detection_threshold);
         ctx->internal_digital_buffer[i] = is_seeing_line;
-
+        
         if (is_seeing_line) {
             any_detected = true;
         }
-
-        // Physical Interpolation (Noise Gate: ignores weak line response)
-        if (line_signal > 0.05f) {
-            sum_weights += line_signal;
-
+        
+        // Physical Interpolation (Noise Gate: ignores signals less than 5%)
+        if (weight > 0.05f) { 
+            sum_weights += weight;
+            
             // If physical distances were provided in config, use them. Otherwise default to flat indices.
             float pos_m = (ctx->config.sensor_positions_m) ? ctx->config.sensor_positions_m[i] : (float)i;
-            sum_positions += (line_signal * pos_m);
+            sum_positions += (weight * pos_m);
         }
     }
 
