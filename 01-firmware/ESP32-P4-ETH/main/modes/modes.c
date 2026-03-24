@@ -9,6 +9,7 @@ static const char *TAG = "MODES_DISPATCHER";
 extern const mode_interface_t mode_idle;
 extern const mode_interface_t mode_calibrate;
 extern const mode_interface_t mode_teleoperation;
+extern const mode_interface_t mode_calibrate_line;
 extern const mode_interface_t mode_follow_line;
 
 // Local state
@@ -22,10 +23,9 @@ static const mode_interface_t* get_interface_for_mode(robot_mode_t mode) {
     switch (mode) {
         case MODE_NONE:               return &mode_idle;
         case MODE_CALIBRATE_MOTORS:   return &mode_calibrate;
-        case MODE_CALIBRATE_LINE:     return &mode_calibrate;
         case MODE_REMOTE_DRIVE:       return &mode_teleoperation;
-        case MODE_AUTONOMOUS_PATH:    return &mode_follow_line;
-        case MODE_AUTONOMOUS_OBSTACLE: return &mode_follow_line; // Placeholder
+        case MODE_CALIBRATE_LINE:     return &mode_calibrate_line;
+        case MODE_FOLLOW_LINE:        return &mode_follow_line;
         default:                      return &mode_idle;
     }
 }

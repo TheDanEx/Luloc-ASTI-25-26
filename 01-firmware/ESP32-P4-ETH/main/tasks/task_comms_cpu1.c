@@ -52,38 +52,6 @@ static telemetry_handle_t tel_system = NULL;
 // Helper: Data Collection
 // =============================================================================
 
-/**
- * Capture high-frequency metrics from local sensors.
- * This function handles odometry calculations and system telemetry 
- * batching before committing points to the asynchronous reporter.
- */
-static void collect_high_freq_sensor_data(void)
-{
-    shared_memory_t* shm = shared_memory_get();
-
-    // Wheel Odometry Sync (Reading from SHM populated by CPU0)
-    float speed_l, dist_l, speed_r, dist_r;
-    xSemaphoreTake(shm->mutex, portMAX_DELAY);
-    speed_l = shm->sensors.motor_speed_left;
-    dist_l  = shm->sensors.motor_distance_left;
-    speed_r = shm->sensors.motor_speed_right;
-    dist_r  = shm->sensors.motor_distance_right;
-    xSemaphoreGive(shm->mutex);
-
-    telemetry_add_float(tel_odometry, "velIZ", speed_l);
-    telemetry_add_float(tel_odometry, "posIZ", dist_l);
-    telemetry_add_float(tel_odometry, "velDR", speed_r);
-    telemetry_add_float(tel_odometry, "posDR", dist_r);
-    telemetry_commit_point(tel_odometry);
-
-    // System Metrics & State
-    test_sensor_data_t sys_data;
-    if (test_sensor_read(&sys_data) == ESP_OK) {
-        telemetry_add_int(tel_system, "uptime_sec", sys_data.uptime_sec);
-        telemetry_add_int(tel_system, "uptime_ms", sys_data.uptime_ms);
-        telemetry_commit_point(tel_system);
-    }
-}
 
 // =============================================================================
 // Public API: Lifecycle

@@ -69,89 +69,31 @@ config ROBOT_USE_ETHERNET
         help
             Frequency to push CPU Load and general system heartbeat.
 
-    config TELEMETRY_INTERVAL_FOLLOW_LINE_MS
-        int "Telemetry: Follow Line Publish Interval (ms)"
-        default 50
-        help
-            Publish interval for line follower PID and sensor metrics (e.g., 50ms = 20Hz)
 
-endmenu
-
-menu "Luloc-ASTI: 1. Follow Line Configuration"
-
-    config FOLLOW_LINE_KP
-        string "Line Follower: Kp (Proportional)"
-        default "1.0"
-        help
-            Proportional gain for the line follower steering PID.
-
-    config FOLLOW_LINE_KI
-        string "Line Follower: Ki (Integral)"
+    config LINE_FOLLOWER_DEFAULT_KP
+        string "Line Follower: Default Kp"
+        default "0.05"
+    
+    config LINE_FOLLOWER_DEFAULT_KI
+        string "Line Follower: Default Ki"
         default "0.0"
-        help
-            Integral gain for the line follower steering PID.
 
-    config FOLLOW_LINE_KD
-        string "Line Follower: Kd (Derivative)"
-        default "0.1"
-        help
-            Derivative gain for the line follower steering PID.
+    config LINE_FOLLOWER_DEFAULT_KD
+        string "Line Follower: Default Kd"
+        default "0.01"
 
-    config FOLLOW_LINE_BASE_SPEED
+    config LINE_FOLLOWER_BASE_SPEED
         string "Line Follower: Base Speed (m/s)"
-        default "0.2"
-        help
-            Default straight-line speed for the robot.
+        default "0.3"
 
-    config FOLLOW_LINE_MAX_SPEED
-        string "Line Follower: Max Speed (m/s)"
-        default "0.8"
-        help
-            Absolute maximum speed for any motor during steering.
+    config LINE_FOLLOWER_FF_WEIGHT
+        string "Line Follower: Feed Forward Weight"
+        default "1.0"
 
-    config FOLLOW_LINE_FF_WEIGHT
-        string "Line Follower: FF Weight (0.0 to 1.0)"
-        default "0.5"
-        help
-            Weighting factor for the curvature feed-forward multiplier. 
-            0.0 = Ignore FF, 1.0 = Full application of FF.
+    config LINE_FOLLOWER_FF_VALUE
+        string "Line Follower: Feed Forward Value"
+        default "1.0"
 
 endmenu
 
-menu "Luloc-ASTI: 1.1. Follow Line Sensor Mapping"
 
-    config LINE_ARRAY_SENSOR_COUNT
-        int "Line sensor count"
-        default 4
-        range 1 8
-        help
-            Number of active line sensors in the array.
-
-    config LINE_ARRAY_SENSOR_PITCH_MM
-        int "Line sensor pitch (mm)"
-        default 10
-        range 1 50
-        help
-            Physical spacing between adjacent line sensors, in millimeters.
-
-    config LINE_ARRAY_SENSOR_GPIO0
-        int "Line sensor 0 GPIO"
-        default 18
-        range 0 54
-
-    config LINE_ARRAY_SENSOR_GPIO1
-        int "Line sensor 1 GPIO"
-        default 17
-        range 0 54
-
-    config LINE_ARRAY_SENSOR_GPIO2
-        int "Line sensor 2 GPIO"
-        default 16
-        range 0 54
-
-    config LINE_ARRAY_SENSOR_GPIO3
-        int "Line sensor 3 GPIO"
-        default 19
-        range 0 54
-
-endmenu

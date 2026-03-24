@@ -10,7 +10,7 @@ Format: JSON.
 
 | Evento | Payload |
 | :--- | :--- |
-| Cambio de Modo | `{"event":"MODE_CHANGE","mode":2,"mode_str":"AUTONOMOUS"}` |
+| Cambio de Modo | `{"event":"MODE_CHANGE","mode":2,"mode_str":"REMOTE"}` |
 | Error de Modo | `{"error":"MODE_CHANGE_REJECTED"}` |
 
 ---
@@ -24,7 +24,7 @@ Formato: ILP con Timestamps de 19 dígitos (Nanosegundos).
 | Tópico | Measurement | Campos Comunes |
 | :--- | :--- | :--- |
 | `robot/telemetry/odometry` | `odometry` | `velIZ`, `posIZ`, `velDR`, `posDR` |
-| `robot/telemetry/system` | `system` | `uptime_sec`, `uptime_ms`, `curvatura_ff` |
+| `robot/telemetry/system` | `system` | `uptime_sec`, `uptime_ms` |
 
 ---
 
@@ -64,7 +64,6 @@ Envío: `{"op": "set", "action": "<nombre>", ...}`
 
 1. **Reproducir Sonido:** `{"op": "set", "action": "play_sound", "sound_id": 1, "volume": 80}`
 2. **Cambiar de Modo:** `{"op": "set", "action": "set_mode", "mode_id": 1, "force": false}`
-3. **Mascara Calibración:** `{"op": "set", "action": "set_cal_mask", "mask": 3}`
 
 ---
 
@@ -74,4 +73,3 @@ Envío: `{"op": "set", "action": "<nombre>", ...}`
 **Tópicos:** `robot/config/<subsystem>`
 
 - **Motores:** `robot/config/motors` -> `{"kp": 0.8, "ki": 0.1, "kd": 0.05}`
-- **Curvatura:** `robot/config/curvature` -> `0.05` (Float o Binario).

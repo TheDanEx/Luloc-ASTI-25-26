@@ -26,12 +26,11 @@ typedef enum {
  */
 typedef enum {
     MODE_NONE = 0,
-    MODE_AUTONOMOUS_PATH,
-    MODE_AUTONOMOUS_OBSTACLE,
     MODE_REMOTE_DRIVE,
     MODE_TELEMETRY_STREAM,
     MODE_CALIBRATE_MOTORS,
     MODE_CALIBRATE_LINE,
+    MODE_FOLLOW_LINE,
     MODE_COUNT // Always last
 } robot_mode_t;
 
@@ -43,7 +42,6 @@ typedef enum {
     SENSOR_TEST = (1 << 0),
     SENSOR_ODOMETRY = (1 << 1),
     SENSOR_LiDAR = (1 << 2),
-    SENSOR_LINE = (1 << 3),
     // Add more as needed
 } robot_sensor_t;
 

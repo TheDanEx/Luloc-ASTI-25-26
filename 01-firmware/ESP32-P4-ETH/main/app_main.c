@@ -8,6 +8,7 @@
 #include "task_rtcontrol_cpu0.h"
 #include "task_comms_cpu1.h"
 #include "task_monitor_lowpower_cpu1.h"
+#include "task_telemetry.h"
 
 // =============================================================================
 // Application Entry Point
@@ -29,6 +30,9 @@ void app_main(void)
     printf("[CPU%d] %-40s [ OK ]\n", 1, "Started Comms Task");
 
     vTaskDelay(pdMS_TO_TICKS(100));
+
+    // Start telemetry task (handles line follower and system data)
+    task_telemetry_start();
 
     // Start real-time control loop on CPU 0 (PID, Sensors, Odometry)
     task_rtcontrol_cpu0_start();

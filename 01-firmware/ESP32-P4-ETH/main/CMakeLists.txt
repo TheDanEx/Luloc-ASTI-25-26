@@ -8,17 +8,18 @@ idf_component_register(
         "modes/modes.c"
         "modes/idle/mode_idle.c"
         "modes/calibrate/mode_calibrate.c"
-        "modes/teleoperation/mode_teleoperation.c"
+        "modes/calibrate/mode_calibrate_line.c"
         "modes/follow_line/mode_follow_line.c"
-        "modes/follow_line/follow_line_logic.c"
+        "modes/teleoperation/mode_teleoperation.c"
+        "tasks/task_telemetry.c"
     INCLUDE_DIRS
         "."
         "tasks"
         "modes"
         "modes/idle"
         "modes/calibrate"
-        "modes/teleoperation"
         "modes/follow_line"
+        "modes/teleoperation"
     REQUIRES
         ethernet
         mqtt_custom_client
@@ -36,9 +37,9 @@ idf_component_register(
         pid_tuner
         mqtt_api_responder
         motor_velocity_ctrl
-        line_sensor
         esp_adc
         ptp_client
+        line_sensor
     PRIV_REQUIRES
         nvs_flash
         esp_event

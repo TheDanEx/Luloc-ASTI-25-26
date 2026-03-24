@@ -1,33 +1,90 @@
-menu "Luloc-ASTI: 2. Sensors - ADC Line Array"
+menu "Lurloc-ASTI: 1. Line Sensor Configuration"
 
-    config LINE_SENSOR_CALIB_THRESHOLD
-        int "Calibration Min-Max difference threshold"
-        default 1500
-        help
-            The minimum difference between the maximum (white) and minimum (black) values
-            read during calibration to consider a sensor successfully calibrated.
-            For a 12-bit ADC (0-4095), 1500 is a safe threshold.
+config LINE_SENSOR_ENABLE
+    bool "Enable Line Sensor Component"
+    default y
 
-    config LINE_SENSOR_OVERSAMPLING
-        int "ADC Oversampling count"
-        default 16
-        help
-            Number of consecutive ADC reads to average for a single sensor measurement
-            to increase precision and reduce noise. Higher values cost more CPU time.
+config LINE_SENSOR_ADC_UNIT
+    int "ADC Unit for Line Sensors"
+    default 1
+    help
+        ADC Unit to use (1 or 2).
 
-    config LINE_SENSOR_DETECTION_THRESHOLD
-        int "Digital Detection Threshold (%)"
-        default 50
-        help
-            Percentage threshold (0-100) applied to the processed line signal.
-            Values around 50 usually work best after a correct min-max calibration.
+# Digital Pins
+config LINE_SENSOR_PIN_D1
+    int "Pin D1 (Digital)"
+    default 1
+config LINE_SENSOR_PIN_D2
+    int "Pin D2 (Digital)"
+    default 2
+config LINE_SENSOR_PIN_D7
+    int "Pin D7 (Digital)"
+    default 7
+config LINE_SENSOR_PIN_D8
+    int "Pin D8 (Digital)"
+    default 8
 
-    config LINE_SENSOR_LINE_IS_DARK
-        bool "Line color is dark (black)"
-        default y
-        help
-            If enabled, the component inverts normalized reflectance so dark line
-            produces high detection/weight. Disable only for white-line tracks
-            on dark background.
+# Analog Pins (GPIO -> ADC Channel mapping needed)
+config LINE_SENSOR_PIN_D3
+    int "Pin D3 (Analog GPIO)"
+    default 3
+config LINE_SENSOR_CHAN_D3
+    int "ADC Channel for D3"
+    default 3
+
+config LINE_SENSOR_PIN_D4
+    int "Pin D4 (Analog GPIO)"
+    default 4
+config LINE_SENSOR_CHAN_D4
+    int "ADC Channel for D4"
+    default 4
+
+config LINE_SENSOR_PIN_D5
+    int "Pin D5 (Analog GPIO)"
+    default 5
+config LINE_SENSOR_CHAN_D5
+    int "ADC Channel for D5"
+    default 5
+
+config LINE_SENSOR_PIN_D6
+    int "Pin D6 (Analog GPIO)"
+    default 6
+config LINE_SENSOR_CHAN_D6
+    int "ADC Channel for D6"
+    default 6
+
+# Default Calibration
+config LINE_SENSOR_DEFAULT_MIN
+    int "Default Min ADC Value"
+    default 100
+config LINE_SENSOR_DEFAULT_MAX
+    int "Default Max ADC Value"
+    default 4000
+
+# Weights (mm from center)
+config LINE_SENSOR_WEIGHT_D1
+    int "Weight D1 (mm)"
+    default -35
+config LINE_SENSOR_WEIGHT_D2
+    int "Weight D2 (mm)"
+    default -25
+config LINE_SENSOR_WEIGHT_D3
+    int "Weight D3 (mm)"
+    default -15
+config LINE_SENSOR_WEIGHT_D4
+    int "Weight D4 (mm)"
+    default -5
+config LINE_SENSOR_WEIGHT_D5
+    int "Weight D5 (mm)"
+    default 5
+config LINE_SENSOR_WEIGHT_D6
+    int "Weight D6 (mm)"
+    default 15
+config LINE_SENSOR_WEIGHT_D7
+    int "Weight D7 (mm)"
+    default 25
+config LINE_SENSOR_WEIGHT_D8
+    int "Weight D8 (mm)"
+    default 35
 
 endmenu

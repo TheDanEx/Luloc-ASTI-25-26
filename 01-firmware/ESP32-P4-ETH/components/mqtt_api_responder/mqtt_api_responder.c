@@ -83,16 +83,7 @@ static void handle_resource_status(cJSON *response_root) {
     robot_state_context_t* ctx = state_machine_get_context();
     shared_memory_t* shm = shared_memory_get();
 
-    bool line_detected = false;
-    float line_position = 0.0f;
-    bool line_calibrating = false;
-    bool line_calibrated = false;
-
     if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        line_detected = shm->sensors.line_detected;
-        line_position = shm->sensors.line_position_mm;
-        line_calibrating = shm->sensors.line_calibrating;
-        line_calibrated = shm->sensors.line_calibrated;
         xSemaphoreGive(shm->mutex);
     }
 
@@ -100,11 +91,6 @@ static void handle_resource_status(cJSON *response_root) {
     cJSON_AddStringToObject(response_root, "state_str", get_state_name(ctx->current_state));
     cJSON_AddNumberToObject(response_root, "mode_id", ctx->current_mode);
     cJSON_AddStringToObject(response_root, "mode_str", get_mode_name(ctx->current_mode));
-
-    cJSON_AddBoolToObject(response_root, "line_detected", line_detected);
-    cJSON_AddNumberToObject(response_root, "line_position", line_position);
-    cJSON_AddBoolToObject(response_root, "line_calibrating", line_calibrating);
-    cJSON_AddBoolToObject(response_root, "line_calibrated", line_calibrated);
 }
 
 // =============================================================================
@@ -223,6 +209,36 @@ static void handle_action_set_cal_mask(cJSON *root, cJSON *response_root) {
     }
 }
 
+/**
+ * Update Line Follower PID and Base Speed
+ */
+static void handle_action_set_line_params(cJSON *root, cJSON *response_root) {
+    cJSON *kp = cJSON_GetObjectItem(root, "kp");
+    cJSON *ki = cJSON_GetObjectItem(root, "ki");
+    cJSON *kd = cJSON_GetObjectItem(root, "kd");
+    cJSON *speed = cJSON_GetObjectItem(root, "speed");
+
+    shared_memory_t* shm = shared_memory_get();
+    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        if (cJSON_IsNumber(kp) && cJSON_IsNumber(ki) && cJSON_IsNumber(kd)) {
+            shm->line_pid.kp = (float)kp->valuedouble;
+            shm->line_pid.ki = (float)ki->valuedouble;
+            shm->line_pid.kd = (float)kd->valuedouble;
+            shm->line_pid.updated_flag = true;
+        }
+        if (cJSON_IsNumber(speed)) {
+            shm->line_base_speed = (float)speed->valuedouble;
+            shm->line_params_updated = true;
+        }
+        xSemaphoreGive(shm->mutex);
+        cJSON_AddStringToObject(response_root, "status", "success");
+        cJSON_AddStringToObject(response_root, "message", "Line parameters updated");
+    } else {
+        cJSON_AddStringToObject(response_root, "status", "error");
+        cJSON_AddStringToObject(response_root, "message", "Shared memory timeout");
+    }
+}
+
 // =============================================================================
 // MQTT Callback
 // =============================================================================
@@ -285,6 +301,7 @@ static void api_mqtt_callback(const char *topic, int topic_len, const char *data
                 if (strcmp(action, "play_sound") == 0) handle_action_play_sound(root, response_root);
                 else if (strcmp(action, "set_mode") == 0) handle_action_set_mode(root, response_root);
                 else if (strcmp(action, "set_cal_mask") == 0) handle_action_set_cal_mask(root, response_root);
+                else if (strcmp(action, "set_line_params") == 0) handle_action_set_line_params(root, response_root);
                 else {
                     cJSON_AddStringToObject(response_root, "status", "error");
                     cJSON_AddStringToObject(response_root, "message", "Unknown Action");

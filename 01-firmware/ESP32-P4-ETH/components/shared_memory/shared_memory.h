@@ -22,16 +22,11 @@ typedef struct {
     float battery_voltage;       // mV
     float temperature;           // °C
     
-    // Line Sensor
-    bool  line_detected;
-    float line_position_mm;      // Centered position (mm)
-    bool  line_calibrating;
-    bool  line_calibrated;
-    
     int32_t encoder_count_left;  // Ticks
     int32_t encoder_count_right; // Ticks
     uint32_t timestamp_ms;       // Local timestamp
 } robot_sensor_data_t;
+
 
 typedef struct {
     // Commands received by CPU1 to execute on CPU0
@@ -61,6 +56,9 @@ typedef struct {
     
     shared_teleop_config_t teleop;     // Teleoperation targets
     shared_pid_config_t motor_pids[2]; // 0=Left, 1=Right
+    shared_pid_config_t line_pid;      // Line follower PID
+    float line_base_speed;             // Line follower base speed
+    bool line_params_updated;          // Flag for speed update
     uint8_t calibration_motor_mask;    // bitmask: 1=Left, 2=Right, 3=Both
 
     uint32_t heartbeat_cpu0;    // CPU0 heartbeat counter

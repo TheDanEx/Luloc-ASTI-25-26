@@ -54,44 +54,12 @@ Observe el tópico `robot/telemetry/calibration` (Grafana). Ahora el sistema des
 
 ---
 
-## 2. Calibración del Sigue-Líneas (`MODE_FOLLOW_LINE = 2`)
-
-**Objetivo:** Mantener el centro de la línea negra sin oscilaciones (Wobbling) y con suavidad en curvas.
-
-### Preparación
-1. Coloque el robot en pista y active el modo:
-   ```json
-   {"op": "set", "action": "set_mode", "mode_id": 2}
-   ```
-
-### Configuración Dinámica
-A diferencia de los motores, el siguelíneas tiene su propio tópico de configuración JSON:
-```json
-// Topic: robot/config/follow_line
-{
-  "kp": 1.5, 
-  "kd": 0.5, 
-  "max_speed": 0.8,
-  "ff_weight": 0.4
-}
-```
-
-### Parámetros Clave
-*   **`kp`**: Agresividad al corregir el error de posición.
-*   **`kd`**: Amortiguación. Vital para evitar el "culebreo" en rectas tras salir de una curva.
-*   **`ff_weight`**: (0.0 a 1.0). Determina cuánto caso le hace el robot a la predicción de curva de la Raspberry Pi. Si el robot frena demasiado en curvas, baje este valor.
-
-### Configuración por Defecto (Kconfig)
-Los valores iniciales se pueden definir en `idf.py menuconfig` bajo el menú `Follow Line Configuration`, lo que permite que el robot arranque con una base estable.
-
----
-
 ## 3. Ejemplo Paso a Paso: Calibración Rápida
 
 Para calibrar el **Motor Izquierdo** desde cero:
 
 1.  **Activar Trazas:** Ponga al robot en el modo adecuado:
-    `Topic: robot/api/request` -> `{"op": "set", "action": "set_mode", "mode_id": 5}`
+    `Topic: robot/api/request` -> `{"op": "set", "action": "set_mode", "mode_id": 3}`
 2.  **Aislar el Motor:** Active solo el motor izquierdo:
     `Topic: robot/api/request` -> `{"op": "set", "action": "set_cal_mask", "mask": 1}`
 3.  **Lanzar Estímulo:** Configure un barrido de 0.5 m/s cada 2 segundos:
@@ -103,7 +71,7 @@ Para calibrar el **Motor Izquierdo** desde cero:
 > [!IMPORTANT]
 > **Aviso de Persistencia**
 > *   **Motores:** Los valores enviados a `robot/config/motors` **SÍ** se guardan en la memoria Flash (NVS) y sobreviven al reinicio.
-> *   **Siguelíneas y Barrido:** Los valores de `follow_line` y `calibration` son **VOLÁTILES**. Se borrarán al apagar el robot.
+> *   **Barrido:** Los valores de `calibration` son **VOLÁTILES**. Se borrarán al apagar el robot.
 > *   **Recomendación:** Una vez hallados los valores óptimos, **trasládelos a `menuconfig`** (`idf.py menuconfig`) para que formen parte del firmware oficial y el robot sea determinista desde el segundo 0.
 
 ---
@@ -113,5 +81,5 @@ Para calibrar el **Motor Izquierdo** desde cero:
 | :--- | :--- | :--- |
 | **Control Motores** | `robot/config/motors` | `{"motor":"left", "kp":1.0}` |
 | **Test de Barrido** | `robot/config/calibration` | `{"speed1":0.5, "manual_mode":false}`|
-| **Sigue-Líneas** | `robot/config/follow_line` | `{"kp":1.2, "ff_weight":0.5}` |
-| **Comandos API** | `robot/api/request` | `{"op":"set", "action":"set_mode", "mode_id":2}` |
+| **Comandos API** | `robot/api/request` | `{"op":"set", "action":"set_mode", "mode_id":3}` |
+

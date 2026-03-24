@@ -1,115 +1,88 @@
-/*
- * Line Sensor Array Component for ESP32-P4
- * SPDX-License-Identifier: MIT
- */
 #pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
-#include "hal/adc_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// Opaque handle for the line sensor instance (Class-like encapsulation)
-typedef struct line_sensor_context* line_sensor_handle_t;
+#define LINE_SENSOR_COUNT 8
 
-/**
- * @brief Configuration structure for the Line Sensor Array
- * 
- * Supports an arbitrary number of sensors by passing an array of ADC channels.
- */
+typedef enum {
+    LINE_SENSOR_DIGITAL = 0,
+    LINE_SENSOR_ANALOG
+} line_sensor_type_t;
+
 typedef struct {
-    int num_sensors;                    // Example: 8
-    adc_unit_t adc_unit;                // Example: ADC_UNIT_1
-    const adc_channel_t *adc_channels;  // Array of ADC channels to read
-    const float *sensor_positions_m;    // Array of physical distances from center (meters)
-    int oversample_count;               // If 0, uses menuconfig default
-    int calibration_threshold;          // If 0, uses menuconfig default
-    float detection_threshold;          // Normalized threshold (0.0 - 1.0). If 0.0, uses menuconfig %
+    line_sensor_type_t type;
+    int pin;
+    uint32_t min_value;
+    uint32_t max_value;
+    float weight_mm; // Distance from center in mm
 } line_sensor_config_t;
 
 /**
- * @brief Output data containing the processed line centroid and raw values
- */
-typedef struct {
-    float line_position_mm;   // Centroid of the line in real metric units (millimeters)
-    bool line_detected;       // True if a line is currently seen by ANY sensor
-    uint16_t *raw_values;     // Array of raw reflectance values
-    float *normalized_values; // Array of normalized values (0.0 to 1.0)
-    bool *digital_states;     // Array of individual triggers (true if line is under sensor i)
-} line_sensor_data_t;
-
-/**
- * @brief Initialize the Line Sensor Array
+ * @brief Initialize line sensor array
  * 
- * @param config Pointer to the configuration struct
- * @return line_sensor_handle_t Handle to the initialized sensor, NULL on failure
- */
-line_sensor_handle_t line_sensor_init(const line_sensor_config_t *config);
-
-/**
- * @brief De-initialize the Line Sensor Array and free memory
- * 
- * @param handle Valid line sensor handle
  * @return esp_err_t ESP_OK on success
  */
-esp_err_t line_sensor_deinit(line_sensor_handle_t handle);
+esp_err_t line_sensor_init(void);
 
 /**
- * @brief Start background calibration process
- * 
- * Spawns a dedicated FreeRTOS task to sample sensors at high frequency.
- * @param handle Valid line sensor handle
- * @return esp_err_t ESP_OK on success
+ * @brief Deinitialize and release resources
  */
-esp_err_t line_sensor_calibration_start(line_sensor_handle_t handle);
+void line_sensor_deinit(void);
 
 /**
- * @brief Stop the calibration process
+ * @brief Read raw values from all sensors
  * 
- * @param handle Valid line sensor handle
- * @return esp_err_t ESP_OK on success
+ * @param raw_values Array to store results (must be size LINE_SENSOR_COUNT)
+ * @param num_samples Number of ADC samples for oversampling/averaging
  */
-esp_err_t line_sensor_calibration_stop(line_sensor_handle_t handle);
+void line_sensor_read_raw(uint32_t *raw_values, uint32_t num_samples);
 
 /**
- * @brief Check if all sensors have seen both black and white distinctively
+ * @brief Read normalized values (0.0 to 1.0)
  * 
- * @param handle Valid line sensor handle
- * @return true if calibrated, false otherwise
+ * @param norm_values Array to store results (must be size LINE_SENSOR_COUNT)
+ * @param raw_values_in Optional: provide previously read raw values. If NULL, reads internally.
+ * @param num_samples Number of ADC samples if internal read is performed.
  */
-bool line_sensor_is_calibrated(line_sensor_handle_t handle);
+void line_sensor_read_norm(float *norm_values, const uint32_t *raw_values_in, uint32_t num_samples);
 
 /**
- * @brief Read the latest data (raw, normalized, and centroid)
+ * @brief Read binarized values (0 or 1)
  * 
- * @param handle Valid line sensor handle
- * @param out_data Pointer to the struct where data will be stored
- * @return esp_err_t ESP_OK on successful read
+ * @param bin_values Array to store results (must be size LINE_SENSOR_COUNT)
+ * @param norm_values_in Optional: provide previously read normalized values. If NULL, reads internally.
+ * @param num_samples Number of ADC samples if internal read is performed.
  */
-esp_err_t line_sensor_read(line_sensor_handle_t handle, line_sensor_data_t *out_data);
+void line_sensor_read_bin(uint8_t *bin_values, const float *norm_values_in, uint32_t num_samples);
 
 /**
- * @brief Get only raw ADC values directly (oversampled average)
+ * @brief Calculate position of line in mm relative to center
  * 
- * @param handle Valid line sensor handle
- * @param out_raw Array to store the raw values (must be sized >= num_sensors)
- * @return esp_err_t ESP_OK on success
+ * @param norm_values_in Optional: provide previously read normalized values. If NULL, reads internally.
+ * @param num_samples Number of ADC samples if internal read is performed.
+ * @return float Position in mm. 0 is center.
  */
-esp_err_t line_sensor_read_raw(line_sensor_handle_t handle, uint16_t *out_raw);
+float line_sensor_read_line_position(const float *norm_values_in, uint32_t num_samples);
 
 /**
- * @brief Get only normalized values (0.0 to 1.0) based on calibration bounds
+ * @brief Update calibration values for a specific sensor
  * 
- * @param handle Valid line sensor handle
- * @param out_normalized Array to store values (must be sized >= num_sensors)
- * @return esp_err_t ESP_OK on success
+ * @param index Sensor index (0 to 7)
+ * @param min_val New minimum value
+ * @param max_val New maximum value
  */
-esp_err_t line_sensor_read_normalized(line_sensor_handle_t handle, float *out_normalized);
+void line_sensor_set_calibration(uint8_t index, uint32_t min_val, uint32_t max_val);
 
+/**
+ * @brief Get current calibration values for a sensor
+ */
+void line_sensor_get_calibration(uint8_t index, uint32_t *min_val, uint32_t *max_val);
 
 #ifdef __cplusplus
 }

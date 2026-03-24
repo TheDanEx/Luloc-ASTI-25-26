@@ -12,9 +12,9 @@
 #include <string.h>
 #include "telemetry_manager.h"
 #include "encoder_sensor.h"
-#include "line_sensor.h"
 #include "esp_adc/adc_oneshot.h"
 #include "driver/gpio.h"
+#include "line_sensor.h"
 
 static const char *TAG = "rt_cntrl";
 
@@ -29,235 +29,6 @@ static const char *TAG = "rt_cntrl";
 #define WHEEL_DIAMETER_M        0.068f
 #define GEAR_RATIO              21.3f
 
-// =============================================================================
-// Line Sensor Constraints
-// =============================================================================
-#define LINE_SENSOR_MAX_CHANNELS 8
-
-#ifndef CONFIG_LINE_ARRAY_SENSOR_COUNT
-#define CONFIG_LINE_ARRAY_SENSOR_COUNT 4
-#endif
-
-#ifndef CONFIG_LINE_ARRAY_SENSOR_GPIO0
-#define CONFIG_LINE_ARRAY_SENSOR_GPIO0 18
-#endif
-#ifndef CONFIG_LINE_ARRAY_SENSOR_GPIO1
-#define CONFIG_LINE_ARRAY_SENSOR_GPIO1 17
-#endif
-#ifndef CONFIG_LINE_ARRAY_SENSOR_GPIO2
-#define CONFIG_LINE_ARRAY_SENSOR_GPIO2 16
-#endif
-#ifndef CONFIG_LINE_ARRAY_SENSOR_GPIO3
-#define CONFIG_LINE_ARRAY_SENSOR_GPIO3 19
-#endif
-
-#ifndef CONFIG_LINE_ARRAY_SENSOR_PITCH_MM
-#define CONFIG_LINE_ARRAY_SENSOR_PITCH_MM 10
-#endif
-
-#ifndef CONFIG_LINE_ARRAY_EMITTER_GPIO
-#define CONFIG_LINE_ARRAY_EMITTER_GPIO 5
-#endif
-
-static void line_sensor_emitter_enable(void)
-{
-    gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << CONFIG_LINE_ARRAY_EMITTER_GPIO),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-
-    if (gpio_config(&io_conf) == ESP_OK) {
-        (void)gpio_set_level(CONFIG_LINE_ARRAY_EMITTER_GPIO, 1);
-        ESP_LOGI(TAG, "Line emitter enabled on GPIO %d", CONFIG_LINE_ARRAY_EMITTER_GPIO);
-    } else {
-        ESP_LOGE(TAG, "Failed to configure line emitter GPIO %d", CONFIG_LINE_ARRAY_EMITTER_GPIO);
-    }
-}
-
-// =============================================================================
-// Motor Configuration
-// =============================================================================
-
-// Default HW configuration (PINS: Iz: 47/48, Dr: 20/21)
-static motor_driver_mcpwm_t motors = {
-    .left  = { .in1 = GPIO_NUM_22, .in2 = GPIO_NUM_23},
-    .right = { .in1 = GPIO_NUM_21, .in2 = GPIO_NUM_20},
-
-    .nsleep = GPIO_NUM_NC,
-    .pwm_hz = 20000,
-    .resolution_hz = 10000000,  // 10 MHz
-    .deadband = 30,
-    .brake_on_stop = true,
-};
-
-// =============================================================================
-// Internal Helpers
-// =============================================================================
-
-typedef struct {
-    line_sensor_handle_t handle;
-    int count;
-    adc_channel_t channels[LINE_SENSOR_MAX_CHANNELS];
-    float positions_m[LINE_SENSOR_MAX_CHANNELS];
-    adc_unit_t unit;
-    bool active;
-} line_sensor_bank_t;
-
-typedef struct {
-    line_sensor_bank_t adc1;
-    line_sensor_bank_t adc2;
-    float last_line_position_mm;
-} line_sensor_runtime_t;
-
-static bool add_sensor_to_bank(line_sensor_bank_t *bank, adc_channel_t channel, float position_m)
-{
-    if (bank == NULL || bank->count >= LINE_SENSOR_MAX_CHANNELS) {
-        return false;
-    }
-
-    bank->channels[bank->count] = channel;
-    bank->positions_m[bank->count] = position_m;
-    bank->count++;
-    return true;
-}
-
-static bool init_bank_handle(line_sensor_bank_t *bank)
-{
-    if (bank == NULL || bank->count <= 0) {
-        return false;
-    }
-
-    line_sensor_config_t cfg = {
-        .num_sensors = bank->count,
-        .adc_unit = bank->unit,
-        .adc_channels = bank->channels,
-        .sensor_positions_m = bank->positions_m,
-        .oversample_count = 0,
-        .calibration_threshold = 0,
-        .detection_threshold = 0.0f,
-    };
-
-    bank->handle = line_sensor_init(&cfg);
-    bank->active = (bank->handle != NULL);
-
-    if (bank->active) {
-        ESP_LOGI(TAG, "Line sensor bank initialized: unit=%d, channels=%d", (int)bank->unit, bank->count);
-    } else {
-        ESP_LOGE(TAG, "Failed to initialize line sensor bank: unit=%d", (int)bank->unit);
-    }
-
-    return bank->active;
-}
-
-static line_sensor_runtime_t init_line_sensor_runtime(void)
-{
-    line_sensor_runtime_t runtime = {0};
-    runtime.adc1.unit = ADC_UNIT_1;
-
-    // Sensor index order follows sdkconfig GPIO slots: idx 0 = rightmost, idx N-1 = leftmost.
-    const int configured_gpios[] = {
-        CONFIG_LINE_ARRAY_SENSOR_GPIO0,
-        CONFIG_LINE_ARRAY_SENSOR_GPIO1,
-        CONFIG_LINE_ARRAY_SENSOR_GPIO2,
-        CONFIG_LINE_ARRAY_SENSOR_GPIO3,
-    };
-    const int max_configured = (int)(sizeof(configured_gpios) / sizeof(configured_gpios[0]));
-    int sensor_count = CONFIG_LINE_ARRAY_SENSOR_COUNT;
-    if (sensor_count < 1) {
-        sensor_count = 1;
-    }
-    if (sensor_count > max_configured) {
-        ESP_LOGW(TAG, "LINE_ARRAY_SENSOR_COUNT=%d exceeds GPIO entries (%d). Clamping.",
-                 sensor_count, max_configured);
-        sensor_count = max_configured;
-    }
-
-    const float pitch_mm = (float)CONFIG_LINE_ARRAY_SENSOR_PITCH_MM;
-    const float center = ((float)(sensor_count - 1)) * 0.5f;
-
-    for (int i = 0; i < sensor_count; i++) {
-        const int gpio = configured_gpios[i];
-        const float sensor_position = (center - (float)i) * pitch_mm;
-
-        adc_unit_t unit = ADC_UNIT_1;
-        adc_channel_t channel = ADC_CHANNEL_0;
-        esp_err_t err = adc_oneshot_io_to_channel(gpio, &unit, &channel);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "Skipping GPIO %d (sensor idx %d): no ADC mapping", gpio, i);
-            continue;
-        }
-
-        if (unit != ADC_UNIT_1) {
-            ESP_LOGE(TAG, "Skipping GPIO %d (sensor idx %d): unexpected unit=%d", gpio, i, (int)unit);
-            continue;
-        }
-
-        bool added = add_sensor_to_bank(&runtime.adc1, channel, sensor_position);
-        if (!added) {
-            ESP_LOGE(TAG, "Unable to add sensor idx %d (GPIO %d, unit %d, ch %d)", i, gpio, (int)unit, (int)channel);
-        } else {
-            ESP_LOGI(TAG, "Line sensor idx %d: GPIO %d -> unit %d ch %d pos %.4f m", i, gpio, (int)unit, (int)channel, sensor_position);
-        }
-    }
-
-    (void)init_bank_handle(&runtime.adc1);
-
-    if (!runtime.adc1.active) {
-        ESP_LOGE(TAG, "No valid ADC1 line sensors configured");
-    }
-
-    return runtime;
-}
-
-
-static bool line_bank_start_calibration(line_sensor_bank_t *bank)
-{
-    if (bank == NULL || !bank->active || bank->handle == NULL) {
-        return true;
-    }
-    return line_sensor_calibration_start(bank->handle) == ESP_OK;
-}
-
-static void line_bank_stop_calibration(line_sensor_bank_t *bank)
-{
-    if (bank == NULL || !bank->active || bank->handle == NULL) {
-        return;
-    }
-    (void)line_sensor_calibration_stop(bank->handle);
-}
-
-static bool line_bank_is_calibrated(const line_sensor_bank_t *bank)
-{
-    if (bank == NULL || !bank->active || bank->handle == NULL) {
-        return true;
-    }
-    return line_sensor_is_calibrated(bank->handle);
-}
-
-static void line_bank_accumulate(const line_sensor_bank_t *bank,
-                                 bool *out_detected,
-                                 float *acc_weight,
-                                 float *acc_pos_weighted)
-{
-    if (bank == NULL || !bank->active || bank->handle == NULL) {
-        return;
-    }
-
-    line_sensor_data_t data = {0};
-    if (line_sensor_read(bank->handle, &data) != ESP_OK) {
-        return;
-    }
-
-    // Use the centroid computed by the line_sensor component in millimeters.
-    if (data.line_detected) {
-        *out_detected = true;
-        *acc_weight += 1.0f;
-        *acc_pos_weighted += data.line_position_mm;
-    }
-}
 
 // =============================================================================
 // Real-Time Control Task
@@ -274,6 +45,15 @@ static void line_bank_accumulate(const line_sensor_bank_t *bank,
 static void task_rtcontrol_cpu0(void *arg)
 {
     ESP_LOGI(TAG, "Control loop running");
+    motor_driver_mcpwm_t motors = {
+        .left  = { .in1 = GPIO_NUM_22, .in2 = GPIO_NUM_23},
+        .right = { .in1 = GPIO_NUM_21, .in2 = GPIO_NUM_20},
+        .nsleep = GPIO_NUM_NC,
+        .pwm_hz = 20000,
+        .resolution_hz = 10000000,  // 10 MHz
+        .deadband = 30,
+        .brake_on_stop = true,
+    };
     motor_mcpwm_init(&motors);
 
     // Base configuration from Kconfig (Updated via NVS/MQTT Live Tuning)
@@ -317,55 +97,23 @@ static void task_rtcontrol_cpu0(void *arg)
     };
     encoder_sensor_handle_t encoder_right = encoder_sensor_init(&enc_r_cfg);
 
-    line_sensor_emitter_enable();
-    line_sensor_runtime_t line_runtime = init_line_sensor_runtime();
-    bool line_calibration_running = false;
-
+    line_sensor_init();
     modes_init();
 
     const float dt = (float)CONFIG_ROBOT_CONTROL_PERIOD_MS / 1000.0f;
     const TickType_t poll_rate = pdMS_TO_TICKS(CONFIG_ROBOT_CONTROL_PERIOD_MS);
 
+    TickType_t last_wake_time = xTaskGetTickCount();
+
     while(1) {
+        // High-frequency deterministic delay
+        vTaskDelayUntil(&last_wake_time, poll_rate);
+
         // 1. High-Frequency Synchronous Encoder Polling (Eliminates Phase Lag)
         float speed_l_ms = encoder_sensor_get_speed(encoder_left);
         float distance_l_m = encoder_sensor_get_distance(encoder_left);
         float speed_r_ms = encoder_sensor_get_speed(encoder_right);
         float distance_r_m = encoder_sensor_get_distance(encoder_right);
-
-        bool line_detected = false;
-        float line_position = line_runtime.last_line_position_mm;
-        bool line_calibrated = false;
-
-        const bool has_any_line_bank = line_runtime.adc1.active;
-        if (has_any_line_bank) {
-            const robot_mode_t active_mode = state_machine_get_context()->current_mode;
-            const bool should_calibrate_line = (active_mode == MODE_CALIBRATE_LINE);
-
-            if (should_calibrate_line && !line_calibration_running) {
-                line_calibration_running = line_bank_start_calibration(&line_runtime.adc1);
-                if (line_calibration_running) {
-                    ESP_LOGI(TAG, "Line calibration started (ADC1)");
-                } else {
-                    ESP_LOGE(TAG, "Failed to start line calibration on ADC1 bank");
-                }
-            } else if (!should_calibrate_line && line_calibration_running) {
-                line_bank_stop_calibration(&line_runtime.adc1);
-                line_calibration_running = false;
-                ESP_LOGI(TAG, "Line calibration stopped");
-            }
-
-            float sum_w = 0.0f;
-            float sum_pos_w = 0.0f;
-            line_bank_accumulate(&line_runtime.adc1, &line_detected, &sum_w, &sum_pos_w);
-
-            if (sum_w > 0.0f) {
-                line_position = sum_pos_w / sum_w;
-                line_runtime.last_line_position_mm = line_position;
-            }
-
-            line_calibrated = line_bank_is_calibrated(&line_runtime.adc1);
-        }
 
         shared_memory_t* shm = shared_memory_get();
         if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
@@ -373,10 +121,6 @@ static void task_rtcontrol_cpu0(void *arg)
             shm->sensors.motor_distance_left = distance_l_m;
             shm->sensors.motor_speed_right = speed_r_ms;
             shm->sensors.motor_distance_right = distance_r_m;
-            shm->sensors.line_detected = line_detected;
-            shm->sensors.line_position_mm = line_position;
-            shm->sensors.line_calibrating = line_calibration_running;
-            shm->sensors.line_calibrated = line_calibrated;
             xSemaphoreGive(shm->mutex);
         }
 
@@ -390,8 +134,6 @@ static void task_rtcontrol_cpu0(void *arg)
 
         // 3. Execute Mode (Router Pattern / Dispatcher)
         modes_execute(&motors, ctrl_left, ctrl_right, dt);
-
-        vTaskDelay(poll_rate);
     }
 }
 
