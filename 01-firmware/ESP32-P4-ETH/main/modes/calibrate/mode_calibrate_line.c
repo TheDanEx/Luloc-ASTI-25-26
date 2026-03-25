@@ -46,10 +46,18 @@ static void calibrate_execute(motor_driver_mcpwm_t* motors,
 
         line_sensor_set_calibration(i, current_min, current_max);
 
-        // Check conditions: Analog sensors >65% and <35% of absolute range
-        // ADC range is 0..4095
-        if (raw[i] < 1433) s_min_seen[i] = true; // < 35%
-        if (raw[i] > 2662) s_max_seen[i] = true; // > 65%
+        // check if analog or digital based on firmware mapping
+        // Digital: 0, 1, 6, 7 | Analog: 2, 3, 4, 5
+        bool is_analog = (i >= 2 && i <= 5);
+
+        if (is_analog) {
+            if (raw[i] < 1433) s_min_seen[i] = true; // < 35% ADC
+            if (raw[i] > 2662) s_max_seen[i] = true; // > 65% ADC
+        } else {
+            // Digital sensors only give 0 or 1
+            if (raw[i] == 0) s_min_seen[i] = true;
+            if (raw[i] == 1) s_max_seen[i] = true;
+        }
 
         if (!s_min_seen[i] || !s_max_seen[i]) {
             all_calibrated = false;
