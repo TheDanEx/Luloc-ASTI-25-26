@@ -24,6 +24,18 @@ esp_err_t line_sensor_init(void)
     s_sensors[6] = (line_sensor_config_t){.type = LINE_SENSOR_DIGITAL, .pin = CONFIG_LINE_SENSOR_PIN_D7, .weight_mm = (float)CONFIG_LINE_SENSOR_WEIGHT_D7};
     s_sensors[7] = (line_sensor_config_t){.type = LINE_SENSOR_DIGITAL, .pin = CONFIG_LINE_SENSOR_PIN_D8, .weight_mm = (float)CONFIG_LINE_SENSOR_WEIGHT_D8};
 
+    // 1.1 Enable IR Emmitters Pin
+    gpio_config_t ir_conf = {
+        .intr_type = GPIO_INTR_DISABLE,
+        .mode = GPIO_MODE_OUTPUT,
+        .pin_bit_mask = (1ULL << CONFIG_LINE_SENSOR_PIN_IR_EN),
+        .pull_down_en = 0,
+        .pull_up_en = 0
+    };
+    gpio_config(&ir_conf);
+    gpio_set_level(CONFIG_LINE_SENSOR_PIN_IR_EN, 1); // Power ON
+    ESP_LOGI(TAG, "IR emitters enabled on GPIO %d", CONFIG_LINE_SENSOR_PIN_IR_EN);
+
     // Analog Pins
     s_sensors[2] = (line_sensor_config_t){.type = LINE_SENSOR_ANALOG, .pin = CONFIG_LINE_SENSOR_PIN_D3, .weight_mm = (float)CONFIG_LINE_SENSOR_WEIGHT_D3, .min_value = CONFIG_LINE_SENSOR_DEFAULT_MIN, .max_value = CONFIG_LINE_SENSOR_DEFAULT_MAX};
     s_sensors[3] = (line_sensor_config_t){.type = LINE_SENSOR_ANALOG, .pin = CONFIG_LINE_SENSOR_PIN_D4, .weight_mm = (float)CONFIG_LINE_SENSOR_WEIGHT_D4, .min_value = CONFIG_LINE_SENSOR_DEFAULT_MIN, .max_value = CONFIG_LINE_SENSOR_DEFAULT_MAX};
