@@ -196,5 +196,5 @@ static void task_comms_cpu1(void *arg)
 
 void task_comms_cpu1_start(void)
 {
-    xTaskCreatePinnedToCore(task_comms_cpu1, "comms_cpu1", 8192, NULL, 10, NULL, 1);
+    xTaskCreatePinnedToCore(task_comms_cpu1, "comms_cpu1", 12288, NULL, 10, NULL, 1);
 }

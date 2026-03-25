@@ -82,8 +82,8 @@ static void follow_execute(motor_driver_mcpwm_t* motors,
 
     // 2. Read Position
     float norm[8];
-    line_sensor_read_norm(norm, NULL, 16);
-    float pos = line_sensor_read_line_position(norm, 16);
+    line_sensor_read_norm(norm, NULL, CONFIG_LINE_SENSOR_SAMPLES);
+    float pos = line_sensor_read_line_position(norm, CONFIG_LINE_SENSOR_SAMPLES);
     
     // Edge case: No line detected
     bool line_lost = true;

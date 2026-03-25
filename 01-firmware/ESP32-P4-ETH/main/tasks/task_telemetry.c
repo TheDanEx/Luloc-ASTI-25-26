@@ -61,7 +61,7 @@ void task_telemetry_start(void)
         return;
     }
 
-    xTaskCreate(telemetry_task, "telemetry_task", 4096, NULL, 5, NULL);
+    xTaskCreate(telemetry_task, "telemetry_task", 8192, NULL, 5, NULL);
 }
 
 void task_telemetry_send(const line_follower_telemetry_t *data)

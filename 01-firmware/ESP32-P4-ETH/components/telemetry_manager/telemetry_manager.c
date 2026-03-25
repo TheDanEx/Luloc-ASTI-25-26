@@ -136,7 +136,7 @@ telemetry_handle_t telemetry_create(const char *topic, const char *measurement, 
     // Limit name length for FreeRTOS
     task_name[configMAX_TASK_NAME_LEN - 1] = '\0';
 
-    BaseType_t res = xTaskCreatePinnedToCore(telemetry_task, task_name, 3072, obj, 4, &obj->task_handle, 1);
+    BaseType_t res = xTaskCreatePinnedToCore(telemetry_task, task_name, 8192, obj, 4, &obj->task_handle, 1);
     
     if (res != pdPASS) {
         ESP_LOGE(TAG, "Failed to create task for %s", measurement);

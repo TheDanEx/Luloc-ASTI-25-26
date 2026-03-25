@@ -16,6 +16,12 @@ config LINE_SENSOR_PIN_IR_EN
     help
         GPIO used to turn on the IR LEDs.
 
+config LINE_SENSOR_SAMPLES
+    int "Samples per reading (Filtering/Oversampling)"
+    default 16
+    help
+        Number of ADC samples to average for each analog sensor read.
+
 # Digital Pins
 config LINE_SENSOR_PIN_D1
     int "Pin D1 (Digital)"
