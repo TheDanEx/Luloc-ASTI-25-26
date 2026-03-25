@@ -26,6 +26,12 @@ Este componente abstrae el array de 8 sensores de línea del robot Lurloc-ASTI. 
 - **Ruido ADC:** El ESP32-P4 requiere al menos 16 muestras de sobremuestreo para lecturas estables en entornos industriales.
 - **Calibración:** Los valores Min/Max deben ajustarse según la superficie de la pista.
 
+## Pinout Corregido (ESP32-P4-ETH)
+| Sensores | Función | Pines (GPIOs) | Motivo |
+| :--- | :--- | :--- | :--- |
+| **D1, D2, D7, D8** | Digital (HP) | **3, 4, 5, 6** | Sin conflicto I2C Audio |
+| **D3, D4, D5, D6** | Analógico (ADC1) | **18, 17, 16, 19** | Soporte ADC nativo |
+
 ## Ejemplo de Uso e Instanciación
 ```c
 line_sensor_init();
