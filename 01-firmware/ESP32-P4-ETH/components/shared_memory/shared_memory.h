@@ -59,6 +59,7 @@ typedef struct {
     shared_pid_config_t line_pid;      // Line follower PID
     float line_base_speed;             // Line follower base speed
     bool line_params_updated;          // Flag for speed update
+    float vision_curvature_multiplier; // Velocity multiplier from camera (CPU1 -> CPU0)
     uint8_t calibration_motor_mask;    // bitmask: 1=Left, 2=Right, 3=Both
 
     uint32_t heartbeat_cpu0;    // CPU0 heartbeat counter

@@ -26,6 +26,10 @@ static void telemetry_task(void *arg)
             
             telemetry_add_int(s_line_telemetry, "mode", (int32_t)data.mode);
             telemetry_add_float(s_line_telemetry, "pos", data.position);
+            telemetry_add_float(s_line_telemetry, "error", data.error);
+            telemetry_add_float(s_line_telemetry, "p_t", data.p_term);
+            telemetry_add_float(s_line_telemetry, "i_t", data.i_term);
+            telemetry_add_float(s_line_telemetry, "d_t", data.d_term);
             telemetry_add_float(s_line_telemetry, "pid_out", data.pid_out);
             telemetry_add_float(s_line_telemetry, "ff", data.ff_val);
             telemetry_add_float(s_line_telemetry, "tgt_l", data.target_speed_l);

@@ -16,6 +16,8 @@ static float s_kd = 0.01f;
 static float s_base_speed = 0.3f;
 static float s_ff_weight = 1.0f;
 static float s_ff_value = 1.0f;
+static float s_min_speed = 0.1f;
+static float s_max_speed = 1.5f;
 
 static float s_integral = 0.0f;
 static float s_last_error = 0.0f;
@@ -35,6 +37,16 @@ static void follow_enter(void)
     s_base_speed = atof(CONFIG_LINE_FOLLOWER_BASE_SPEED);
     s_ff_weight = atof(CONFIG_LINE_FOLLOWER_FF_WEIGHT);
     s_ff_value = atof(CONFIG_LINE_FOLLOWER_FF_VALUE);
+    s_min_speed = atof(CONFIG_LINE_FOLLOWER_MIN_SPEED);
+    s_max_speed = atof(CONFIG_LINE_FOLLOWER_MAX_SPEED);
+
+    // 0. Calibration Check (Warning only)
+    uint32_t c_min, c_max;
+    // Check D4 (index 3) as a representative sensor
+    line_sensor_get_calibration(3, &c_min, &c_max);
+    if (c_min == 100 && c_max == 4000) { // Using standard Kconfig defaults as markers
+        ESP_LOGW(TAG, "Robot has NOT been calibrated! Sensors will behave erratically.");
+    }
 }
 
 static void follow_execute(motor_driver_mcpwm_t* motors, 
@@ -55,6 +67,17 @@ static void follow_execute(motor_driver_mcpwm_t* motors,
         s_base_speed = shm->line_base_speed;
         shm->line_params_updated = false;
         ESP_LOGI(TAG, "Line Base Speed Updated: %.3f", s_base_speed);
+    }
+
+    // 1.1 Read Vision Curvature & Sensor Data
+    float cur_l = 0.0f, cur_r = 0.0f, bat_mv = 12000.0f;
+    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+        s_ff_value = shm->vision_curvature_multiplier;
+        cur_l = shm->sensors.motor_speed_left;
+        cur_r = shm->sensors.motor_speed_right;
+        bat_mv = shm->sensors.battery_voltage;
+        if (bat_mv < 5000.0f) bat_mv = 16800.0f; // Safety fallback
+        xSemaphoreGive(shm->mutex);
     }
 
     // 2. Read Position
@@ -78,14 +101,23 @@ static void follow_execute(motor_driver_mcpwm_t* motors,
     float derivative = (error - s_last_error) / dt_s;
     s_last_error = error;
 
-    float pid_out = (s_kp * error) + (s_ki * s_integral) + (s_kd * derivative);
+    float p_term = s_kp * error;
+    float i_term = s_ki * s_integral;
+    float d_term = s_kd * derivative;
+    float pid_out = p_term + i_term + d_term;
     
     // Normalize PID output (clamped to -1.0 to 1.0 for correction)
     if (pid_out > 1.0f) pid_out = 1.0f;
     if (pid_out < -1.0f) pid_out = -1.0f;
 
     // 3. Kinematics (Feedforward + Differential)
-    float speed_base_ff = s_base_speed * s_ff_weight * s_ff_value;
+    // Apply curvature multiplier blended with weight: 1.0 + (cam_val - 1.0) * weight
+    float effective_multiplier = 1.0f + (s_ff_value - 1.0f) * s_ff_weight;
+    float speed_base_ff = s_base_speed * effective_multiplier;
+
+    // Safety Clamping: Jam avoided (speed > min) and Rocket avoided (speed < max)
+    if (speed_base_ff < s_min_speed) speed_base_ff = s_min_speed;
+    if (speed_base_ff > s_max_speed) speed_base_ff = s_max_speed;
     
     // Differential Steering: Left = Base + Correction, Right = Base - Correction
     // If line is to the right (pos > 0), error is negative, pid_out should make right motor slower?
@@ -93,12 +125,11 @@ static void follow_execute(motor_driver_mcpwm_t* motors,
     float target_l = speed_base_ff - pid_out * speed_base_ff;
     float target_r = speed_base_ff + pid_out * speed_base_ff;
 
-    // Clamp to hardware limits (assume 1.5 m/s max)
-    const float max_v = 1.5f;
-    if (target_l > max_v) target_l = max_v;
-    if (target_l < -max_v) target_l = -max_v;
-    if (target_r > max_v) target_r = max_v;
-    if (target_r < -max_v) target_r = -max_v;
+    // Clamp wheel targets to hardware limits
+    if (target_l > s_max_speed) target_l = s_max_speed;
+    if (target_l < -s_max_speed) target_l = -s_max_speed;
+    if (target_r > s_max_speed) target_r = s_max_speed;
+    if (target_r < -s_max_speed) target_r = -s_max_speed;
 
     // 4. Actuation
     // Note: We use motor_velocity_ctrl_update to get PWM from target speeds
@@ -107,8 +138,8 @@ static void follow_execute(motor_driver_mcpwm_t* motors,
     // Given we have ctrl_left/right, we SHOULD use them for closed-loop speed control.
     
     float pwm_l, pwm_r;
-    motor_velocity_input_t in_l = { .target_speed = target_l, .current_speed = 0.0f /* Get from somewhere? */, .battery_mv = 12000.0f };
-    motor_velocity_input_t in_r = { .target_speed = target_r, .current_speed = 0.0f, .battery_mv = 12000.0f };
+    motor_velocity_input_t in_l = { .target_speed = target_l, .current_speed = cur_l, .battery_mv = bat_mv };
+    motor_velocity_input_t in_r = { .target_speed = target_r, .current_speed = cur_r, .battery_mv = bat_mv };
     
     // In actual implementation, we'd get current_speed from encoder task (shared_memory)
     // For now, following the specific requested flow of PID correction on speed.
@@ -125,6 +156,10 @@ static void follow_execute(motor_driver_mcpwm_t* motors,
     line_follower_telemetry_t tele = {
         .mode = MODE_FOLLOW_LINE,
         .position = pos,
+        .error = error,
+        .p_term = p_term,
+        .i_term = i_term,
+        .d_term = d_term,
         .kp = s_kp, .ki = s_ki, .kd = s_kd,
         .pid_out = pid_out,
         .ff_val = s_ff_value,

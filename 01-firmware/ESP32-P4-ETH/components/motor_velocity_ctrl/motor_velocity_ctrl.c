@@ -4,7 +4,7 @@
 #include <string.h>
 #include <math.h>
 
-static const char *TAG = "VEL_CTRL";
+// TAG removed (unused)
 
 struct motor_velocity_ctrl_context_t {
     motor_velocity_config_t config;

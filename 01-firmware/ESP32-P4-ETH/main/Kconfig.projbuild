@@ -94,6 +94,14 @@ config ROBOT_USE_ETHERNET
         string "Line Follower: Feed Forward Value"
         default "1.0"
 
+    config LINE_FOLLOWER_MIN_SPEED
+        string "Line Follower: Minimum Speed (m/s)"
+        default "0.1"
+
+    config LINE_FOLLOWER_MAX_SPEED
+        string "Line Follower: Maximum Speed (m/s)"
+        default "1.5"
+
 endmenu
 
 

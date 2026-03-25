@@ -38,6 +38,7 @@ static const char *TAG = "comms_c1";
 #define CMD_QUEUE_SIZE          32
 #define CMD_QUEUE_ITEM_SIZE     256
 #define POLL_INTERVAL_MS        10
+#define CURVATURE_TOPIC         "robot/vision/curvature"
 
 // =============================================================================
 // Static Variables
@@ -49,8 +50,32 @@ static telemetry_handle_t tel_odometry = NULL;
 static telemetry_handle_t tel_system = NULL;
 
 // =============================================================================
-// Helper: Data Collection
+// Helper: Data Collection / Vision
 // =============================================================================
+
+/**
+ * MQTT Callback for curvature updates from Vision System (e.g. Raspberry Pi)
+ * Parses a float multiplier to adjust real-time base speed.
+ */
+static void mqtt_curvature_callback(const char *topic, int topic_len, const char *data, int data_len) 
+{
+    if (data == NULL || data_len <= 0) return;
+    
+    char payload[32] = {0};
+    int copy_len = (data_len < 31) ? data_len : 31;
+    memcpy(payload, data, copy_len);
+
+    char *endptr = NULL;
+    float val = strtof(payload, &endptr);
+    if (endptr != payload) {
+        shared_memory_t* shm = shared_memory_get();
+        // Use a short timeout since this is high frequency
+        if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+            shm->vision_curvature_multiplier = val;
+            xSemaphoreGive(shm->mutex);
+        }
+    }
+}
 
 
 // =============================================================================
@@ -121,6 +146,12 @@ static void task_comms_cpu1(void *arg)
     mqtt_api_responder_init();
     mqtt_api_responder_subscribe();
 
+    // Register & Subscribe Vision Curvature
+    mqtt_custom_client_register_topic_callback(CURVATURE_TOPIC, mqtt_curvature_callback);
+    if (mqtt_custom_client_is_connected()) {
+        mqtt_custom_client_subscribe(CURVATURE_TOPIC, 0);
+    }
+
     TickType_t last_sampling_tick = 0;
     bool last_mqtt_conn = false;
 
@@ -147,6 +178,7 @@ static void task_comms_cpu1(void *arg)
                  // Resubscribe if connection was dropped and restored
                  pid_tuner_subscribe();
                  mqtt_api_responder_subscribe();
+                 mqtt_custom_client_subscribe(CURVATURE_TOPIC, 0);
              } else {
                  shared_memory_set_mqtt_connected(false);
              }

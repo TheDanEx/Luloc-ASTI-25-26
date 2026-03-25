@@ -16,6 +16,10 @@ typedef struct {
     float kp;
     float ki;
     float kd;
+    float error;
+    float p_term;
+    float i_term;
+    float d_term;
     float pid_out;
     float ff_val;
     float target_speed_l;

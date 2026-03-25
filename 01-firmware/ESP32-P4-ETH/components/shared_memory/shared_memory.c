@@ -32,9 +32,9 @@ void shared_memory_init(void)
     g_shared_memory.last_command = (robot_command_t){0};
     g_shared_memory.heartbeat_cpu0 = 0;
     g_shared_memory.heartbeat_cpu1 = 0;
-    g_shared_memory.cpu0_alive = false;
     g_shared_memory.cpu1_alive = false;
     g_shared_memory.calibration_motor_mask = 3; 
+    g_shared_memory.vision_curvature_multiplier = 1.0f; // Default: No change
 
     g_initialized = true;
     ESP_LOGI(TAG, "Shared memory initialized");
