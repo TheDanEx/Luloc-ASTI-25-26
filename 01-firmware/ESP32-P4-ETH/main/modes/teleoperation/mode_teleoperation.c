@@ -11,7 +11,7 @@ static const char *TAG = "MODE_TELEOP";
 #define TELEOP_TOPIC "robot/teleop"
 
 static void mqtt_teleop_callback(const char *topic, int topic_len, const char *data, int data_len) {
-    if (data == NULL || data_len <= 0) return;
+    if (data == NULL || data_len <= 0 || data_len > 1024) return;
     cJSON *root = cJSON_ParseWithLength(data, data_len);
     if (root == NULL) return;
 
