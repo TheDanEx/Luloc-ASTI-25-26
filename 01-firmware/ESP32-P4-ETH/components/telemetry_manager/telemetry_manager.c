@@ -1,6 +1,6 @@
 /*
- * Telemetry Manager - InfluxDB Line Protocol over MQTT
- * SPDX-License-Identifier: MIT
+ * Telemetry Manager - Optimized Hierarchical Double-Buffered Implementation
+ * Optimized for ESP32-P4 to fit in static BSS while providing 500Hz capability.
  */
 
 #include "sdkconfig.h"
@@ -12,74 +12,60 @@
 #include "freertos/semphr.h"
 #include "esp_log.h"
 #include "esp_timer.h"
-#include <time.h>
 #include "mqtt_custom_client.h"
 #include "ptp_client.h"
 #include "telemetry_manager.h"
 
 // =============================================================================
-// Definitions & Internal Types
+// Static Pool Allocation (Hierarchical)
 // =============================================================================
 
 static const char *TAG = "telemetry";
 
-#define MAX_FIELDS 16
-#define MAX_BUFFER_SIZE 32768
+#define BUF_SIZE_HIGH 65536 // 64KB for Instance 0 (High Frequency: Siguelineas)
+#define BUF_SIZE_LOW  8192  // 8KB for Instances 1 & 2 (Low Frequency: Odom/System)
 
 typedef struct {
-    char *key;
-    char *value_str;
-    int64_t timestamp_ns;
-} field_t;
-
-typedef struct {
-    char *topic;
-    char *measurement;
-    char *tags;
+    char topic[64];
+    char measurement[32];
+    char tags[128];
     uint32_t interval_ms;
     
-    // Internal State
-    field_t fields[MAX_FIELDS];
-    int field_count;
-    char *batch_buffer;
-    int batch_offset;
+    // Pointers to the static buffers
+    char *buf_a;
+    char *buf_b;
+    uint32_t max_buf_size;
+    
+    char *active_buf;
+    int active_offset;
+    
     SemaphoreHandle_t mutex;
     TaskHandle_t task_handle;
     bool running;
-} telemetry_obj_t;
+    bool in_use;
+} telemetry_obj_internal_t;
+
+// Reserve memories statically to avoid heap fragmentation and linker overflows
+static char s_buf_inst0_a[BUF_SIZE_HIGH];
+static char s_buf_inst0_b[BUF_SIZE_HIGH];
+static char s_buf_inst1_a[BUF_SIZE_LOW];
+static char s_buf_inst1_b[BUF_SIZE_LOW];
+static char s_buf_inst2_a[BUF_SIZE_LOW];
+static char s_buf_inst2_b[BUF_SIZE_LOW];
+
+static telemetry_obj_internal_t s_pool[3] = {
+    { .buf_a = s_buf_inst0_a, .buf_b = s_buf_inst0_b, .max_buf_size = BUF_SIZE_HIGH, .in_use = false },
+    { .buf_a = s_buf_inst1_a, .buf_b = s_buf_inst1_b, .max_buf_size = BUF_SIZE_LOW,  .in_use = false },
+    { .buf_a = s_buf_inst2_a, .buf_b = s_buf_inst2_b, .max_buf_size = BUF_SIZE_LOW,  .in_use = false }
+};
 
 // =============================================================================
-// Internal Handlers & Tasks
+// Internal Task
 // =============================================================================
 
-/**
- * Helper to safely append valid InfluxDB line protocol fields to the internal list
- */
-static void append_field_str(telemetry_obj_t *obj, const char *key, const char *val_str)
-{
-    if (obj->field_count >= MAX_FIELDS) return;
-
-    int64_t timestamp_ns = get_ptp_timestamp_us() * 1000ULL;
-
-    // Allocate copy of key and value
-    obj->fields[obj->field_count].key = strdup(key);
-    obj->fields[obj->field_count].value_str = strdup(val_str);
-    obj->fields[obj->field_count].timestamp_ns = timestamp_ns;
-    
-    if (obj->fields[obj->field_count].key && obj->fields[obj->field_count].value_str) {
-        obj->field_count++;
-    } else {
-        // Cleanup if allocation failed
-        if (obj->fields[obj->field_count].key) free(obj->fields[obj->field_count].key);
-        if (obj->fields[obj->field_count].value_str) free(obj->fields[obj->field_count].value_str);
-    }
-}
-
-// Internal task function
 static void telemetry_task(void *arg)
 {
-    telemetry_obj_t *obj = (telemetry_obj_t *)arg;
-    
+    telemetry_obj_internal_t *obj = (telemetry_obj_internal_t *)arg;
     TickType_t period = pdMS_TO_TICKS(obj->interval_ms);
     
     while (obj->running) {
@@ -89,190 +75,160 @@ static void telemetry_task(void *arg)
             continue;
         }
 
-        xSemaphoreTake(obj->mutex, portMAX_DELAY);
-        
-        if (obj->batch_offset > 0) {
-            // Publish the accumulated batch buffer
-            mqtt_custom_client_publish(obj->topic, obj->batch_buffer, 0, 0, 0);
-            
-            // Clear batch buffer
-            obj->batch_offset = 0;
-            obj->batch_buffer[0] = '\0';
-        }
-        
-        xSemaphoreGive(obj->mutex);
-    }
+        int size_to_send = 0;
+        char *buffer_to_send = NULL;
 
+        if (xSemaphoreTake(obj->mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+            if (obj->active_offset > 0) {
+                buffer_to_send = obj->active_buf;
+                size_to_send = obj->active_offset;
+
+                // Ping-Pong swap
+                obj->active_buf = (obj->active_buf == obj->buf_a) ? obj->buf_b : obj->buf_a;
+                obj->active_offset = 0;
+                obj->active_buf[0] = '\0';
+            }
+            xSemaphoreGive(obj->mutex);
+        }
+
+        if (buffer_to_send && size_to_send > 0) {
+            mqtt_custom_client_publish(obj->topic, buffer_to_send, size_to_send, 0, 0);
+        }
+    }
     vTaskDelete(NULL);
 }
 
 // =============================================================================
-// Public API: Registry & Lifecycle
+// Public API
 // =============================================================================
 
-/**
- * Create a new telemetry reporter mapped to a specific topic
- */
 telemetry_handle_t telemetry_create(const char *topic, const char *measurement, uint32_t interval_ms)
 {
-    telemetry_obj_t *obj = calloc(1, sizeof(telemetry_obj_t));
-    if (!obj) return NULL;
+    telemetry_obj_internal_t *obj = NULL;
+    
+    // Find free slot
+    for (int i = 0; i < 3; i++) {
+        if (!s_pool[i].in_use) {
+            obj = &s_pool[i];
+            obj->in_use = true;
+            break;
+        }
+    }
 
-    obj->topic = strdup(topic);
-    obj->measurement = strdup(measurement);
+    if (!obj) {
+        ESP_LOGE(TAG, "No free telemetry slots");
+        return NULL;
+    }
+
+    strncpy(obj->topic, topic, sizeof(obj->topic) - 1);
+    strncpy(obj->measurement, measurement, sizeof(obj->measurement) - 1);
     obj->interval_ms = interval_ms;
     obj->mutex = xSemaphoreCreateMutex();
     obj->running = true;
+    obj->active_buf = obj->buf_a;
+    obj->active_offset = 0;
+    obj->active_buf[0] = '\0';
 
-    obj->batch_buffer = calloc(1, MAX_BUFFER_SIZE);
-    if (!obj->batch_buffer) {
-        telemetry_destroy(obj);
-        return NULL;
-    }
-
-    // Create task pinned to CPU1 as requested
     char task_name[16];
     snprintf(task_name, sizeof(task_name), "tel_%s", measurement);
-    // Limit name length for FreeRTOS
     task_name[configMAX_TASK_NAME_LEN - 1] = '\0';
 
-    BaseType_t res = xTaskCreatePinnedToCore(telemetry_task, task_name, 8192, obj, 4, &obj->task_handle, 1);
+    xTaskCreatePinnedToCore(telemetry_task, task_name, 4096, obj, 4, &obj->task_handle, 1);
     
-    if (res != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create task for %s", measurement);
-        telemetry_destroy(obj);
-        return NULL;
-    }
-
-    ESP_LOGI(TAG, "Telemetry created: %s -> %s (%lu ms)", measurement, topic, interval_ms);
+    ESP_LOGI(TAG, "Telemetry created: %s, Buffer size: %lu KB", measurement, obj->max_buf_size/1024);
     return (telemetry_handle_t)obj;
 }
 
 void telemetry_destroy(telemetry_handle_t handle)
 {
     if (!handle) return;
-    telemetry_obj_t *obj = (telemetry_obj_t *)handle;
-
+    telemetry_obj_internal_t *obj = (telemetry_obj_internal_t *)handle;
     obj->running = false;
     vTaskDelay(pdMS_TO_TICKS(100)); 
-
-    if (obj->topic) free(obj->topic);
-    if (obj->measurement) free(obj->measurement);
-    if (obj->tags) free(obj->tags);
-    if (obj->batch_buffer) free(obj->batch_buffer);
-    
-    xSemaphoreTake(obj->mutex, portMAX_DELAY);
-    for (int i = 0; i < obj->field_count; i++) {
-        free(obj->fields[i].key);
-        free(obj->fields[i].value_str);
-    }
-    xSemaphoreGive(obj->mutex);
-    vSemaphoreDelete(obj->mutex);
-    
-    free(obj);
+    if (obj->mutex) vSemaphoreDelete(obj->mutex);
+    obj->in_use = false;
 }
 
 void telemetry_set_tags(telemetry_handle_t handle, const char *tags)
 {
     if (!handle) return;
-    telemetry_obj_t *obj = (telemetry_obj_t *)handle;
-    
-    xSemaphoreTake(obj->mutex, portMAX_DELAY);
-    if (obj->tags) free(obj->tags);
-    obj->tags = tags ? strdup(tags) : NULL;
-    xSemaphoreGive(obj->mutex);
+    telemetry_obj_internal_t *obj = (telemetry_obj_internal_t *)handle;
+    if (xSemaphoreTake(obj->mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        if (tags) strncpy(obj->tags, tags, sizeof(obj->tags) - 1);
+        else obj->tags[0] = '\0';
+        xSemaphoreGive(obj->mutex);
+    }
 }
 
-// =============================================================================
-// Public API: Field Management & Commit
-// =============================================================================
-
-/**
- * Format the collected fields into the batch buffer and clear the current point
- */
-void telemetry_commit_point(telemetry_handle_t handle)
-{
-    if (!handle) return;
-    telemetry_obj_t *obj = (telemetry_obj_t *)handle;
-    
-    xSemaphoreTake(obj->mutex, portMAX_DELAY);
-    
-    if (obj->field_count > 0) {
-        // Format: measurement[,tags] field=val timestamp\n
-        // Multi-line ILP to support independent field timestamps.
-        
+static void append_to_batch(telemetry_obj_internal_t *obj, const char *key, const char *val_str) {
+    int64_t timestamp_ns = get_ptp_timestamp_us() * 1000ULL;
 #ifdef CONFIG_TELEMETRY_ROBOT_NAME
-        const char *global_robot_tag = "robot=" CONFIG_TELEMETRY_ROBOT_NAME;
+    const char *global_robot_tag = "robot=" CONFIG_TELEMETRY_ROBOT_NAME;
 #else
-        const char *global_robot_tag = "robot=unknown";
+    const char *global_robot_tag = "robot=unknown";
 #endif
 
-        for (int i = 0; i < obj->field_count; i++) {
-            char line_buf[256];
-            int len = 0;
-
-            if (obj->tags && strlen(obj->tags) > 0) {
-                len = snprintf(line_buf, sizeof(line_buf), "%s,%s,%s %s=%s %lld\n", 
-                              obj->measurement, global_robot_tag, obj->tags,
-                              obj->fields[i].key, obj->fields[i].value_str,
-                              obj->fields[i].timestamp_ns);
-            } else {
-                len = snprintf(line_buf, sizeof(line_buf), "%s,%s %s=%s %lld\n", 
-                              obj->measurement, global_robot_tag,
-                              obj->fields[i].key, obj->fields[i].value_str,
-                              obj->fields[i].timestamp_ns);
-            }
-
-            // Append to batch buffer if there's space
-            if (obj->batch_offset + len < MAX_BUFFER_SIZE - 1) {
-                memcpy(obj->batch_buffer + obj->batch_offset, line_buf, len);
-                obj->batch_offset += len;
-                obj->batch_buffer[obj->batch_offset] = '\0';
-            }
-
-            // Free the memory for the field strings
-            free(obj->fields[i].key);
-            free(obj->fields[i].value_str);
-        }
-        
-        obj->field_count = 0;
+    char line_buf[256];
+    int len = 0;
+    if (obj->tags[0] != '\0') {
+        len = snprintf(line_buf, sizeof(line_buf), "%s,%s,%s %s=%s %lld\n", 
+                        obj->measurement, global_robot_tag, obj->tags,
+                        key, val_str, timestamp_ns);
+    } else {
+        len = snprintf(line_buf, sizeof(line_buf), "%s,%s %s=%s %lld\n", 
+                        obj->measurement, global_robot_tag,
+                        key, val_str, timestamp_ns);
     }
-    
-    xSemaphoreGive(obj->mutex);
+
+    if (len > 0 && (obj->active_offset + len < obj->max_buf_size - 1)) {
+        memcpy(obj->active_buf + obj->active_offset, line_buf, len);
+        obj->active_offset += len;
+        obj->active_buf[obj->active_offset] = '\0';
+    } else if (len > 0) {
+        static uint32_t last_warn = 0;
+        uint32_t now = esp_timer_get_time() / 1000000;
+        if (now - last_warn > 5) {
+            ESP_LOGW(TAG, "Buffer FULL for %s", obj->measurement);
+            last_warn = now;
+        }
+    }
 }
 
 void telemetry_add_float(telemetry_handle_t handle, const char *key, float value)
 {
     if (!handle) return;
-    telemetry_obj_t *obj = (telemetry_obj_t *)handle;
-    
-    char val_str[32];
+    telemetry_obj_internal_t *obj = (telemetry_obj_internal_t *)handle;
+    char val_str[24];
     snprintf(val_str, sizeof(val_str), "%.3f", value);
-    
-    xSemaphoreTake(obj->mutex, portMAX_DELAY);
-    append_field_str(obj, key, val_str);
-    xSemaphoreGive(obj->mutex);
+    if (xSemaphoreTake(obj->mutex, 0) == pdTRUE) {
+        append_to_batch(obj, key, val_str);
+        xSemaphoreGive(obj->mutex);
+    }
 }
 
 void telemetry_add_int(telemetry_handle_t handle, const char *key, int32_t value)
 {
     if (!handle) return;
-    telemetry_obj_t *obj = (telemetry_obj_t *)handle;
-    
-    char val_str[32];
-    snprintf(val_str, sizeof(val_str), "%d", (int)value); 
-    
-    xSemaphoreTake(obj->mutex, portMAX_DELAY);
-    append_field_str(obj, key, val_str);
-    xSemaphoreGive(obj->mutex);
+    telemetry_obj_internal_t *obj = (telemetry_obj_internal_t *)handle;
+    char val_str[16];
+    snprintf(val_str, sizeof(val_str), "%li", (long)value);
+    if (xSemaphoreTake(obj->mutex, 0) == pdTRUE) {
+        append_to_batch(obj, key, val_str);
+        xSemaphoreGive(obj->mutex);
+    }
 }
 
 void telemetry_add_bool(telemetry_handle_t handle, const char *key, bool value)
 {
     if (!handle) return;
-    telemetry_obj_t *obj = (telemetry_obj_t *)handle;
-    
-    xSemaphoreTake(obj->mutex, portMAX_DELAY);
-    append_field_str(obj, key, value ? "true" : "false");
-    xSemaphoreGive(obj->mutex);
+    telemetry_obj_internal_t *obj = (telemetry_obj_internal_t *)handle;
+    if (xSemaphoreTake(obj->mutex, 0) == pdTRUE) {
+        append_to_batch(obj, key, value ? "true" : "false");
+        xSemaphoreGive(obj->mutex);
+    }
+}
+
+void telemetry_commit_point(telemetry_handle_t handle)
+{
+    (void)handle;
 }

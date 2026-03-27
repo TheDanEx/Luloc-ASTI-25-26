@@ -13,6 +13,7 @@ static const char *TAG = "MODE_CALIB_LINE";
 static bool s_min_seen[8] = {false};
 static bool s_max_seen[8] = {false};
 static float s_timeout_timer = 0.0f;
+static float s_last_print_time = -0.5f; // Initialized to -0.5 to trigger first print at 0s.
 static bool s_done = false;
 
 static void calibrate_enter(void)
@@ -23,6 +24,7 @@ static void calibrate_enter(void)
         s_max_seen[i] = false;
     }
     s_timeout_timer = 0.0f;
+    s_last_print_time = -0.6f; // Forces immediate first print
     s_done = false;
 }
 
@@ -61,6 +63,24 @@ static void calibrate_execute(motor_driver_mcpwm_t* motors,
         if (!s_min_seen[i] || !s_max_seen[i]) {
             all_calibrated = false;
         }
+    }
+
+    // 2.1 Serial monitor periodic log (Every 0.5s)
+    if (s_timeout_timer - s_last_print_time >= 0.5f) {
+        s_last_print_time = s_timeout_timer;
+        printf("\r\n--- CALIBRATION [T:%.1f s] ---\x1B[K\r\n", s_timeout_timer);
+        printf("SNR | RAW  | MIN  | MAX  | OK?\x1B[K\r\n");
+        printf("-------------------------------\x1B[K\r\n");
+        for (int i = 0; i < 8; i++) {
+            uint32_t c_min, c_max;
+            line_sensor_get_calibration(i, &c_min, &c_max);
+            const char* tag = (i < 2 || i > 5) ? "[DIG]" : "[ANA]";
+            printf("S%d %s | %4lu | %4lu | %4lu | %s%s\x1B[K\r\n", 
+                   i, tag, raw[i], c_min, c_max, 
+                   s_min_seen[i] ? "L" : ".", 
+                   s_max_seen[i] ? "H" : ".");
+        }
+        printf("-------------------------------\x1B[K\r\n");
     }
 
     // 2.1 Motor Control (Spin)
