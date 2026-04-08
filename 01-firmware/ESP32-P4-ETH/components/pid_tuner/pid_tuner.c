@@ -5,6 +5,7 @@
 #include "cJSON.h"
 #include "mqtt_custom_client.h"
 #include "shared_memory.h"
+#include <string.h>
 
 // =============================================================================
 // Definitions & Local State
@@ -102,7 +103,7 @@ esp_err_t pid_tuner_save_motor_pid(uint8_t index, float kp, float ki, float kd) 
 
 static void pid_mqtt_callback(const char *topic, int topic_len, const char *data, int data_len) {
     if (topic_len <= 0 || data_len <= 0 || data_len > 512) return;
-    if (strncmp(topic, CONFIG_PID_TUNER_MQTT_TOPIC, topic_len) != 0) return;
+    if (strncmp(topic, CONFIG_PID_TUNER_MQTT_TOPIC, (size_t)topic_len) != 0) return;
 
     cJSON *root = cJSON_ParseWithLength(data, data_len);
     if (root == NULL) {
