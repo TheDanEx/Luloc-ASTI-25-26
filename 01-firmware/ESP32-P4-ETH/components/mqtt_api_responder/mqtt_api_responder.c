@@ -6,6 +6,7 @@
 #include "test_sensor.h"
 #include "audio_player.h"
 #include "state_machine.h"
+#include "ptp_client.h"
 #include <string.h>
 #include <time.h>
 #include <inttypes.h>
@@ -203,6 +204,15 @@ static void handle_action_set_cal_mask(cJSON *root, cJSON *response_root) {
     }
 }
 
+/**
+ * Force PTP/SNTP Time Synchronization
+ */
+static void handle_action_sync_time(cJSON *root, cJSON *response_root) {
+    ptp_client_force_sync();
+    cJSON_AddStringToObject(response_root, "status", "success");
+    cJSON_AddStringToObject(response_root, "message", "PTP Sync Forced");
+}
+
 // =============================================================================
 // MQTT Callback
 // =============================================================================
@@ -265,6 +275,7 @@ static void api_mqtt_callback(const char *topic, int topic_len, const char *data
                 if (strcmp(action, "play_sound") == 0) handle_action_play_sound(root, response_root);
                 else if (strcmp(action, "set_mode") == 0) handle_action_set_mode(root, response_root);
                 else if (strcmp(action, "set_cal_mask") == 0) handle_action_set_cal_mask(root, response_root);
+                else if (strcmp(action, "sync_time") == 0) handle_action_sync_time(root, response_root);
                 else {
                     cJSON_AddStringToObject(response_root, "status", "error");
                     cJSON_AddStringToObject(response_root, "message", "Unknown Action");

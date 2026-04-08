@@ -29,6 +29,11 @@ uint64_t get_ptp_timestamp_us(void);
  */
 bool ptp_client_is_synced(void);
 
+/**
+ * @brief Force a time synchronization refresh via SNTP/PTP.
+ */
+void ptp_client_force_sync(void);
+
 #ifdef __cplusplus
 }
 #endif

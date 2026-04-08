@@ -9,6 +9,9 @@
 #include "esp_sntp.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "mqtt_custom_client.h"
+#include <time.h>
+#include <stdlib.h>
 
 // Networking headers for UDP/Multicast
 #include "lwip/err.h"
@@ -99,12 +102,32 @@ static void ptp_listener_task(void *arg)
                      int64_t local_up_us = esp_timer_get_time();
                      
                      master_slave_offset_us = master_epoch_us - local_up_us;
-                     
-                     if (!is_synchronized) {
-                         ESP_LOGI(TAG, "PTP Locked: %lld us offset", master_slave_offset_us);
-                         is_synchronized = true;
-                     }
-                 }
+                                          if (!is_synchronized) {
+                             ESP_LOGI(TAG, "PTP Locked: %lld us offset", master_slave_offset_us);
+                             is_synchronized = true;
+
+                             // Set Spain timezone implicitly for the C STDLIB
+                             setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
+                             tzset();
+                             
+                             struct tm timeinfo;
+                             time_t now = (time_t)(master_epoch_us / 1000000ULL);
+                             localtime_r(&now, &timeinfo);
+                             char time_str[64];
+                             strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &timeinfo);
+
+#ifdef CONFIG_TELEMETRY_ROBOT_NAME
+                             const char *robot_name = CONFIG_TELEMETRY_ROBOT_NAME;
+#else
+                             const char *robot_name = "unknown";
+#endif
+                             // Note: InfluxDB ILP timestamps should be in nanoseconds
+                             char ilp[256];
+                             snprintf(ilp, sizeof(ilp), "events,type=TIME_SYNC,robot=%s sync_date=\"%s\" %lld", 
+                                     robot_name, time_str, master_epoch_us * 1000ULL);
+                             
+                             mqtt_custom_client_publish("robot/events", ilp, 0, 1, 0);
+                         }               }
              }
         }
     }
@@ -142,4 +165,10 @@ uint64_t get_ptp_timestamp_us(void)
 bool ptp_client_is_synced(void)
 {
     return is_synchronized;
+}
+
+void ptp_client_force_sync(void)
+{
+    is_synchronized = false;
+    esp_sntp_restart();
 }

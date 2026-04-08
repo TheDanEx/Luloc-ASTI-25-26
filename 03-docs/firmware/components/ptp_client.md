@@ -9,6 +9,7 @@ Depende de `lwip` para sockets POSIX, de la activación estricta de `CONFIG_LWIP
 ## Interfaces de E/S (Inputs/Outputs)
 - **Inputs:** Paquetes UDP Multicast en la IP `224.0.1.129` (Puerto `320` para mensajes Follow_Up PTP de 2 Pasos).
 - **Outputs:** Exporta la API global `get_ptp_timestamp_us()` para inyectar la fecha Epoch asíncrona perfecta.
+- **Output (ASYNC):** Al bloquear la sincronía válida emite un evento `TIME_SYNC` (formato Influx Line Protocol) al tópico `robot/events`.
 
 ## Flujo de Ejecución Lógico
 1. `ptp_client_init()` lanza el Listener UDP Multicast de baja prioridad.
@@ -19,6 +20,7 @@ Depende de `lwip` para sockets POSIX, de la activación estricta de `CONFIG_LWIP
 - `ptp_client_init()`: Crea el Task interno del Listener.
 - `get_ptp_timestamp_us()`: API estática de extracción Unix Epoch del sistema global (en Microsegundos).
 - `ptp_is_synchronized()`: Alerta local de sincronía.
+- `ptp_client_force_sync()`: Fuerza la bajada del flag síncrono y reinicia el servicio SNTP de apoyo para forzar al sistema a re-capturar el offset desde cero.
 
 ## Puntos Críticos y Depuración
 - **Recepción IGMP Cegada:** Si Wi-Fi o ETH actúan sordiamente a Multicast, compruebe siempre `CONFIG_LWIP_IGMP=y` en Menú Kconfig Base.

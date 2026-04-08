@@ -10,7 +10,7 @@ Requiere `cJSON` para el _parsing_ robusto de la mensajería entrante y el _stri
 Requiere `audio_player` para recibir e inyectar solicitudes de comando SET de audio desde hardware externo a través de la red.
 
 ## Interfaces de E/S (Inputs/Outputs)
-- **Input (UNIFIED):** Se suscribe al tópico `robot/api/request` esperando un JSON con campo `op` (`get` o `set`).
+- **Input (UNIFIED):** Se suscribe al tópico `robot/api/request` esperando un JSON con campo `op` (`get` o `set`). Permite acciones como `play_sound`, `set_mode`, y la sincronización horaria forzada PTP/SNTP (`sync_time`).
 - **Output (RESP):** Responde de forma Síncrona publicando el resultado en `robot/api/response` (JSON).
 - **Output (ASTYNC):** Publica cambios de estado o modo en `robot/events` usando **Influx Line Protocol (ILP)**.
 
