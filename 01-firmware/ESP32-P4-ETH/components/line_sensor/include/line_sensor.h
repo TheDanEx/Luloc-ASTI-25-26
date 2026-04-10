@@ -110,6 +110,16 @@ esp_err_t line_sensor_read_raw(line_sensor_handle_t handle, uint16_t *out_raw);
  */
 esp_err_t line_sensor_read_normalized(line_sensor_handle_t handle, float *out_normalized);
 
+/**
+ * @brief Get the current calibration bounds
+ * 
+ * @param handle Valid line sensor handle
+ * @param out_min Array to store min values (must be sized >= num_sensors)
+ * @param out_max Array to store max values (must be sized >= num_sensors)
+ * @return esp_err_t ESP_OK on success
+ */
+esp_err_t line_sensor_get_calibration_bounds(line_sensor_handle_t handle, uint16_t *out_min, uint16_t *out_max);
+
 
 #ifdef __cplusplus
 }
