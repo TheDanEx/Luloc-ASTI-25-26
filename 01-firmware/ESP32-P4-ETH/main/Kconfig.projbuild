@@ -43,6 +43,32 @@ config ROBOT_USE_ETHERNET
         endif
     endif
 
+    config ROBOT_CONTROL_PERIOD_MS
+        int "Main Control Loop Period (ms)"
+        default 10
+        range 1 100
+        help
+            Period in milliseconds for the main RTOS motor control and PID loop.
+            10 ms = 100 Hz, 2 ms = 500 Hz.
+
+    config TELEMETRY_INTERVAL_CALIBRATION_MS
+        int "Telemetry: Motor Calibration Interval (ms)"
+        default 50
+        help
+            Publish interval for motor PID calibration metrics (e.g., 20ms = 50Hz)
+
+    config TELEMETRY_INTERVAL_ODOMETRY_MS
+        int "Telemetry: Odometry Publish Interval (ms)"
+        default 1000
+        help
+            Frequency to push odometry (X, Y, Theta) data.
+
+    config TELEMETRY_INTERVAL_SYSTEM_MS
+        int "Telemetry: System Status Publish Interval (ms)"
+        default 5000
+        help
+            Frequency to push CPU Load and general system heartbeat.
+
 endmenu
 
 menu "Luloc-ASTI: 1. Follow Line Configuration"

@@ -1,5 +1,6 @@
 #include "shared_memory.h"
 #include "esp_log.h"
+#include <stdlib.h>
 
 static const char *TAG = "shrd_mem";
 
@@ -35,6 +36,18 @@ void shared_memory_init(void)
     g_shared_memory.cpu0_alive = false;
     g_shared_memory.cpu1_alive = false;
     g_shared_memory.calibration_motor_mask = 3; 
+
+    // Initialize Line PID parameters from Kconfig defaults
+    g_shared_memory.line_pid.kp = atof(CONFIG_FOLLOW_LINE_KP);
+    g_shared_memory.line_pid.ki = atof(CONFIG_FOLLOW_LINE_KI);
+    g_shared_memory.line_pid.kd = atof(CONFIG_FOLLOW_LINE_KD);
+    g_shared_memory.line_pid.updated_flag = false;
+
+    // Initialize Line Sensor Calibration bounds
+    for (int i = 0; i < 8; i++) {
+        g_shared_memory.sensors.line_min[i] = 4095;
+        g_shared_memory.sensors.line_max[i] = 0;
+    }
 
     g_initialized = true;
     ESP_LOGI(TAG, "Shared memory initialized");
