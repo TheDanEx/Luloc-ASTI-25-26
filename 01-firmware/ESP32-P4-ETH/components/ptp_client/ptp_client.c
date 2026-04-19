@@ -7,6 +7,8 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_sntp.h"
+#include <time.h>
+#include <sys/time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -102,6 +104,20 @@ static void ptp_listener_task(void *arg)
                      
                      if (!is_synchronized) {
                          ESP_LOGI(TAG, "PTP Locked: %lld us offset", master_slave_offset_us);
+                         
+                         // Calcular la hora local ajustada de Espana (CET/CEST)
+                         setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
+                         tzset();
+                         
+                         time_t locked_time_sec = (time_t)(master_epoch_us / 1000000ULL);
+                         struct tm timeinfo;
+                         localtime_r(&locked_time_sec, &timeinfo);
+                         
+                         char strftime_buf[64];
+                         strftime(strftime_buf, sizeof(strftime_buf), "%Y-%m-%d %H:%M:%S", &timeinfo);
+                         
+                         ESP_LOGI(TAG, "PTP Date/Time (Spain): %s", strftime_buf);
+
                          is_synchronized = true;
                      }
                  }
