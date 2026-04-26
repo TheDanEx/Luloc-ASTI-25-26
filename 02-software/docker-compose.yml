@@ -122,6 +122,29 @@ services:
     depends_on:
       - influx-db
 
+  # ===============================
+  # ROS 2 -> INFLUXDB BRIDGE
+  # ===============================
+  ros2-influx-bridge:
+    build:
+      context: ./05-telemetry/telegraf/scripts
+      dockerfile: Dockerfile.bridge
+    container_name: ros2_influx_bridge
+    network_mode: "host"
+    restart: unless-stopped
+    depends_on:
+      - telegraf
+
+  # ===============================
+  # MICRO-ROS AGENT
+  # ===============================
+  microros-agent:
+    image: microros/micro-ros-agent:humble
+    container_name: uros_agent
+    network_mode: "host"
+    restart: unless-stopped
+    command: udp4 --port 8888
+
 volumes:
   influxdb-data:
   grafana-data:
