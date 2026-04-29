@@ -79,7 +79,7 @@ static void collect_high_freq_sensor_data(void)
 
     // Line Sensor Telemetry
     float err_line, norm[8], kp, ki, kd, target_l, target_r;
-    uint16_t min_vals[8], max_vals[8];
+    uint16_t raw_vals[8], min_vals[8], max_vals[8];
     bool detected, is_cal;
 
     xSemaphoreTake(shm->mutex, portMAX_DELAY);
@@ -92,6 +92,7 @@ static void collect_high_freq_sensor_data(void)
     ki = shm->line_pid.ki;
     kd = shm->line_pid.kd;
     memcpy(norm, shm->sensors.line_norm, 8 * sizeof(float));
+    memcpy(raw_vals, shm->sensors.line_raw, 8 * sizeof(uint16_t));
     memcpy(min_vals, shm->sensors.line_min, 8 * sizeof(uint16_t));
     memcpy(max_vals, shm->sensors.line_max, 8 * sizeof(uint16_t));
     xSemaphoreGive(shm->mutex);
@@ -105,11 +106,15 @@ static void collect_high_freq_sensor_data(void)
     telemetry_add_float(tel_line, "ki", ki);
     telemetry_add_float(tel_line, "kd", kd);
 
-    // Add individual sensor values
+    // Add individual sensor values (Normalized and RAW)
     char key[8];
     for (int i = 0; i < 8; i++) {
         snprintf(key, sizeof(key), "s%d", i);
         telemetry_add_float(tel_line, key, norm[i]);
+        
+        snprintf(key, sizeof(key), "raw%d", i);
+        telemetry_add_int(tel_line, key, raw_vals[i]);
+
         snprintf(key, sizeof(key), "min%d", i);
         telemetry_add_int(tel_line, key, min_vals[i]);
         snprintf(key, sizeof(key), "max%d", i);

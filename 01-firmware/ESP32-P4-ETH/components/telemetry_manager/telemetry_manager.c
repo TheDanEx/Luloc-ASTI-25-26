@@ -23,7 +23,7 @@
 
 static const char *TAG = "telemetry";
 
-#define MAX_FIELDS 16
+#define MAX_FIELDS 64
 #define MAX_BUFFER_SIZE 32768
 
 typedef struct {

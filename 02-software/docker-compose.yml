@@ -38,13 +38,25 @@ services:
       sh -c "apt-get update && apt-get install -y linuxptp && 
              phc_ctl eth0 set && 
              ptp4l -i eth0 -4 -m -H -l 6"
-    network_mode: "host" 
+    network_mode: "host"
     privileged: false
     cap_add:
       - SYS_TIME
       - NET_ADMIN
     devices:
       - "/dev/ptp0:/dev/ptp0"
+
+  # ===============================
+  # MICRO-ROS AGENT
+  # ===============================
+  micro-ros-agent:
+    image: microros/micro-ros-agent:humble
+    container_name: micro_ros_agent
+    restart: unless-stopped
+    network_mode: "host"
+    environment:
+      - ROS_DOMAIN_ID=13
+    command: udp4 --port 8888
 
   message-broker:
     image: eclipse-mosquitto:2

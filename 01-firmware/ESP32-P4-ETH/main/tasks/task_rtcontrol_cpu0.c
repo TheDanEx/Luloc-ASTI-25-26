@@ -18,13 +18,14 @@ static const char *TAG = "rt_cntrl";
 // =============================================================================
 // Hardware Constraints
 // =============================================================================
-#define ENCODER_LEFT_PIN_A      33
-#define ENCODER_LEFT_PIN_B      46
-#define ENCODER_RIGHT_PIN_A     27
-#define ENCODER_RIGHT_PIN_B     32
+#define ENCODER_LEFT_PIN_A      2
+#define ENCODER_LEFT_PIN_B      3
+#define ENCODER_RIGHT_PIN_A     4
+#define ENCODER_RIGHT_PIN_B     5
 #define ENCODER_PPR             11
 #define WHEEL_DIAMETER_M        0.068f
 #define GEAR_RATIO              21.3f
+#define IR_ENABLE_PIN           11
 
 // =============================================================================
 // Line Sensor Configuration
@@ -42,10 +43,10 @@ static const float distancias_m[] = {
 // Motor Configuration
 // =============================================================================
 
-// Default HW configuration (PINS: Iz: 47/48, Dr: 20/21)
+// Default HW configuration (Updated to new GPIO Table)
 static motor_driver_mcpwm_t motors = {
-    .left  = { .in1 = GPIO_NUM_22, .in2 = GPIO_NUM_23},
-    .right = { .in1 = GPIO_NUM_21, .in2 = GPIO_NUM_20},
+    .left  = { .in1 = GPIO_NUM_6,  .in2 = GPIO_NUM_15},
+    .right = { .in1 = GPIO_NUM_26, .in2 = GPIO_NUM_27},
 
     .nsleep = GPIO_NUM_NC,
     .pwm_hz = 20000,
@@ -90,6 +91,17 @@ static void task_rtcontrol_cpu0(void *arg)
     motor_velocity_ctrl_handle_t ctrl_left, ctrl_right;
     motor_velocity_ctrl_create(&cfg_l, &ctrl_left);
     motor_velocity_ctrl_create(&cfg_r, &ctrl_right);
+
+    // 1. Initialize IR Activation Pin (GPIO 11)
+    gpio_config_t ir_cfg = {
+        .pin_bit_mask = (1ULL << IR_ENABLE_PIN),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE
+    };
+    gpio_config(&ir_cfg);
+    gpio_set_level(IR_ENABLE_PIN, 1); // Power on sensors
 
     // Initialize Wheel Encoders strictly inside CPU0 Time-Domain
     encoder_sensor_config_t enc_l_cfg = {
@@ -153,6 +165,7 @@ static void task_rtcontrol_cpu0(void *arg)
             shm->sensors.line_position = line_data.line_position_m;
             for (int i = 0; i < 8; i++) {
                 shm->sensors.line_norm[i] = line_data.normalized_values[i];
+                shm->sensors.line_raw[i]  = line_data.raw_values[i];
             }
             // Get calibration bounds from component internal state
             line_sensor_get_calibration_bounds(line_array, shm->sensors.line_min, shm->sensors.line_max);

@@ -1,0 +1,11 @@
+FROM ros:humble-ros-base
+
+WORKDIR /app
+
+USER root
+RUN apt-get update && apt-get install -y python3-pip && rm -rf /var/lib/apt/lists/*
+
+COPY ros2_influx_bridge.py .
+
+# Añadimos la opción -u a python3 para deshabilitar el búfer de salida y poder ver los prints en tiempo real
+ENTRYPOINT ["/bin/bash", "-c", "source /opt/ros/humble/setup.bash && python3 -u ros2_influx_bridge.py"]
