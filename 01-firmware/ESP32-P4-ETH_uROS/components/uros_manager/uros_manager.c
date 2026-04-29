@@ -231,14 +231,14 @@ static void task_uros_core0(void * arg) {
         vPortFree(slow_telemetry_msg.data.data);
         vPortFree(log_msg.data.data);
         
-        rcl_publisher_fini(&fast_telemetry_pub, &node);
-        rcl_publisher_fini(&slow_telemetry_pub, &node);
-        rcl_publisher_fini(&log_pub, &node);
-        rcl_subscription_fini(&mode_sub, &node);
-        rcl_subscription_fini(&twist_sub, &node);
-        rcl_node_fini(&node);
+        (void)rcl_publisher_fini(&fast_telemetry_pub, &node);
+        (void)rcl_publisher_fini(&slow_telemetry_pub, &node);
+        (void)rcl_publisher_fini(&log_pub, &node);
+        (void)rcl_subscription_fini(&mode_sub, &node);
+        (void)rcl_subscription_fini(&twist_sub, &node);
+        (void)rcl_node_fini(&node);
         rclc_support_fini(&support);
-        rcl_init_options_fini(&init_options);
+        (void)rcl_init_options_fini(&init_options);
         
         vTaskDelay(pdMS_TO_TICKS(1000));
     }

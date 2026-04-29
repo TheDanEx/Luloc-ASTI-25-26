@@ -35,7 +35,7 @@ void task_control_core1(void *pvParameters) {
         // 1. Read Commands
         if (shared_memory_get_mode_cmd(&mode_cmd) == ESP_OK) {
             slow_data.current_mode = mode_cmd.new_mode;
-            ESP_LOGI("CTRL", "Mode changed to: %d", slow_data.current_mode);
+            ESP_LOGI("CTRL", "Mode changed to: %lu", (unsigned long)slow_data.current_mode);
         }
 
         if (shared_memory_get_twist_cmd(&twist_cmd) == ESP_OK) {
