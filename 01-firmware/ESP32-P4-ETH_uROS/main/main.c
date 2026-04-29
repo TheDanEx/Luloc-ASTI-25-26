@@ -10,6 +10,7 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
+#include "shared_memory.h"
 
 // Micro-ROS headers
 #include <uros_network_interfaces.h>
@@ -19,6 +20,8 @@
 #include <rclc/executor.h>
 #include <std_msgs/msg/int32.h>
 #include <std_msgs/msg/string.h>
+
+#include <geometry_msgs/msg/twist.h>
 
 #ifdef CONFIG_MICRO_ROS_ESP_XRCE_DDS_MIDDLEWARE
 #include <rmw_microros/rmw_microros.h>
@@ -33,10 +36,11 @@
 rcl_publisher_t diag_publisher;
 rcl_publisher_t my_publisher;
 rcl_subscription_t my_subscriber;
+rcl_subscription_t velocity_subscriber;
 std_msgs__msg__String diag_msg;
 std_msgs__msg__Int32 send_msg;
 std_msgs__msg__Int32 recv_msg;
-
+geometry_msgs__msg__Twist cmd_vel;
 // Diagnostics variables
 float g_latency_ms = 0.0f;
 float g_offset_ms = 0.0f;
@@ -48,6 +52,17 @@ void subscription_callback(const void * msvin)
 {
 	const std_msgs__msg__Int32 * msg = (const std_msgs__msg__Int32 *)msvin;
 	printf("Received from topic: %ld\n", (long)msg->data);
+}
+void subscription_vel_callback(const void * msvin)
+{
+    const geometry_msgs__msg__Twist * msg =
+    (const geometry_msgs__msg__Twist *)msvin;
+    
+    cmd_vel_data_t cmd;
+    cmd.linear_x = msg->linear.x;
+    cmd.angular_z = msg->angular.z;
+    shared_memory_write_cmd_vel(&cmd, 0);
+    printf("cmd_vel -> lin.x: %.2f ang.z: %.2f\n",(float)cmd->linear_x,(float)cmd->angular_z);
 }
 
 // Callback for timer: Periodic execution
@@ -112,14 +127,17 @@ void micro_ros_task(void * arg)
 
 		// 5. Subscriber Init
 		RCCHECK(rclc_subscription_init_default(&my_subscriber, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32), "/esp32/subscriber"));
-
+        
+        RCCHECK(rclc_subscription_init_default(&velocity_subscriber, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "/cmd_vel"));
+        
 		// 6. Timer Init (2 seconds)
 		RCCHECK(rclc_timer_init_default2(&timer, &support, RCL_MS_TO_NS(2000), timer_callback, true));
 
 		// 7. Executor Init (3 handles: timer + subscriber + empty)
-		RCCHECK(rclc_executor_init(&executor, &support.context, 2, &allocator));
+		RCCHECK(rclc_executor_init(&executor, &support.context, 3, &allocator));
 		RCCHECK(rclc_executor_add_timer(&executor, &timer));
 		RCCHECK(rclc_executor_add_subscription(&executor, &my_subscriber, &recv_msg, &subscription_callback, ON_NEW_DATA));
+        RCCHECK(rclc_executor_add_subscription(&executor, &velocity_subscriber, &cmd_vel, &subscription_vel_callback, ON_NEW_DATA));
 
 		// Setup buffers for diagnostic string
 		char buffer[STRING_BUFFER_LEN];
@@ -128,7 +146,7 @@ void micro_ros_task(void * arg)
 		send_msg.data = 0;
 
         int64_t last_sync_time = 0;
-
+        
 		// 8. Main Loop
 		while(1){
             // --- SYNC SESSION LOGIC ---
@@ -171,6 +189,7 @@ void micro_ros_task(void * arg)
 
 void app_main(void)
 {
+    shared_memory_init();
     ESP_ERROR_CHECK(uros_network_interface_initialize());
     xTaskCreate(micro_ros_task, "uros_task", 16384, NULL, 5, NULL);
 }
