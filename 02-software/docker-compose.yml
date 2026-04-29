@@ -58,6 +58,9 @@ services:
       - ROS_DOMAIN_ID=13
     command: udp4 --port 8888
 
+  # ===============================
+  # MQTT BROKER
+  # ===============================
   message-broker:
     image: eclipse-mosquitto:2
     container_name: mosquitto

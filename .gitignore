@@ -1,9 +1,66 @@
-# Ignore all local VS Code configurations for any subproject in the repository
-**/.vscode/
+# ==============================================================================
+# Lurloc-ASTI-25-26 - Global Git Ignore
+# ==============================================================================
 
-# Ignore ESP-IDF generated configurations and locks
-01-firmware/ESP32-P4-ETH/dependencies.lock
+# --- OS Specific ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# Ignore Python compiled files and cache
+# --- IDEs & Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
+*.user
+*.workspace
+*.suo
+*.sln.docstates
+
+# --- Environment & Secrets ---
+*.pem
+*.key
+secrets.json
+
+
+# --- ESP-IDF / Firmware ---
+**/build/
+**/dependencies.lock
+**/managed_components/
+**/.espressif/
+**/flasher_args.json
+
+*.bin
+*.elf
+*.map
+
+# --- Python ---
 **/__pycache__/
 **/*.pyc
+**/*.pyo
+**/*.pyd
+**/.venv/
+**/venv/
+**/env/
+*.egg-info/
+dist/
+build/
+
+# --- C/C++ Tooling ---
+.clangd/
+.ccls-cache/
+compile_commands.json
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+
+# --- Docker & Software ---
+**/node_modules/
+.docker-cache/
