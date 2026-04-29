@@ -17,19 +17,16 @@ static const char *TAG = "MAIN";
 void task_control_core1(void *pvParameters) {
     ESP_LOGI(TAG, "Starting Control Task on Core 1");
     
-    robot_line_sensors_t line_sensors = {0};
-    robot_calibration_t calibration = {0};
-    robot_pid_data_t pid_data = {0};
-    robot_odometry_t odometry = {0};
-    robot_state_t state = { .current_mode = 0, .battery_voltage = 12.6f, .uptime_s = 0 };
+    robot_telemetry_fast_t fast_data = {0};
+    robot_telemetry_slow_t slow_data = {0};
     
     robot_mode_cmd_t mode_cmd;
     robot_twist_cmd_t twist_cmd;
 
-    // Set some initial placeholder calibration values
+    // Initial placeholder calibration
     for(int i=0; i<8; i++) {
-        calibration.min[i] = 100.0f;
-        calibration.max[i] = 900.0f;
+        slow_data.calib_min[i] = 100.0f;
+        slow_data.calib_max[i] = 900.0f;
     }
 
     uint64_t last_time = esp_timer_get_time();
@@ -37,43 +34,40 @@ void task_control_core1(void *pvParameters) {
     while (1) {
         // 1. Read Commands
         if (shared_memory_get_mode_cmd(&mode_cmd) == ESP_OK) {
-            state.current_mode = mode_cmd.new_mode;
-            ESP_LOGI("CTRL", "Mode changed to: %d", state.current_mode);
+            slow_data.current_mode = mode_cmd.new_mode;
+            ESP_LOGI("CTRL", "Mode changed to: %d", slow_data.current_mode);
         }
 
         if (shared_memory_get_twist_cmd(&twist_cmd) == ESP_OK) {
-            pid_data.setpoint = twist_cmd.linear_x;
+            fast_data.pid_setpoint = twist_cmd.linear_x;
         }
 
         // 2. Simulate Sensor Data (Placeholder)
         for(int i=0; i<8; i++) {
-            line_sensors.raw[i] = 200.0f + (float)(rand() % 50);
-            line_sensors.normalized[i] = (line_sensors.raw[i] - calibration.min[i]) / (calibration.max[i] - calibration.min[i]);
+            fast_data.line_raw[i] = 200.0f + (float)(rand() % 50);
+            fast_data.line_norm[i] = (fast_data.line_raw[i] - slow_data.calib_min[i]) / (slow_data.calib_max[i] - slow_data.calib_min[i]);
         }
 
         // 3. Simulate PID Logic (Placeholder)
-        pid_data.error = pid_data.setpoint - pid_data.output;
-        pid_data.p_term = pid_data.error * 0.5f;
-        pid_data.i_term += pid_data.error * 0.01f;
-        pid_data.d_term = 0.0f;
-        pid_data.output = pid_data.p_term + pid_data.i_term + pid_data.d_term;
+        fast_data.pid_error = fast_data.pid_setpoint - fast_data.pid_output;
+        fast_data.pid_p = fast_data.pid_error * 0.5f;
+        fast_data.pid_i += fast_data.pid_error * 0.01f;
+        fast_data.pid_output = fast_data.pid_p + fast_data.pid_i;
 
         // 4. Simulate Odometry (Placeholder)
-        odometry.vel_linear = pid_data.output;
-        odometry.pos_x += odometry.vel_linear * 0.01f;
-        odometry.theta += twist_cmd.angular_z * 0.01f;
+        slow_data.odom_lin = fast_data.pid_output;
+        slow_data.odom_x += slow_data.odom_lin * 0.01f;
+        slow_data.odom_theta += twist_cmd.angular_z * 0.01f;
 
-        // 5. Push Data to Shared Memory
-        shared_memory_push_line_sensors(&line_sensors);
-        shared_memory_push_pid_data(&pid_data);
-        shared_memory_push_odometry(&odometry);
-        shared_memory_push_calibration(&calibration);
+        // 5. Push Data
+        shared_memory_push_telemetry_fast(&fast_data);
         
-        static int state_counter = 0;
-        if (state_counter++ >= 100) { // 1Hz
-            state_counter = 0;
-            state.uptime_s = (uint32_t)(esp_timer_get_time() / 1000000);
-            shared_memory_push_state(&state);
+        static int slow_counter = 0;
+        if (slow_counter++ >= 100) { // 1Hz
+            slow_counter = 0;
+            slow_data.uptime_s = (uint32_t)(esp_timer_get_time() / 1000000);
+            slow_data.battery_v = 12.6f;
+            shared_memory_push_telemetry_slow(&slow_data);
         }
 
         vTaskDelayUntil((TickType_t*)&last_time, pdMS_TO_TICKS(10)); // 100Hz
@@ -89,7 +83,6 @@ void app_main(void) {
     ESP_ERROR_CHECK(uros_network_interface_initialize());
     ESP_ERROR_CHECK(uros_manager_start());
 
-    // Priority 10 on Core 1 for Control Task
     xTaskCreatePinnedToCore(task_control_core1, "control_task", 4096, NULL, 10, NULL, 1);
 
     ESP_LOGI(TAG, "System started successfully");
