@@ -20,6 +20,7 @@
 #include <rclc/executor.h>
 
 #include <std_msgs/msg/int32.h>
+#include <std_msgs/msg/int8.h>
 #include <std_msgs/msg/string.h>
 #include <geometry_msgs/msg/twist.h>
 
@@ -50,12 +51,14 @@ static const char *TAG = "UROS_MGR";
 
 static rcl_publisher_t diag_publisher;
 static rcl_publisher_t my_publisher;
-static rcl_subscription_t my_subscriber;
+// static rcl_subscription_t my_subscriber;
 static rcl_subscription_t velocity_subscriber;
+static rcl_subscription_t mode_subscriber;
 
 static std_msgs__msg__String diag_msg;
 static std_msgs__msg__Int32 send_msg;
-static std_msgs__msg__Int32 recv_msg;
+static std_msgs__msg__Int8 change_mode;
+// static std_msgs__msg__Int32 recv_msg;
 static geometry_msgs__msg__Twist cmd_vel;
 
 static float g_latency_ms = 0.0f;
@@ -63,10 +66,16 @@ static float g_offset_ms = 0.0f;
 static float g_jitter_ms = 0.0f;
 static float g_last_latency_ms = -1.0f;
 
-static void subscription_callback(const void *msvin)
+// static void subscription_callback(const void *msvin)
+// {
+//     const std_msgs__msg__Int32 *msg = (const std_msgs__msg__Int32 *)msvin;
+//     ESP_LOGI(TAG, "Received from topic: %ld", (long)msg->data);
+// }
+
+static void mode_callback(const void *msvin)
 {
-    const std_msgs__msg__Int32 *msg = (const std_msgs__msg__Int32 *)msvin;
-    ESP_LOGI(TAG, "Received from topic: %ld", (long)msg->data);
+    const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msvin;
+    printf("Mode change -> %d \n",msg->data);
 }
 
 static uint32_t millis_now(void)
@@ -84,13 +93,17 @@ static void subscription_vel_callback(const void *msvin)
     float target_l = v - (w*WHEEL_BASE_M/2.0);
     float target_r = v + (w*WHEEL_BASE_M/2.0);
 
+    uint32_t now = millis_now();
+
     shared_memory_t* shm = shared_memory_get();
     if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
         shm->teleop.target_speed_left = target_l;
         shm->teleop.target_speed_right = target_r;
-        shm->teleop.last_update_ms = (uint32_t)(esp_timer_get_time() / 1000);
+        shm->teleop.last_update_ms = now;
         xSemaphoreGive(shm->mutex);
     }  
+    printf("cmd_vel -> lin.x: %.2f ang.z: %.2f\n",(float)msg->linear.x,(float)msg->angular.z);
+    
 }
 
 static void timer_callback(rcl_timer_t *timer, int64_t last_call_time)
@@ -129,6 +142,7 @@ static void timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 
 static void micro_ros_task(void *arg)
 {
+    ESP_LOGI(TAG, "micro_ros_task started");
     (void)arg;
 
     rcl_allocator_t allocator = rcl_get_default_allocator();
@@ -176,12 +190,12 @@ static void micro_ros_task(void *arg)
             "/esp32/publisher"
         ));
 
-        RCCHECK(rclc_subscription_init_default(
-            &my_subscriber,
-            &node,
-            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-            "/esp32/subscriber"
-        ));
+        // RCCHECK(rclc_subscription_init_default(
+        //     &my_subscriber,
+        //     &node,
+        //     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
+        //     "/esp32/subscriber"
+        // ));
 
         RCCHECK(rclc_subscription_init_default(
             &velocity_subscriber,
@@ -198,17 +212,24 @@ static void micro_ros_task(void *arg)
             true
         ));
 
+        RCCHECK(rclc_subscription_init_default(
+            &mode_subscriber,
+            &node,
+            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
+            "/robot/mode_cmd"
+        ));
+        
         RCCHECK(rclc_executor_init(&executor, &support.context, 3, &allocator));
 
         RCCHECK(rclc_executor_add_timer(&executor, &timer));
 
-        RCCHECK(rclc_executor_add_subscription(
-            &executor,
-            &my_subscriber,
-            &recv_msg,
-            &subscription_callback,
-            ON_NEW_DATA
-        ));
+        // RCCHECK(rclc_executor_add_subscription(
+        //     &executor,
+        //     &my_subscriber,
+        //     &recv_msg,
+        //     &subscription_callback,
+        //     ON_NEW_DATA
+        // ));
 
         RCCHECK(rclc_executor_add_subscription(
             &executor,
@@ -217,7 +238,14 @@ static void micro_ros_task(void *arg)
             &subscription_vel_callback,
             ON_NEW_DATA
         ));
-
+        
+        RCCHECK(rclc_executor_add_subscription(
+            &executor,
+            &mode_subscriber,
+            &change_mode,
+            &mode_callback,
+            ON_NEW_DATA
+        ));
         static char buffer[STRING_BUFFER_LEN];
         diag_msg.data.data = buffer;
         diag_msg.data.capacity = STRING_BUFFER_LEN;
@@ -277,8 +305,9 @@ static void micro_ros_task(void *arg)
 
         rcl_publisher_fini(&diag_publisher, &node);
         rcl_publisher_fini(&my_publisher, &node);
-        rcl_subscription_fini(&my_subscriber, &node);
+        // rcl_subscription_fini(&my_subscriber, &node);
         rcl_subscription_fini(&velocity_subscriber, &node);
+        rcl_subscription_fini(&mode_subscriber, &node);
         rcl_timer_fini(&timer);
         rclc_executor_fini(&executor);
         rcl_node_fini(&node);
@@ -292,7 +321,7 @@ static void micro_ros_task(void *arg)
 esp_err_t uros_manager_start(void)
 {
     static bool started = false;
-
+    ESP_LOGI(TAG,"Inicio micro-ROS");
     if (started) {
         ESP_LOGW(TAG, "micro-ROS task already started");
         return ESP_OK;
