@@ -1,5 +1,6 @@
 #include "uros_manager.h"
 #include "shared_memory.h"
+#include "state_machine.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -75,7 +76,15 @@ static float g_last_latency_ms = -1.0f;
 static void mode_callback(const void *msvin)
 {
     const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msvin;
-    printf("Mode change -> %d \n",msg->data);
+    int8_t mode_id = msg->data;
+
+    if (mode_id < 0 || mode_id >= MODE_COUNT) {
+        ESP_LOGW(TAG, "Ignoring invalid mode id: %d", mode_id);
+        return;
+    }
+
+    bool accepted = state_machine_request_mode((robot_mode_t)mode_id, true);
+    ESP_LOGI(TAG, "Mode change request -> %d (%s)", mode_id, accepted ? "accepted" : "rejected");
 }
 
 static uint32_t millis_now(void)
@@ -96,13 +105,21 @@ static void subscription_vel_callback(const void *msvin)
     uint32_t now = millis_now();
 
     shared_memory_t* shm = shared_memory_get();
+    if (shm == NULL) {
+        ESP_LOGW(TAG, "Shared memory unavailable, dropping cmd_vel");
+        return;
+    }
+
     if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
         shm->teleop.target_speed_left = target_l;
         shm->teleop.target_speed_right = target_r;
         shm->teleop.last_update_ms = now;
         xSemaphoreGive(shm->mutex);
-    }  
-    printf("cmd_vel -> lin.x: %.2f ang.z: %.2f\n",(float)msg->linear.x,(float)msg->angular.z);
+    } else {
+        ESP_LOGW(TAG, "Shared memory busy, dropping cmd_vel");
+    }
+
+    ESP_LOGI(TAG, "cmd_vel -> lin.x: %.2f ang.z: %.2f", (float)msg->linear.x, (float)msg->angular.z);
     
 }
 

@@ -1,8 +1,6 @@
 #include "mode_interface.h"
 #include "esp_log.h"
 #include "shared_memory.h"
-#include "mqtt_custom_client.h"
-#include "cJSON.h"
 #include "motor.h"
 #include "esp_timer.h"
 
@@ -14,6 +12,11 @@ static void enter(void) {
     
     // Initialize targets to 0
     shared_memory_t* shm = shared_memory_get();
+    if (shm == NULL) {
+        ESP_LOGE(TAG, "Shared memory unavailable on teleop enter");
+        return;
+    }
+
     if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         shm->teleop.target_speed_left = 0;
         shm->teleop.target_speed_right = 0;
@@ -28,8 +31,16 @@ static void execute(motor_driver_mcpwm_t* motors,
                     float dt_s) 
 {
     shared_memory_t* shm = shared_memory_get();
+    if (shm == NULL) {
+        motor_mcpwm_stop(motors);
+        return;
+    }
     
-    xSemaphoreTake(shm->mutex, portMAX_DELAY);
+    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(2)) != pdTRUE) {
+        motor_mcpwm_stop(motors);
+        return;
+    }
+
     float target_l = shm->teleop.target_speed_left;
     float target_r = shm->teleop.target_speed_right;
     float bat_mv   = shm->sensors.battery_voltage;
@@ -50,9 +61,14 @@ static void execute(motor_driver_mcpwm_t* motors,
     motor_velocity_input_t input_l = { .target_speed = target_l, .current_speed = cur_l, .battery_mv = bat_mv };
     motor_velocity_input_t input_r = { .target_speed = target_r, .current_speed = cur_r, .battery_mv = bat_mv };
 
-    float pwm_l, pwm_r;
-    motor_velocity_ctrl_update(ctrl_left,  &input_l, dt_s, &pwm_l, NULL);
-    motor_velocity_ctrl_update(ctrl_right, &input_r, dt_s, &pwm_r, NULL);
+    float pwm_l = 0.0f;
+    float pwm_r = 0.0f;
+    esp_err_t left_err = motor_velocity_ctrl_update(ctrl_left, &input_l, dt_s, &pwm_l, NULL);
+    esp_err_t right_err = motor_velocity_ctrl_update(ctrl_right, &input_r, dt_s, &pwm_r, NULL);
+    if (left_err != ESP_OK || right_err != ESP_OK) {
+        motor_mcpwm_stop(motors);
+        return;
+    }
 
     motor_mcpwm_set(motors, (int16_t)(pwm_l * 10.0f), (int16_t)(pwm_r * 10.0f));
 }

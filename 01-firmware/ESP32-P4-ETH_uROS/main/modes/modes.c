@@ -2,14 +2,13 @@
 #include "mode_interface.h"
 #include "esp_log.h"
 #include <stddef.h>
+#include "shared_memory.h"
 
 static const char *TAG = "MODES_DISPATCHER";
 
 // Extern declarations of mode interfaces
 extern const mode_interface_t mode_idle;
-extern const mode_interface_t mode_calibrate;
 extern const mode_interface_t mode_teleoperation;
-extern const mode_interface_t mode_follow_line;
 
 // Local state
 static robot_mode_t s_active_mode = MODE_NONE;
@@ -21,11 +20,14 @@ static const mode_interface_t* s_active_interface = &mode_idle;
 static const mode_interface_t* get_interface_for_mode(robot_mode_t mode) {
     switch (mode) {
         case MODE_NONE:               return &mode_idle;
-        case MODE_CALIBRATE_MOTORS:   return &mode_calibrate;
-        case MODE_CALIBRATE_LINE:     return &mode_calibrate;
         case MODE_REMOTE_DRIVE:       return &mode_teleoperation;
-        case MODE_AUTONOMOUS_PATH:    return &mode_follow_line;
-        case MODE_AUTONOMOUS_OBSTACLE: return &mode_follow_line; // Placeholder
+        case MODE_CALIBRATE_MOTORS:
+        case MODE_CALIBRATE_LINE:
+        case MODE_AUTONOMOUS_PATH:
+        case MODE_AUTONOMOUS_OBSTACLE:
+        case MODE_TELEMETRY_STREAM:
+            ESP_LOGW(TAG, "Mode %s disabled in teleoperation-only build", get_mode_name(mode));
+            return &mode_idle;
         default:                      return &mode_idle;
     }
 }

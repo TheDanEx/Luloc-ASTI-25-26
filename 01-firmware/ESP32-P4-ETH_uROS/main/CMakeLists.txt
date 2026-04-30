@@ -2,13 +2,27 @@ idf_component_register(
     SRCS
         "main.c"
         "tasks/uros_manager.c"
+        "tasks/task_rtcontrol_cpu0.c"
+        "modes/modes.c"
+        "modes/idle/mode_idle.c"
+        "modes/teleoperation/mode_teleoperation.c"
     INCLUDE_DIRS
         "."
         "tasks"
+        "modes"
+        "modes/idle"
+        "modes/teleoperation"
     REQUIRES
+        state_machine
         shared_memory
+        audio_player
         micro_ros_bridge
+        motors
+        motor_velocity_ctrl
+        pid_tuner
+        encoder_sensor
         freertos
         log
         esp_timer
+        esp_driver_gpio
 )
