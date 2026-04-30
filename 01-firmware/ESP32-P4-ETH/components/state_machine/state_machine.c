@@ -212,7 +212,7 @@ bool state_machine_request_mode(robot_mode_t new_mode, bool force)
 // Public API: Utilities & Getters
 // =============================================================================
 
-robot_state_context_t* 4(void)
+robot_state_context_t* state_machine_get_context(void)
 {
     return &g_state;
 }
