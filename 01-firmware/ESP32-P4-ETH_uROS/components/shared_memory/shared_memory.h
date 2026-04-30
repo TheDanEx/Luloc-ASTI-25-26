@@ -39,10 +39,6 @@ typedef struct {
     uint32_t timestamp_ms;       // Local timestamp
 } robot_sensor_data_t;
 
-typedef struct {
-    float linear_x;
-    float angular_z;
-} cmd_vel_data_t;
 
 typedef struct {
     // Commands received by CPU1 to execute on CPU0
@@ -70,7 +66,7 @@ typedef struct {
     robot_sensor_data_t sensors;
     robot_command_t last_command;
     
-    shared_teleop_config_t teleop;     // Teleoperation targets
+    shared_teleop_config_t teleop; 
     shared_pid_config_t motor_pids[2]; // 0=Left, 1=Right
     shared_pid_config_t line_pid;      // Line following PD/PID
     uint8_t calibration_motor_mask;    // bitmask: 1=Left, 2=Right, 3=Both
@@ -81,23 +77,12 @@ typedef struct {
     bool cpu1_alive;
     bool mqtt_connected;        // CPU1 reports MQTT connection status to CPU0
     SemaphoreHandle_t mutex;    // Protect concurrent access
-    cmd_vel_data_t cmd_vel;
 } shared_memory_t;
 
 /**
  * Initialize shared memory and synchronization primitives
  */
 void shared_memory_init(void);
-/**
- * Write cmd_vel
- */
-bool shared_memory_write_cmd_vel(const cmd_vel_data_t *data, TickType_t timeout);
-
-/**
- * Read cmd_vel
- */
-bool shared_memory_read_cmd_vel(cmd_vel_data_t *data, TickType_t timeout);
-
 
 /**
  * Write sensor data from CPU0 (non-blocking with timeout)

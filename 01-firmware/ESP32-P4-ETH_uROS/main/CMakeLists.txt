@@ -1,9 +1,14 @@
 idf_component_register(
-    SRCS "main.c"
-    INCLUDE_DIRS "."
-    REQUIRES 
+    SRCS
+        "main.c"
+        "tasks/uros_manager.c"
+    INCLUDE_DIRS
+        "."
+        "tasks"
+    REQUIRES
         shared_memory
-        esp_timer
+        micro_ros_bridge
         freertos
         log
+        esp_timer
 )

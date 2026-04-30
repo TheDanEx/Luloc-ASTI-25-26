@@ -29,7 +29,7 @@ void shared_memory_init(void)
     }
 
     // Default zero-state
-    g_shared_memory.cmd_vel = (cmd_vel_data_t){0};
+    
     g_shared_memory.sensors = (robot_sensor_data_t){0};
     g_shared_memory.last_command = (robot_command_t){0};
     g_shared_memory.heartbeat_cpu0 = 0;
@@ -102,47 +102,6 @@ bool shared_memory_read_sensors(robot_sensor_data_t *data, TickType_t timeout)
     return true;
 }
 
-
-// =============================================================================
-// Public API: CMD_VEL 
-// =============================================================================
-
-/**
- * Update the last command vel.
- */
-
-bool shared_memory_write_cmd_vel(const cmd_vel_data_t *data, TickType_t timeout)
-{
-    if (!g_initialized || data == NULL) {
-        return false;
-    }
-
-    if (xSemaphoreTake(g_shared_memory.mutex, timeout) != pdTRUE) {
-        ESP_LOGW(TAG, "Failed to acquire mutex for command write (timeout)");
-        return false;
-    }
-
-    g_shared_memory.cmd_vel = *data;    
-    xSemaphoreGive(g_shared_memory.mutex);
-    return true;
-}
-
-bool shared_memory_read_cmd_vel(cmd_vel_data_t *data, TickType_t timeout)
-{
-    if (!g_initialized || data == NULL) {
-        return false;
-    }
-
-    if (xSemaphoreTake(g_shared_memory.mutex, timeout) != pdTRUE) {
-        ESP_LOGW(TAG, "Failed to acquire mutex for command read (timeout)");
-        return false;
-    }
-
-    *data = g_shared_memory.cmd_vel;
-    
-    xSemaphoreGive(g_shared_memory.mutex);
-    return true;
-}
 
 
 // =============================================================================
