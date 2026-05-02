@@ -2,15 +2,15 @@ menu "Luloc-ASTI: 3. Control & Motors - Motor Velocity"
 
     config VELOCITY_CTRL_DEFAULT_KP
         string "Default Proportional Gain (Kp)"
-        default "0.5"
+        default "0.6"
 
     config VELOCITY_CTRL_DEFAULT_KI
         string "Default Integral Gain (Ki)"
-        default "0.1"
+        default "0.15"
 
     config VELOCITY_CTRL_DEFAULT_KD
         string "Default Derivative Gain (Kd)"
-        default "0.05"
+        default "0.01"
 
     config VELOCITY_CTRL_MAX_BATTERY_MV
         string "Reference Max Battery Voltage (mV)"

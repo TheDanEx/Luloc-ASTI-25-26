@@ -13,6 +13,7 @@ idf_component_register(
         "modes/idle"
         "modes/teleoperation"
     REQUIRES
+        ina226_sensor
         state_machine
         shared_memory
         audio_player

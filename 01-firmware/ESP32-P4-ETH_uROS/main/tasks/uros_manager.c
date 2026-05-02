@@ -119,7 +119,7 @@ static void subscription_vel_callback(const void *msvin)
         ESP_LOGW(TAG, "Shared memory busy, dropping cmd_vel");
     }
 
-    ESP_LOGI(TAG, "cmd_vel -> lin.x: %.2f ang.z: %.2f", (float)msg->linear.x, (float)msg->angular.z);
+    // ESP_LOGI(TAG, "cmd_vel ->\n lin.x: %.2f, ang.z: %.2f\n target_l: %.4f, target_r: %.4f", (float)msg->linear.x, (float)msg->angular.z,(float)target_l,(float)target_r);
     
 }
 

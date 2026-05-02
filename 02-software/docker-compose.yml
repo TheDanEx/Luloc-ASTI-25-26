@@ -54,9 +54,24 @@ services:
     container_name: micro_ros_agent
     restart: unless-stopped
     network_mode: "host"
-    environment:
-      - ROS_DOMAIN_ID=13
+    # environment:
+    #   - ROS_DOMAIN_ID=13
     command: udp4 --port 8888
+
+    # ===============================
+    # LiDAR LAUNCHER
+    # ===============================
+  lidar:
+    image: ros2_luloc:lidar
+    entrypoint: ["/ros_entrypoint.sh"]
+    network_mode: host
+    restart: unless-stopped
+    ipc: host
+    devices:
+      - /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0:/dev/ttyUSB0
+    group_add:
+      - dialout
+    command: ["ros2", "launch", "ldlidar_stl_ros2", "ld06.launch.py"]
 
   # ===============================
   # MQTT BROKER

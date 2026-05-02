@@ -7,11 +7,13 @@
 #include "state_machine.h"
 #include "task_rtcontrol_cpu0.h"
 #include "uros_manager.h"
+// #include "system_init.h"
 
 static const char *TAG = "MAIN";
 
 void app_main(void)
 {
+    // system_init();
     shared_memory_init();
     state_machine_init();
 

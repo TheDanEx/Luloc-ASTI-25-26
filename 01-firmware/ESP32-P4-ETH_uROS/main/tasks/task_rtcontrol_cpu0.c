@@ -35,7 +35,7 @@ static const char *TAG = "rt_cntrl";
 // Default HW configuration (Updated to new GPIO Table)
 static motor_driver_mcpwm_t motors = {
     .left  = { .in1 = GPIO_NUM_6,  .in2 = GPIO_NUM_15},
-    .right = { .in1 = GPIO_NUM_26, .in2 = GPIO_NUM_27},
+        .right = { .in1 = GPIO_NUM_27, .in2 = GPIO_NUM_26},
 
     .nsleep = GPIO_NUM_NC,
     .pwm_hz = 20000,
@@ -73,6 +73,12 @@ static void task_rtcontrol_cpu0(void *arg)
         .ema_alpha       = atof(CONFIG_VEL_CTRL_EMA_ALPHA)
     };
     motor_velocity_config_t cfg_r = cfg_l;
+    // Baja velocidad: el derecho empuja más
+    cfg_l.deadband_v += 0.20f;
+    // cfg_r.deadband_v -= 0.20f;
+
+    // Alta velocidad: el izquierdo empuja más
+    cfg_l.max_motor_speed *= 1.08;
 
     pid_tuner_load_motor_pid(0, &cfg_l.kp, &cfg_l.ki, &cfg_l.kd);
     pid_tuner_load_motor_pid(1, &cfg_r.kp, &cfg_r.ki, &cfg_r.kd);
