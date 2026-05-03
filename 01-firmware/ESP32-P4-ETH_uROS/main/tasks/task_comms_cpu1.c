@@ -21,7 +21,6 @@
 #include "encoder_sensor.h"
 #include "telemetry_manager.h"
 #include "ina226_sensor.h"
-#include "pid_tuner.h"
 #include "mqtt_api_responder.h"
 #include "driver/gpio.h"
 #include "ptp_client.h"
@@ -50,6 +49,11 @@ static telemetry_handle_t tel_line = NULL;
 // =============================================================================
 // Helper: Data Collection
 // =============================================================================
+
+static bool is_calibration_mode(robot_mode_t mode)
+{
+    return mode == MODE_CALIBRATE_MOTORS || mode == MODE_CALIBRATE_LINE;
+}
 
 /**
  * Capture high-frequency metrics from local sensors.
@@ -190,11 +194,8 @@ static void task_comms_cpu1(void *arg)
 
     vTaskDelay(pdMS_TO_TICKS(1000)); 
     
-    // Register telemetry/config responders. MQTT mode changes are explicitly
-    // rejected inside mqtt_api_responder; modes are controlled through micro-ROS.
-    pid_tuner_init();
-    pid_tuner_register_callback();
-    pid_tuner_subscribe();
+    // Register config responders. MQTT mode changes are explicitly rejected
+    // inside mqtt_api_responder; modes are controlled through micro-ROS.
     mqtt_api_responder_init();
     mqtt_api_responder_subscribe();
 
@@ -222,7 +223,6 @@ static void task_comms_cpu1(void *arg)
              if (mqtt_custom_client_is_connected()) {
                  shared_memory_set_mqtt_connected(true);
                  // Resubscribe if connection was dropped and restored
-                 pid_tuner_subscribe();
                  mqtt_api_responder_subscribe();
              } else {
                  shared_memory_set_mqtt_connected(false);
@@ -231,8 +231,12 @@ static void task_comms_cpu1(void *arg)
              last_sampling_tick = current_tick;
         }
 
-        // 4. High-Frequency Sampling Call
-        collect_high_freq_sensor_data();
+        // 4. High-frequency telemetry only during calibration to avoid
+        // adding network latency to teleoperation.
+        robot_state_context_t *state = state_machine_get_context();
+        if (state != NULL && is_calibration_mode(state->current_mode)) {
+            collect_high_freq_sensor_data();
+        }
 
         vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));
     }

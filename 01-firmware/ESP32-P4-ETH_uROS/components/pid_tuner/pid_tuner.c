@@ -98,12 +98,10 @@ esp_err_t pid_tuner_save_motor_pid(uint8_t index, float kp, float ki, float kd) 
  * Register the PID tuning callback with the MQTT client
  */
 esp_err_t pid_tuner_register_callback(void) {
-    ESP_LOGW(TAG, "MQTT PID tuning disabled in teleoperation-only build");
     return ESP_ERR_NOT_SUPPORTED;
 }
 
 esp_err_t pid_tuner_subscribe(void) {
-    ESP_LOGW(TAG, "MQTT PID tuning disabled in teleoperation-only build");
     return ESP_ERR_NOT_SUPPORTED;
 }
 
