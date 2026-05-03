@@ -14,14 +14,7 @@ static const char *TAG = "MAIN";
 
 void app_main(void)
 {
-    // system_init();
-    
     system_init();
-
-    esp_err_t audio_err = audio_player_init();
-    if (audio_err != ESP_OK) {
-        ESP_LOGW(TAG, "Audio player unavailable: %s", esp_err_to_name(audio_err));
-    }
 
     ESP_ERROR_CHECK(uros_network_interface_initialize());
     ESP_ERROR_CHECK(uros_manager_start());

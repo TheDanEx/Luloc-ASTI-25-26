@@ -18,10 +18,8 @@
 #include "audio_player.h"
 #include "test_sensor.h"
 #include "performance_monitor.h"
-#include "ethernet.h"
 #include "encoder_sensor.h"
 #include "telemetry_manager.h"
-#include "ina226_sensor.h"
 #include "ina226_sensor.h"
 #include "pid_tuner.h"
 #include "mqtt_api_responder.h"
@@ -167,11 +165,10 @@ bool task_comms_cpu1_is_ready(void)
 static void task_comms_cpu1(void *arg)
 {
     task_comms_cpu1_init_queue();
-    
-    // Block until network is physically ready
-    while (!ethernet_is_connected()) {
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
+
+    // The network stack is initialized by micro-ROS before this task starts.
+    // MQTT can start immediately and will reconnect until the broker is reachable.
+    vTaskDelay(pdMS_TO_TICKS(500));
 
     ptp_client_init();
 
@@ -193,7 +190,8 @@ static void task_comms_cpu1(void *arg)
 
     vTaskDelay(pdMS_TO_TICKS(1000)); 
     
-    // Register Asynchronous Responders
+    // Register telemetry/config responders. MQTT mode changes are explicitly
+    // rejected inside mqtt_api_responder; modes are controlled through micro-ROS.
     pid_tuner_init();
     pid_tuner_register_callback();
     pid_tuner_subscribe();

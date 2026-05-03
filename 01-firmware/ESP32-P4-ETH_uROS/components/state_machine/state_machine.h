@@ -47,6 +47,11 @@ robot_state_t state_machine_update(void);
 bool state_machine_request_mode(robot_mode_t new_mode, bool force);
 
 /**
+ * Record MQTT connectivity status without changing the active mode.
+ */
+void state_machine_notify_mqtt_status(bool connected);
+
+/**
  * Get current state context
  */
 robot_state_context_t* state_machine_get_context(void);

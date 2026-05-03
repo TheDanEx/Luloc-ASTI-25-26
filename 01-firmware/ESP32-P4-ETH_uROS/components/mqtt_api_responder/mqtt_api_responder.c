@@ -96,60 +96,9 @@ static void handle_resource_status(cJSON *response_root) {
  * Execute mode change request and publish ILP event
  */
 static void handle_action_set_mode(cJSON *root, cJSON *response_root) {
-    cJSON *mode_id_item = cJSON_GetObjectItem(root, "mode_id");
-    cJSON *force_item = cJSON_GetObjectItem(root, "force");
-    bool force = false;
-
-    if (cJSON_IsBool(force_item)) {
-        force = cJSON_IsTrue(force_item);
-    }
-
-    if (cJSON_IsNumber(mode_id_item)) {
-        int mode_id = mode_id_item->valueint;
-        if (mode_id >= MODE_NONE && mode_id < MODE_COUNT) {
-            
-            if (state_machine_request_mode((robot_mode_t)mode_id, force)) {
-                cJSON_AddStringToObject(response_root, "status", "success");
-                cJSON_AddStringToObject(response_root, "message", "Mode changed");
-                
-                // Publish the asynchronous event using ILP
-                struct timespec ts;
-                clock_gettime(CLOCK_REALTIME, &ts);
-                int64_t timestamp_ns = (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
-
-#ifdef CONFIG_TELEMETRY_ROBOT_NAME
-                const char *robot_name = CONFIG_TELEMETRY_ROBOT_NAME;
-#else
-                const char *robot_name = "unknown";
-#endif
-
-                char ilp_payload[192];
-                snprintf(ilp_payload, sizeof(ilp_payload), 
-                        "events,type=MODE_CHANGE,robot=%s mode=%di,mode_str=\"%s\" %lld", 
-                        robot_name, mode_id, get_mode_name((robot_mode_t)mode_id), timestamp_ns);
-                
-                mqtt_custom_client_publish("robot/events", ilp_payload, 0, 1, 0);
-            } else {
-                cJSON_AddStringToObject(response_root, "status", "error");
-                cJSON_AddStringToObject(response_root, "message", "Mode change rejected");
-                
-                // Also publish error event in ILP
-                struct timespec ts_err;
-                clock_gettime(CLOCK_REALTIME, &ts_err);
-                int64_t ts_err_ns = (int64_t)ts_err.tv_sec * 1000000000LL + (int64_t)ts_err.tv_nsec;
-                
-                char err_payload[128];
-                snprintf(err_payload, sizeof(err_payload), "events,type=ERROR,robot=unknown error=\"MODE_REJECTED\" %lld", ts_err_ns);
-                mqtt_custom_client_publish("robot/events", err_payload, 0, 1, 0);
-            }
-        } else {
-            cJSON_AddStringToObject(response_root, "status", "error");
-            cJSON_AddStringToObject(response_root, "message", "Invalid mode_id");
-        }
-    } else {
-        cJSON_AddStringToObject(response_root, "status", "error");
-        cJSON_AddStringToObject(response_root, "message", "Missing mode_id");
-    }
+    (void)root;
+    cJSON_AddStringToObject(response_root, "status", "error");
+    cJSON_AddStringToObject(response_root, "message", "Mode changes over MQTT are disabled; use micro-ROS /robot/mode_cmd");
 }
 
 /**

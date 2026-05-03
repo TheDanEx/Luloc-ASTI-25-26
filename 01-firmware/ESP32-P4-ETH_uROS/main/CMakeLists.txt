@@ -3,6 +3,7 @@ idf_component_register(
         "main.c"
         "system_init.c"
         "tasks/uros_manager.c"
+        "tasks/task_comms_cpu1.c"
         "tasks/task_rtcontrol_cpu0.c"
         "tasks/task_monitor_lowpower_cpu1.c"
         "modes/modes.c"

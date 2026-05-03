@@ -5,6 +5,7 @@
 #include "esp_heap_caps.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 static const char *TAG = "perf_mon";
 
@@ -20,6 +21,16 @@ esp_err_t perf_mon_get_stats_absolute(perf_data_abs_t *stats)
         return ESP_ERR_INVALID_ARG;
     }
 
+#if (configUSE_TRACE_FACILITY != 1)
+    stats->cpu0_total_runtime_ticks = 0;
+    stats->cpu1_total_runtime_ticks = 0;
+    stats->cpu0_idle_ticks = 0;
+    stats->cpu1_idle_ticks = 0;
+    stats->heap_free_bytes = esp_get_free_heap_size();
+    stats->min_heap_free_bytes = esp_get_minimum_free_heap_size();
+    stats->total_sleep_ticks = 0;
+    return ESP_ERR_NOT_SUPPORTED;
+#else
     // Get Total Run Time (Cumulative ticks since boot)
     // Note: portGET_RUN_TIME_COUNTER_VALUE() returns the counter for specific core.
     // However, in SMP, FreeRTOS keeps individual idle counters.
@@ -66,14 +77,17 @@ esp_err_t perf_mon_get_stats_absolute(perf_data_abs_t *stats)
     stats->total_sleep_ticks = 0; 
 
     return ESP_OK;
+#endif
 }
 
 
 
+#if (configUSE_TRACE_FACILITY == 1)
 // Static state for relative calculations
 static TaskStatus_t *pxPrevTaskStatusArray = NULL;
 static UBaseType_t prev_task_count = 0;
 static uint32_t prev_total_runtime = 0;
+#endif
 
 // Calculated stats storage
 typedef struct {
@@ -89,6 +103,9 @@ static float s_core1_idle = 0.0f;
 
 esp_err_t perf_mon_update(void)
 {
+#if (configUSE_TRACE_FACILITY != 1)
+    return ESP_ERR_NOT_SUPPORTED;
+#else
     uint32_t total_runtime;
     UBaseType_t task_count = uxTaskGetNumberOfTasks();
     
@@ -145,7 +162,7 @@ esp_err_t perf_mon_update(void)
         if (pct > 0.0f) {
             strncpy(new_records[valid_records].name, curr->pcTaskName, configMAX_TASK_NAME_LEN - 1);
             new_records[valid_records].name[configMAX_TASK_NAME_LEN - 1] = '\0';
-            // new_records[valid_records].core_id = (int)curr->xCoreID;
+            new_records[valid_records].core_id = tskNO_AFFINITY;
             new_records[valid_records].usage_pct = pct;
             valid_records++;
         }
@@ -167,6 +184,7 @@ esp_err_t perf_mon_update(void)
     prev_total_runtime = total_runtime;
 
     return ESP_OK;
+#endif
 }
 
 void perf_mon_print_report(void)

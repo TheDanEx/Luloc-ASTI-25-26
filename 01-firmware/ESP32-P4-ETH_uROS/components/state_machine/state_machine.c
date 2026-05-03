@@ -22,6 +22,7 @@ static robot_state_context_t g_state = {
 };
 
 static TickType_t g_state_start_time = 0;
+static bool g_mqtt_connected = false;
 
 // =============================================================================
 // Internal Handlers
@@ -131,6 +132,16 @@ bool state_machine_request_mode(robot_mode_t new_mode, bool force)
     ESP_LOGI(TAG, "Mode transition: %d -> %d", g_state.current_mode, new_mode);
     g_state.current_mode = new_mode;
     return true;
+}
+
+void state_machine_notify_mqtt_status(bool connected)
+{
+    if (g_mqtt_connected == connected) {
+        return;
+    }
+
+    g_mqtt_connected = connected;
+    ESP_LOGI(TAG, "MQTT status: %s", connected ? "connected" : "disconnected");
 }
 
 // =============================================================================
