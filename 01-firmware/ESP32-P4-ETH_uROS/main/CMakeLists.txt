@@ -1,17 +1,24 @@
 idf_component_register(
     SRCS
         "main.c"
+        "system_init.c"
         "tasks/uros_manager.c"
         "tasks/task_rtcontrol_cpu0.c"
+        "tasks/task_monitor_lowpower_cpu1.c"
         "modes/modes.c"
         "modes/idle/mode_idle.c"
         "modes/teleoperation/mode_teleoperation.c"
+        "modes/follow_line/mode_follow_line.c"
+        "modes/follow_line/follow_line_logic.c"
+        "modes/calibrate/mode_calibrate.c"
     INCLUDE_DIRS
         "."
         "tasks"
         "modes"
         "modes/idle"
         "modes/teleoperation"
+        "modes/calibrate"
+        "modes/follow_line"
     REQUIRES
         ina226_sensor
         state_machine
@@ -26,4 +33,16 @@ idf_component_register(
         log
         esp_timer
         esp_driver_gpio
+        ptp_client
+        line_sensor
+        performance_monitor
+        mqtt_custom_client
+        mqtt_api_responder
+        test_sensor
+        ethernet
+        telemetry_manager
+    PRIV_REQUIRES
+        nvs_flash
+        esp_event
+        esp_netif
 )

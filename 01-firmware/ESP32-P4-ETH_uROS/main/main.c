@@ -4,18 +4,19 @@
 
 #include "audio_player.h"
 #include "shared_memory.h"
-#include "state_machine.h"
 #include "task_rtcontrol_cpu0.h"
 #include "uros_manager.h"
-// #include "system_init.h"
+#include "system_init.h"
+#include "task_comms_cpu1.h"
+#include "task_monitor_lowpower_cpu1.h"
 
 static const char *TAG = "MAIN";
 
 void app_main(void)
 {
     // system_init();
-    shared_memory_init();
-    state_machine_init();
+    
+    system_init();
 
     esp_err_t audio_err = audio_player_init();
     if (audio_err != ESP_OK) {
@@ -24,7 +25,19 @@ void app_main(void)
 
     ESP_ERROR_CHECK(uros_network_interface_initialize());
     ESP_ERROR_CHECK(uros_manager_start());
+
+     // Start communication task on CPU 1 (handles MQTT, logs, etc)
+    task_comms_cpu1_start();
+    printf("[CPU%d] %-40s [ OK ]\n", 1, "Started Comms Task");
+
+    vTaskDelay(pdMS_TO_TICKS(100));
+
     task_rtcontrol_cpu0_start();
+    printf("[CPU%d] %-40s [ OK ]\n", 0, "Started RT Control");
+
+    // Start monitoring and safety task on CPU 1
+    task_monitor_lowpower_cpu1_start();
+    printf("[CPU%d] %-40s [ OK ]\n", 1, "Started Monitor Task");
 
     ESP_LOGI(TAG, "System started successfully");
 }

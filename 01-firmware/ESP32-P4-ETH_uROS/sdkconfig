@@ -694,6 +694,18 @@ CONFIG_MICRO_ROS_APP_TASK_PRIO=5
 # end of micro-ROS example-app (ping-pong) settings
 
 #
+# Luloc-ASTI: 0. Main Configuration
+#
+CONFIG_ROBOT_USE_ETHERNET=y
+CONFIG_ROBOT_ETH_DHCP=y
+# CONFIG_ROBOT_ETH_STATIC_IP is not set
+CONFIG_ROBOT_CONTROL_PERIOD_MS=10
+CONFIG_TELEMETRY_INTERVAL_CALIBRATION_MS=50
+CONFIG_TELEMETRY_INTERVAL_ODOMETRY_MS=1000
+CONFIG_TELEMETRY_INTERVAL_SYSTEM_MS=5000
+# end of Luloc-ASTI: 0. Main Configuration
+
+#
 # Luloc-ASTI: 1. Follow Line Configuration
 #
 CONFIG_FOLLOW_LINE_KP="1.0"
@@ -703,6 +715,26 @@ CONFIG_FOLLOW_LINE_BASE_SPEED="0.4"
 CONFIG_FOLLOW_LINE_MAX_SPEED="0.8"
 CONFIG_FOLLOW_LINE_FF_WEIGHT="0.5"
 # end of Luloc-ASTI: 1. Follow Line Configuration
+
+#
+# Luloc-ASTI: 1. Communications - Ethernet
+#
+CONFIG_ENV_GPIO_RANGE_MIN=0
+CONFIG_ENV_GPIO_RANGE_MAX=56
+CONFIG_ENV_GPIO_IN_RANGE_MAX=56
+CONFIG_ENV_GPIO_OUT_RANGE_MAX=56
+CONFIG_EXAMPLE_USE_INTERNAL_ETHERNET=y
+CONFIG_EXAMPLE_ETH_PHY_IP101=y
+# CONFIG_EXAMPLE_ETH_PHY_RTL8201 is not set
+# CONFIG_EXAMPLE_ETH_PHY_LAN87XX is not set
+# CONFIG_EXAMPLE_ETH_PHY_DP83848 is not set
+# CONFIG_EXAMPLE_ETH_PHY_KSZ80XX is not set
+CONFIG_EXAMPLE_ETH_MDC_GPIO=31
+CONFIG_EXAMPLE_ETH_MDIO_GPIO=52
+CONFIG_EXAMPLE_ETH_PHY_RST_GPIO=51
+CONFIG_EXAMPLE_ETH_PHY_ADDR=1
+# CONFIG_EXAMPLE_USE_SPI_ETHERNET is not set
+# end of Luloc-ASTI: 1. Communications - Ethernet
 
 #
 # micro-ROS Settings
@@ -742,6 +774,12 @@ CONFIG_MICRO_ROS_ETH_STATIC_GW="192.168.5.1"
 CONFIG_MICRO_ROS_AGENT_IP="192.168.5.1"
 CONFIG_MICRO_ROS_AGENT_PORT="8888"
 # end of micro-ROS Settings
+
+#
+# Luloc-ASTI: 1. Communications - MQTT Client
+#
+CONFIG_BROKER_URL="mqtt://192.168.42.15:51111"
+# end of Luloc-ASTI: 1. Communications - MQTT Client
 
 #
 # Compiler options
@@ -2283,17 +2321,29 @@ CONFIG_VELOCITY_CTRL_SWEEP_TIME_MS=3000
 
 CONFIG_VELOCITY_CTRL_MAX_MOTOR_SPEED_MS="1.5"
 CONFIG_VEL_CTRL_DEADBAND_V="1.2"
-CONFIG_VEL_CTRL_DEADBAND_V_L="1.5"
-CONFIG_VEL_CTRL_DEADBAND_V_R="1.2"
 CONFIG_VEL_CTRL_ACCEL_LIMIT="2.0"
 CONFIG_VEL_CTRL_EMA_ALPHA="0.3"
 # end of Luloc-ASTI: 3. Control & Motors - Motor Velocity
+
+#
+# Luloc-ASTI: 1. Communications - MQTT API Responder
+#
+CONFIG_MQTT_API_GET_TOPIC="robot/api/get"
+CONFIG_MQTT_API_SET_TOPIC="robot/api/set"
+CONFIG_MQTT_API_RESP_TOPIC="robot/api/response"
+# end of Luloc-ASTI: 1. Communications - MQTT API Responder
 
 #
 # Luloc-ASTI: 4. Telemetry & Tuning - Live PID Tuning
 #
 CONFIG_PID_TUNER_MQTT_TOPIC="robot/config/pid_motors"
 # end of Luloc-ASTI: 4. Telemetry & Tuning - Live PID Tuning
+
+#
+# Telemetry Configuration
+#
+CONFIG_TELEMETRY_ROBOT_NAME="Luloc"
+# end of Telemetry Configuration
 # end of Component config
 
 # CONFIG_IDF_EXPERIMENTAL_FEATURES is not set

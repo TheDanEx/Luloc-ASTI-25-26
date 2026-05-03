@@ -177,6 +177,7 @@ esp_err_t ina_check_alerts(void) {
 
     float voltage_mv = 0, current_ma = 0;
     ina_read_voltage(&voltage_mv);
+    // ESP_LOGI(TAG,"Current voltage: %.2f",voltage_mv);
     ina_read_current(&current_ma);
 
     bool triggered = false;
