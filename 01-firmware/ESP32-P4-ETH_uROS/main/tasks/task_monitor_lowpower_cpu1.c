@@ -94,7 +94,7 @@ static void task_monitor_lowpower_cpu1(void *arg)
         // =====================================================================
         // Telemetry Reporting (Power)
         // =====================================================================
-        if (publish_telemetry && telemetry_power) {
+        if (telemetry_power) {
             telemetry_add_float(telemetry_power, "voltage_mv", power_data.voltage_mv);
             telemetry_add_float(telemetry_power, "current_ma", power_data.current_ma);
             telemetry_add_float(telemetry_power, "power_mw",   power_data.power_mw);

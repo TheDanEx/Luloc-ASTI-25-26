@@ -88,6 +88,8 @@ esp_err_t motor_velocity_ctrl_update(motor_velocity_ctrl_handle_t handle,
  */
 esp_err_t motor_velocity_ctrl_set_pid(motor_velocity_ctrl_handle_t handle, float kp, float ki, float kd);
 
+esp_err_t motor_velocity_ctrl_reset(motor_velocity_ctrl_handle_t handle);
+
 #ifdef __cplusplus
 }
 #endif

@@ -3,7 +3,7 @@
 #include "shared_memory.h"
 #include "motor.h"
 #include "esp_timer.h"
-
+#include <math.h>
 static const char *TAG = "MODE_TELEOP";
 
 
@@ -36,7 +36,7 @@ static void execute(motor_driver_mcpwm_t* motors,
         motor_mcpwm_stop(motors);
         return;
     }
-    
+    float bat_mv =0;
     if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(2)) != pdTRUE) {
         motor_mcpwm_stop(motors);
         return;
@@ -44,7 +44,7 @@ static void execute(motor_driver_mcpwm_t* motors,
 
     float target_l = shm->teleop.target_speed_left;
     float target_r = shm->teleop.target_speed_right;
-    float bat_mv   = shm->sensors.battery_voltage;
+    // float bat_mv   = shm->sensors.battery_voltage;
     uint32_t last_update_ms = shm->teleop.last_update_ms;
     float cur_l    = shm->sensors.motor_speed_left;
     float cur_r = -shm->sensors.motor_speed_right;
@@ -61,6 +61,12 @@ static void execute(motor_driver_mcpwm_t* motors,
     }
     // Fallback battery
     if (bat_mv < 5000) bat_mv = 16800;
+    if (fabsf(target_l) < 0.001f && fabsf(target_r) < 0.001f) {
+    motor_velocity_ctrl_reset(ctrl_left);
+    motor_velocity_ctrl_reset(ctrl_right);
+    motor_mcpwm_stop(motors);
+    return;
+}
 
     motor_velocity_input_t input_l = { .target_speed = target_l, .current_speed = cur_l, .battery_mv = bat_mv };
     motor_velocity_input_t input_r = { .target_speed = target_r, .current_speed = cur_r, .battery_mv = bat_mv };

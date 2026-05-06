@@ -133,3 +133,21 @@ esp_err_t motor_velocity_ctrl_set_pid(motor_velocity_ctrl_handle_t handle, float
     ctx->filtered_derivative = 0.0f;
     return ESP_OK;
 }
+
+esp_err_t motor_velocity_ctrl_reset(motor_velocity_ctrl_handle_t handle)
+{
+    if (handle == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    struct motor_velocity_ctrl_context_t *ctx = handle;
+
+    ctx->integral = 0.0f;
+    ctx->prev_filtered_speed = 0.0f;
+    ctx->current_filtered_speed = 0.0f;
+    ctx->ramped_target_speed = 0.0f;
+    ctx->filtered_derivative = 0.0f;
+    ctx->last_out_pwm = 0.0f;
+
+    return ESP_OK;
+}
