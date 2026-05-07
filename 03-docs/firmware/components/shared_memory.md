@@ -1,66 +1,44 @@
-# Shared Memory
+# Shared Memory (IPC Manager)
 
 ## Propósito Arquitectónico
-Provee el mecanismo de acoplamiento débil principal del sistema entero para Inter-Process y Multi-Core Communication (IPC). Elimina condiciones de carrera asegurándose de que una CPU de control (CPU0) pura y agresiva puede enviar datos al mundo exterior operado por una CPU de comunicaciones (CPU1) y viceversa usando simples estructuras comunes.
+Este componente actúa como el puente de comunicación inter-procesos (IPC) entre el **Core 0 (Comunicaciones/uROS)** y el **Core 1 (Control en Tiempo Real)**. Su arquitectura está diseñada para garantizar que el Core 1 nunca se bloquee, manteniendo el determinismo del lazo de control de 100Hz, mientras que el Core 0 puede consumir la información más reciente de forma asíncrona.
 
 ## Entorno y Dependencias
-Core Semaphores primitives de FreeRTOS (`freertos/semphr.h`). 
+- **FreeRTOS Queues:** Utiliza `xQueueOverwrite` para flujos de datos continuos y colas estándar para comandos.
+- **ESP-IDF:** Compatible con la arquitectura multi-core del ESP32-P4.
 
 ## Interfaces de E/S (Inputs/Outputs)
-- **Hardware:** Todo se encuentra anclado a buffers en SRAM local compartida.
-- **Software:** Wrapper sobre una gran directiva estática `shared_memory_t` separando sub-bloques de Sensores (`robot_sensor_data_t`) y Comandos (`robot_command_t`). Incluye configuración de PID por motor (`motor_pids[2]`) y máscara de selección para calibración (`calibration_motor_mask`). Usa mutadores y descriptores con Timeout estricto de concurrencia (`shared_memory_read/write_sensors()`). Implementa variables bidireccionales de 'Heartbeat' para chequeos pasivos de vida y estados MQTT (`mqtt_connected`).
+- **Entradas (desde Core 1):** Telemetría (sensores, PIDs) y Estado (batería, modo).
+- **Entradas (desde Core 0):** Comandos de movimiento (Twist) y Comandos de modo.
+- **Salidas:** Provee una API opaca para extraer estos datos desde el núcleo opuesto.
 
 ## Flujo de Ejecución Lógico
-Instanciación única en inicio (`shared_memory_init()`). Cada bloque (Control o Comms) llama a primitivas `write/read` con un `TickType_t` max timeout. Internamente, un Mutex asegura que los structs de bytes múltiples jamás se crucen a la mitad (Lectura sucia). Un núcleo también escribe periodicamente incrementando un `heartbeat_cpuX++` y valida el contiguo. 
+1. **Productor Rápido -> Consumidor Lento (Core 1 a Core 0):** Se utiliza `xQueueOverwrite` con tamaño 1. El Core 1 escribe constantemente; el Core 0 lee cuando está listo, obteniendo siempre la muestra más fresca.
+2. **Productor Lento -> Consumidor Rápido (Core 0 a Core 1):** Se utilizan colas FIFO. El Core 1 realiza un *polling* no bloqueante (timeout 0) para procesar comandos en cuanto llegan sin detener su ciclo de ejecución.
 
 ## Funciones Principales y Parámetros
-- `shared_memory_init(void)`: Pide el Mutex inicial de RTOS y blanquea el struct global para que ambas CPUs puedan empezar.
-- `shared_memory_write_sensors(const robot_sensor_data_t *data, TickType_t timeout)`: (Uso típico CPU0) Transmite lo leído del hardware al pool central.
-  - `data`: Puntero al struct local rellenado de lecturas de hardware.
-  - `timeout`: Bloqueo máximo dispuesto a esperar por el mutex (ej. `pdMS_TO_TICKS(5)`).
-- `shared_memory_read_sensors(robot_sensor_data_t *data, TickType_t timeout)`: (Uso típico CPU1) Clona lo almacenado para subirlo a telemetría.
-- `shared_memory_write_command(...)` / `_read_command(...)`: Flujo inverso para las directivas desde la red (CPU1) a los motores (CPU0).
-- `shared_memory_heartbeat_cpu0(void)` y `_cpu1(void)`: Incrementan contadores internos para verificar que el núcleo contrario no se bloqueó en un bucle infinito (Watchdog de software mutuo).
+- `shared_memory_init()`: Inicializa todas las colas internas.
+- `shared_memory_push_telemetry(const robot_telemetry_t *data)`: Envía datos desde el Core 1.
+- `shared_memory_get_telemetry(robot_telemetry_t *data)`: Recupera datos desde el Core 0.
+- `shared_memory_push_twist_cmd(const robot_twist_cmd_t *cmd)`: Envía comandos desde el Core 0.
+- `shared_memory_get_twist_cmd(robot_twist_cmd_t *cmd)`: Recupera comandos desde el Core 1.
 
 ## Puntos Críticos y Depuración
-- **Deadlocks / Fallo asimétrico:** Si el Timeout de bloqueo fuera infinito (por mala implementación de otra capa o bugs de Mutex), la CPU completa en modo Real-Time quedaría sentenciada al paro incondicional. Asegurar ticks de timeout máximos no superen los ciclos de control esperados (e.g. max 2-5ms).
-- **Lectura Cruda de Puntero Peligrosa:** Ofrece acceso profundo directo a `shared_memory_get()`. Quien acceda y asigne punteros directos sin tomar el lock corromperá temporalmente los arreglos en arquitecturas SMP en momento de contención extrema.
+- **No Bloqueo:** El Core 1 **JAMÁS** debe llamar a funciones de lectura/escritura con un timeout distinto de 0.
+- **Pérdida de Comandos:** Si se envían múltiples comandos de modo muy rápido desde ROS, la cola (tamaño 5) podría llenarse. Se asume que los cambios de modo son eventos discretos lentos.
 
 ## Ejemplo de Uso e Instanciación
 ```c
 #include "shared_memory.h"
-#include "freertos/FreeRTOS.h"
 
-// 1. Core 0: Tarea Crítica de Control PID
-void control_cpu0_task(void *pvParameters) {
-    robot_command_t cmd_buffer;
-    
-    while(1) {
-        // Latido de hardware (Watchdog cruzado)
-        shared_memory_heartbeat_cpu0();
+// En Core 1 (Control)
+void control_loop() {
+    robot_telemetry_t telem = { ... };
+    shared_memory_push_telemetry(&telem); // Non-blocking
 
-        // Leer Comandos (Enviados por MQTT a través del Core 1)
-        // Timeout de 2 RTOS Ticks (muy rápido, no bloquea PID)
-        if (shared_memory_read_command(&cmd_buffer, 2) == ESP_OK) {
-            set_target_speed(cmd_buffer.velocity_x);
-        }
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-}
-
-// 2. Core 1: Tarea de Networking/MQTT
-void comms_cpu1_task(void *pvParameters) {
-    // Solo un núcleo inicializa la estructura global al principio
-    shared_memory_init();
-
-    robot_command_t new_cmd = { .velocity_x = 1.5f };
-    
-    while(1) {
-        shared_memory_heartbeat_cpu1();
-        
-        // Escribe comando en memoria con timeout seguro de 10 ticks
-        shared_memory_write_command(&new_cmd, 10);
-        vTaskDelay(pdMS_TO_TICKS(100)); // Lazo menos frecuente
+    robot_twist_cmd_t cmd;
+    if (shared_memory_get_twist_cmd(&cmd) == ESP_OK) {
+        // Aplicar velocidad
     }
 }
 ```
