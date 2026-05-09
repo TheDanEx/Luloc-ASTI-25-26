@@ -1,0 +1,10 @@
+menu "Luloc-ASTI: 4. Telemetry & Tuning - Live PID Tuning"
+
+    config PID_TUNER_MQTT_TOPIC
+        string "MQTT Topic for Live PID JSON Tuning"
+        default "robot/config/pid_motors"
+        help
+            The component subscribes to this topic to receive JSON payloads
+            {"kp":0.5, "ki":0.01, "kd":0.05}
+
+endmenu
