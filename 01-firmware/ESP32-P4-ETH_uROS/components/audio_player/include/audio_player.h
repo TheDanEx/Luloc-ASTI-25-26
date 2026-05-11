@@ -18,6 +18,7 @@ extern "C" {
 typedef enum {
     BATTERY_LOW,
     STARTUP,
+    INTHEEND,
     SOUND_MAX
 } audio_sound_t;
 
