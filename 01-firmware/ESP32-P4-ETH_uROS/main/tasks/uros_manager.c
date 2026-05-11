@@ -1,6 +1,7 @@
 #include "uros_manager.h"
 #include "shared_memory.h"
 #include "state_machine.h"
+#include "audio_player.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -77,12 +78,19 @@ static void mode_callback(const void *msvin)
 {
     const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msvin;
     int8_t mode_id = msg->data;
-
-    if (mode_id < 0 || mode_id >= MODE_COUNT) {
+    if ( mode_id == 10){
+        audio_player_play(INTHEEND);
+        ESP_LOGI(TAG, "Playing fight sound");
+        return;
+    }else if (mode_id < 0 || mode_id >= MODE_COUNT) {
         ESP_LOGW(TAG, "Ignoring invalid mode id: %d", mode_id);
         return;
     }
-
+    if(mode_id == 0){
+        audio_player_stop();
+        ESP_LOGI(TAG, "Stoping fight sound");
+    }
+    
     bool accepted = state_machine_request_mode((robot_mode_t)mode_id, true);
     ESP_LOGI(TAG, "Mode change request -> %d (%s)", mode_id, accepted ? "accepted" : "rejected");
 }
@@ -99,8 +107,8 @@ static void subscription_vel_callback(const void *msvin)
 
     float v = msg->linear.x;
     float w = msg->angular.z;
-    float target_l = v - (w*WHEEL_BASE_M/2.0);
-    float target_r = v + (w*WHEEL_BASE_M/2.0);
+    float target_l = v - ((w*WHEEL_BASE_M)/2.0f);
+    float target_r = v + ((w*WHEEL_BASE_M)/2.0f);
 
     uint32_t now = millis_now();
 
