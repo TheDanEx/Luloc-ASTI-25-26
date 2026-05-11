@@ -12,7 +12,7 @@ typedef struct {
 } follow_line_logic_config_t;
 
 typedef struct {
-    float line_position;
+    float line_position_mm;
     bool line_detected;
     float base_speed; // Dynamic base speed (e.g. slowed down for curves)
 } follow_line_logic_input_t;
@@ -20,6 +20,12 @@ typedef struct {
 typedef struct {
     float left_motor_speed;
     float right_motor_speed;
+
+    // Diagnostics for telemetry
+    float p_term;
+    float i_term;
+    float d_term;
+    float raw_steering;
 } follow_line_logic_output_t;
 
 typedef struct follow_line_logic_context_t* follow_line_logic_handle_t;

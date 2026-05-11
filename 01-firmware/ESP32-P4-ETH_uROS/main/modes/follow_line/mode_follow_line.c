@@ -8,8 +8,11 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "telemetry_manager.h"
+
 static const char *TAG = "MODE_FOLLOW_LINE";
 static follow_line_logic_handle_t s_logic = NULL;
+static telemetry_handle_t s_telemetry = NULL;
 static volatile float s_curvature_multiplier = 1.0f; // Default: No change
 
 // Default configuration from Kconfig
@@ -18,6 +21,7 @@ static follow_line_logic_config_t s_current_config = {
 };
 static float s_base_speed_nominal = 0.0f;
 static float s_ff_weight = 0.0f;
+static bool s_defaults_loaded = false;
 
 #define CURVATURE_TOPIC "robot/vision/curvature"
 #define CONFIG_TOPIC    "robot/config/follow_line"
@@ -26,7 +30,7 @@ static float s_ff_weight = 0.0f;
  * MQTT Callback for real-time config updates (JSON)
  */
 static void mqtt_config_callback(const char *topic, int topic_len, const char *data, int data_len) {
-    if (data == NULL || data_len <= 0) return;
+    if (data == NULL || data_len <= 0 || data_len > 1024) return;
     
     cJSON *root = cJSON_ParseWithLength(data, data_len);
     if (root == NULL) return;
@@ -45,17 +49,6 @@ static void mqtt_config_callback(const char *topic, int topic_len, const char *d
 
     if (s_logic) {
         follow_line_logic_set_config(s_logic, &s_current_config);
-        
-        // Sync to Shared Memory for Telemetry
-        shared_memory_t* shm = shared_memory_get();
-        if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-            shm->line_pid.kp = s_current_config.kp;
-            shm->line_pid.ki = s_current_config.ki;
-            shm->line_pid.kd = s_current_config.kd;
-            shm->line_pid.updated_flag = true;
-            xSemaphoreGive(shm->mutex);
-        }
-
         ESP_LOGI(TAG, "Dynamic Config Updated: P=%.2f I=%.2f D=%.2f Max=%.2f FFw=%.2f", 
                  s_current_config.kp, s_current_config.ki, s_current_config.kd, 
                  s_current_config.max_speed, s_ff_weight);
@@ -68,7 +61,7 @@ static void mqtt_config_callback(const char *topic, int topic_len, const char *d
  * MQTT Callback for curvature updates
  */
 static void mqtt_curvature_callback(const char *topic, int topic_len, const char *data, int data_len) {
-    if (data == NULL || data_len <= 0) return;
+    if (data == NULL || data_len <= 0 || data_len > 1024) return;
     
     char payload[32] = {0};
     int copy_len = (data_len < 31) ? data_len : 31;
@@ -87,14 +80,19 @@ static void mqtt_curvature_callback(const char *topic, int topic_len, const char
 static void enter(void) {
     ESP_LOGI(TAG, "Entering FOLLOW_LINE mode");
     
-    // 0. Load values from Kconfig if not already set (first time)
-    if (s_current_config.kp == 0.0f && s_base_speed_nominal == 0.0f) {
+    // 0. Load defaults from Kconfig only once. Live MQTT config can override later.
+    if (!s_defaults_loaded) {
         s_current_config.kp = atof(CONFIG_FOLLOW_LINE_KP);
         s_current_config.ki = atof(CONFIG_FOLLOW_LINE_KI);
         s_current_config.kd = atof(CONFIG_FOLLOW_LINE_KD);
         s_current_config.max_speed = atof(CONFIG_FOLLOW_LINE_MAX_SPEED);
         s_base_speed_nominal = atof(CONFIG_FOLLOW_LINE_BASE_SPEED);
         s_ff_weight = atof(CONFIG_FOLLOW_LINE_FF_WEIGHT);
+        s_defaults_loaded = true;
+
+        ESP_LOGI(TAG, "Loaded default follow_line config: P=%.2f I=%.2f D=%.2f Base=%.2f Max=%.2f FFw=%.2f",
+                 s_current_config.kp, s_current_config.ki, s_current_config.kd,
+                 s_base_speed_nominal, s_current_config.max_speed, s_ff_weight);
     }
 
     // 1. Initialize logic with static or last known config
@@ -104,6 +102,11 @@ static void enter(void) {
     mqtt_custom_client_register_topic_callback(CURVATURE_TOPIC, mqtt_curvature_callback);
     mqtt_custom_client_register_topic_callback(CONFIG_TOPIC,    mqtt_config_callback);
     
+    // 3. Initialize Telemetry
+    if (s_telemetry == NULL) {
+        s_telemetry = telemetry_create("robot/telemetry/follow_line", "line_follower", CONFIG_TELEMETRY_INTERVAL_CALIBRATION_MS);
+    }
+
     if (mqtt_custom_client_is_connected()) {
         mqtt_custom_client_subscribe(CURVATURE_TOPIC, 0);
         mqtt_custom_client_subscribe(CONFIG_TOPIC, 0);
@@ -121,11 +124,11 @@ static void execute(motor_driver_mcpwm_t* motors,
     
     // 1. Read Inputs
     xSemaphoreTake(shm->mutex, portMAX_DELAY);
-    float line_pos = shm->sensors.line_position;
+    float line_pos = shm->sensors.line_position_mm;
     bool detected = shm->sensors.line_detected;
     float bat_mv = shm->sensors.battery_voltage;
     float cur_l = shm->sensors.motor_speed_left;
-    float cur_r = shm->sensors.motor_speed_right;
+    float cur_r = -shm->sensors.motor_speed_right;
     xSemaphoreGive(shm->mutex);
 
     if (bat_mv < 5000) bat_mv = 16800;
@@ -135,7 +138,7 @@ static void execute(motor_driver_mcpwm_t* motors,
     float dynamic_base_speed = s_base_speed_nominal * effective_multiplier;
 
     follow_line_logic_input_t input = {
-        .line_position = line_pos,
+        .line_position_mm = line_pos,
         .line_detected = detected,
         .base_speed = dynamic_base_speed
     };
@@ -152,14 +155,32 @@ static void execute(motor_driver_mcpwm_t* motors,
     motor_velocity_ctrl_update(ctrl_left,  &motor_l, dt_s, &pwm_l, NULL);
     motor_velocity_ctrl_update(ctrl_right, &motor_r, dt_s, &pwm_r, NULL);
 
-    // Sync Target Speeds to SHM for Telemetry
-    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
-        shm->sensors.target_speed_left = output.left_motor_speed;
-        shm->sensors.target_speed_right = output.right_motor_speed;
-        xSemaphoreGive(shm->mutex);
-    }
-
     motor_mcpwm_set(motors, (int16_t)(pwm_l * 10.0f), (int16_t)(pwm_r * 10.0f));
+
+    // 5. Telemetry
+    if (s_telemetry) {
+        telemetry_add_float(s_telemetry, "line_pos",      line_pos);
+        telemetry_add_bool(s_telemetry,  "line_detected", detected);
+        telemetry_add_float(s_telemetry, "base_speed",    dynamic_base_speed);
+        telemetry_add_float(s_telemetry, "target_l",      output.left_motor_speed);
+        telemetry_add_float(s_telemetry, "target_r",      output.right_motor_speed);
+        telemetry_add_float(s_telemetry, "actual_l",      cur_l);
+        telemetry_add_float(s_telemetry, "actual_r",      cur_r);
+        telemetry_add_float(s_telemetry, "p_term",        output.p_term);
+        telemetry_add_float(s_telemetry, "i_term",        output.i_term);
+        telemetry_add_float(s_telemetry, "d_term",        output.d_term);
+        telemetry_add_float(s_telemetry, "steering",      output.raw_steering);
+
+        // Explicit per-motor PID effects (as requested)
+        telemetry_add_float(s_telemetry, "p_eff_l",      output.p_term);
+        telemetry_add_float(s_telemetry, "p_eff_r",     -output.p_term);
+        telemetry_add_float(s_telemetry, "i_eff_l",      output.i_term);
+        telemetry_add_float(s_telemetry, "i_eff_r",     -output.i_term);
+        telemetry_add_float(s_telemetry, "d_eff_l",      output.d_term);
+        telemetry_add_float(s_telemetry, "d_eff_r",     -output.d_term);
+
+        telemetry_commit_point(s_telemetry);
+    }
 }
 
 static void exit_mode(motor_driver_mcpwm_t* motors) {
@@ -167,6 +188,10 @@ static void exit_mode(motor_driver_mcpwm_t* motors) {
     if (s_logic) {
         follow_line_logic_destroy(s_logic);
         s_logic = NULL;
+    }
+    if (s_telemetry) {
+        telemetry_destroy(s_telemetry);
+        s_telemetry = NULL;
     }
     motor_mcpwm_stop(motors);
 }

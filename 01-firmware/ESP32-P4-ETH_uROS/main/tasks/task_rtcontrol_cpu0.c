@@ -159,13 +159,13 @@ static void task_rtcontrol_cpu0(void *arg)
             
             // Update Line Sensor SHM
             shm->sensors.line_detected = line_data.line_detected;
-            shm->sensors.line_position = line_data.line_position_m;
+            shm->sensors.line_position_mm = line_data.line_position_mm;
             for (int i = 0; i < 8; i++) {
                 shm->sensors.line_norm[i] = line_data.normalized_values[i];
                 shm->sensors.line_raw[i]  = line_data.raw_values[i];
             }
             // Get calibration bounds from component internal state
-            line_sensor_get_calibration_bounds(line_array, shm->sensors.line_min, shm->sensors.line_max);
+            // line_sensor_get_calibration_bounds(line_array, shm->sensors.line_min, shm->sensors.line_max);
             shm->sensors.line_is_calibrated = line_sensor_is_calibrated(line_array);
             
             xSemaphoreGive(shm->mutex);

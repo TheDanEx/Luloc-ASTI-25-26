@@ -45,7 +45,7 @@ static void task_monitor_lowpower_cpu1(void *arg)
     }
 
     // Load configuration from Kconfig
-    uint32_t telemetry_rate_ms = 1000;
+    uint32_t telemetry_rate_ms = 5000;
 #ifdef CONFIG_INA226_TELEMETRY_RATE_MS
     telemetry_rate_ms = CONFIG_INA226_TELEMETRY_RATE_MS;
 #endif
