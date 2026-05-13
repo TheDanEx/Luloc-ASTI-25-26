@@ -20,6 +20,7 @@ typedef enum {
     STARTUP,
     INTHEEND,
     TOKYO,
+    HOLA,
     SOUND_MAX
 } audio_sound_t;
 
