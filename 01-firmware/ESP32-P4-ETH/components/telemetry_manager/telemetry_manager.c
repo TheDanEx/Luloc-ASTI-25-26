@@ -52,11 +52,14 @@ static char s_buf_inst1_a[BUF_SIZE_LOW];
 static char s_buf_inst1_b[BUF_SIZE_LOW];
 static char s_buf_inst2_a[BUF_SIZE_LOW];
 static char s_buf_inst2_b[BUF_SIZE_LOW];
+static char s_buf_inst3_a[BUF_SIZE_LOW];
+static char s_buf_inst3_b[BUF_SIZE_LOW];
 
-static telemetry_obj_internal_t s_pool[3] = {
+static telemetry_obj_internal_t s_pool[4] = {
     { .buf_a = s_buf_inst0_a, .buf_b = s_buf_inst0_b, .max_buf_size = BUF_SIZE_HIGH, .in_use = false },
     { .buf_a = s_buf_inst1_a, .buf_b = s_buf_inst1_b, .max_buf_size = BUF_SIZE_LOW,  .in_use = false },
-    { .buf_a = s_buf_inst2_a, .buf_b = s_buf_inst2_b, .max_buf_size = BUF_SIZE_LOW,  .in_use = false }
+    { .buf_a = s_buf_inst2_a, .buf_b = s_buf_inst2_b, .max_buf_size = BUF_SIZE_LOW,  .in_use = false },
+    { .buf_a = s_buf_inst3_a, .buf_b = s_buf_inst3_b, .max_buf_size = BUF_SIZE_LOW,  .in_use = false }
 };
 
 // =============================================================================
@@ -107,7 +110,7 @@ telemetry_handle_t telemetry_create(const char *topic, const char *measurement, 
     telemetry_obj_internal_t *obj = NULL;
     
     // Find free slot
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 4; i++) {
         if (!s_pool[i].in_use) {
             obj = &s_pool[i];
             obj->in_use = true;

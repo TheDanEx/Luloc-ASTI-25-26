@@ -37,6 +37,7 @@ static void telemetry_task(void *arg)
             telemetry_add_float(s_line_telemetry, "kp", data.kp);
             telemetry_add_float(s_line_telemetry, "ki", data.ki);
             telemetry_add_float(s_line_telemetry, "kd", data.kd);
+            telemetry_add_float(s_line_telemetry, "cycle_us", data.cycle_time_us);
 
             // Add raw and norm arrays as individual fields or strings
             // For ILP, better to use individual fields for visualization
@@ -46,6 +47,10 @@ static void telemetry_task(void *arg)
                 telemetry_add_int(s_line_telemetry, key, data.raw[i]);
                 snprintf(key, sizeof(key), "norm_%d", i);
                 telemetry_add_float(s_line_telemetry, key, data.norm[i]);
+                snprintf(key, sizeof(key), "min_%d", i);
+                telemetry_add_int(s_line_telemetry, key, (int32_t)data.min[i]);
+                snprintf(key, sizeof(key), "max_%d", i);
+                telemetry_add_int(s_line_telemetry, key, (int32_t)data.max[i]);
             }
 
             telemetry_commit_point(s_line_telemetry);

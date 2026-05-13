@@ -99,4 +99,11 @@ config LINE_SENSOR_WEIGHT_D8
     int "Weight D8 (mm)"
     default 35
 
+config LINE_SENSOR_CALIB_MIN_RANGE
+    int "Minimum Calibration Range (Contrast)"
+    default 1500
+    help
+        Minimum difference between Max and Min values discovered during 
+        calibration for a sensor to be considered valid.
+
 endmenu

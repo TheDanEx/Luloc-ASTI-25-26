@@ -27,6 +27,7 @@
 #include "mqtt_api_responder.h"
 #include "driver/gpio.h"
 #include "ptp_client.h"
+#include "line_sensor.h"
 
 #include "task_comms_cpu1.h"
 
@@ -132,6 +133,7 @@ static void task_comms_cpu1(void *arg)
 
 
     perf_mon_init();
+    line_sensor_init();
     
     // Setup Telemetry Batches
     tel_odometry = telemetry_create("robot/telemetry/odometry", "odometry", CONFIG_TELEMETRY_INTERVAL_ODOMETRY_MS);
@@ -184,6 +186,16 @@ static void task_comms_cpu1(void *arg)
              }
 
              last_sampling_tick = current_tick;
+        }
+
+        // 4. Background Sensor Sampling (CPU1) to free CPU0 for RT-Control
+        float line_norm_local[8];
+        line_sensor_read_norm(line_norm_local, NULL, CONFIG_LINE_SENSOR_SAMPLES);
+        
+        shared_memory_t* shm = shared_memory_get();
+        if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+            memcpy(shm->sensors.line_norm, line_norm_local, sizeof(line_norm_local));
+            xSemaphoreGive(shm->mutex);
         }
 
         vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));

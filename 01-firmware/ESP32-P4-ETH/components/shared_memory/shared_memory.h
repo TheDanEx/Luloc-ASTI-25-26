@@ -24,6 +24,7 @@ typedef struct {
     
     int32_t encoder_count_left;  // Ticks
     int32_t encoder_count_right; // Ticks
+    float line_norm[8];          // Normalized line sensor values (0.0 - 1.0)
     uint32_t timestamp_ms;       // Local timestamp
 } robot_sensor_data_t;
 

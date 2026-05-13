@@ -54,6 +54,8 @@ static void follow_execute(motor_driver_mcpwm_t* motors,
                           motor_velocity_ctrl_handle_t ctrl_right, 
                           float dt_s)
 {
+    uint32_t start_us = (uint32_t)esp_timer_get_time();
+
     // 1. Read Live Parameters from Shared Memory
     shared_memory_t* shm = shared_memory_get();
     if (shm->line_pid.updated_flag) {
@@ -69,34 +71,38 @@ static void follow_execute(motor_driver_mcpwm_t* motors,
         ESP_LOGI(TAG, "Line Base Speed Updated: %.3f", s_base_speed);
     }
 
-    // 1.1 Read Vision Curvature & Sensor Data
+    // 1.1 Read Asynchronous Sensor Data (CPU1 Sampled)
     float cur_l = 0.0f, cur_r = 0.0f, bat_mv = 12000.0f;
+    float norm[8];
+    
     if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(2)) == pdTRUE) {
         s_ff_value = shm->vision_curvature_multiplier;
         cur_l = shm->sensors.motor_speed_left;
         cur_r = shm->sensors.motor_speed_right;
         bat_mv = shm->sensors.battery_voltage;
+        memcpy(norm, shm->sensors.line_norm, sizeof(norm));
+        
         if (bat_mv < 5000.0f) bat_mv = 16800.0f; // Safety fallback
         xSemaphoreGive(shm->mutex);
     }
 
-    // 2. Read Position
-    float norm[8];
-    line_sensor_read_norm(norm, NULL, CONFIG_LINE_SENSOR_SAMPLES);
-    float pos = line_sensor_read_line_position(norm, CONFIG_LINE_SENSOR_SAMPLES);
+    // 2. Calculate Position (Using pre-normalized values from memory)
+    float pos = line_sensor_read_line_position(norm, 0); // num_samples=0 forces use of norm
     
     // Edge case: No line detected
     bool line_lost = true;
     for(int i=0; i<8; i++) if(norm[i] > 0.5f) line_lost = false;
 
     if (line_lost) {
-        // Assume last value +- 10mm prediction
+        // Assume the line is at the "next" virtual sensor (10mm beyond the last seen)
         pos = s_last_pos + (s_last_pos > 0 ? 10.0f : -10.0f);
+    } else {
+        // Only update memory when we HAVE a valid line
+        s_last_pos = pos;
     }
-    s_last_pos = pos;
 
     // 2. Control PID
-    float error = 0.0f - pos; // Setpoint is 0.0 mm
+    float error = 0.0f - pos;
     s_integral += error * dt_s;
     float derivative = (error - s_last_error) / dt_s;
     s_last_error = error;
@@ -106,24 +112,27 @@ static void follow_execute(motor_driver_mcpwm_t* motors,
     float d_term = s_kd * derivative;
     float pid_out = p_term + i_term + d_term;
     
-    // Normalize PID output (clamped to -1.0 to 1.0 for correction)
     if (pid_out > 1.0f) pid_out = 1.0f;
     if (pid_out < -1.0f) pid_out = -1.0f;
 
     // 3. Kinematics (Feedforward + Differential)
-    // Apply curvature multiplier blended with weight: 1.0 + (cam_val - 1.0) * weight
     float effective_multiplier = 1.0f + (s_ff_value - 1.0f) * s_ff_weight;
     float speed_base_ff = s_base_speed * effective_multiplier;
-
-    // Safety Clamping: Jam avoided (speed > min) and Rocket avoided (speed < max)
-    if (speed_base_ff < s_min_speed) speed_base_ff = s_min_speed;
-    if (speed_base_ff > s_max_speed) speed_base_ff = s_max_speed;
     
-    // Differential Steering: Left = Base + Correction, Right = Base - Correction
-    // If line is to the right (pos > 0), error is negative, pid_out should make right motor slower?
-    // Let's assume positive correction turns left.
-    float target_l = speed_base_ff - pid_out * speed_base_ff;
-    float target_r = speed_base_ff + pid_out * speed_base_ff;
+    // Differential Steering (Additive correction to allow rotation at base_speed = 0)
+    float target_l = speed_base_ff + pid_out;
+    float target_r = speed_base_ff - pid_out;
+
+    // 3.1 Advanced Minimal Speed Logic (Improved per user request)
+    // Only apply if the target speed is non-zero (absolute)
+    if (fabsf(target_l) > 0.001f) {
+        if (target_l > 0 && target_l < s_min_speed) target_l = s_min_speed;
+        else if (target_l < 0 && target_l > -s_min_speed) target_l = -s_min_speed;
+    }
+    if (fabsf(target_r) > 0.001f) {
+        if (target_r > 0 && target_r < s_min_speed) target_r = s_min_speed;
+        else if (target_r < 0 && target_r > -s_min_speed) target_r = -s_min_speed;
+    }
 
     // Clamp wheel targets to hardware limits
     if (target_l > s_max_speed) target_l = s_max_speed;
@@ -132,43 +141,34 @@ static void follow_execute(motor_driver_mcpwm_t* motors,
     if (target_r < -s_max_speed) target_r = -s_max_speed;
 
     // 4. Actuation
-    // Note: We use motor_velocity_ctrl_update to get PWM from target speeds
-    // But since the request says "Send velocities to motor API", if motors refers to motor_mcpwm_set,
-    // we might need to convert or use the velocity controller.
-    // Given we have ctrl_left/right, we SHOULD use them for closed-loop speed control.
-    
     float pwm_l, pwm_r;
     motor_velocity_input_t in_l = { .target_speed = target_l, .current_speed = cur_l, .battery_mv = bat_mv };
     motor_velocity_input_t in_r = { .target_speed = target_r, .current_speed = cur_r, .battery_mv = bat_mv };
     
-    // In actual implementation, we'd get current_speed from encoder task (shared_memory)
-    // For now, following the specific requested flow of PID correction on speed.
-    
-    // If the user wants direct motor API call:
-    // motor_mcpwm_set(motors, (int16_t)(target_l * 1000), (int16_t)(target_r * 1000));
-    
-    // But let's use the velocity controllers if provided
     motor_velocity_ctrl_update(ctrl_left, &in_l, dt_s, &pwm_l, NULL);
     motor_velocity_ctrl_update(ctrl_right, &in_r, dt_s, &pwm_r, NULL);
-    motor_mcpwm_set(motors, (int16_t)(pwm_l * 10), (int16_t)(pwm_r * 10)); // Scale % to 0..1000
+    motor_mcpwm_set(motors, (int16_t)(pwm_l * 10), (int16_t)(pwm_r * 10));
 
-    // 5. Telemetry
-    line_follower_telemetry_t tele = {
-        .mode = MODE_FOLLOW_LINE,
-        .position = pos,
-        .error = error,
-        .p_term = p_term,
-        .i_term = i_term,
-        .d_term = d_term,
-        .kp = s_kp, .ki = s_ki, .kd = s_kd,
-        .pid_out = pid_out,
-        .ff_val = s_ff_value,
-        .target_speed_l = target_l,
-        .target_speed_r = target_r
-    };
-    line_sensor_read_raw(tele.raw, 1);
-    line_sensor_read_norm(tele.norm, tele.raw, 1);
-    task_telemetry_send(&tele);
+    uint32_t end_us = (uint32_t)esp_timer_get_time();
+
+    // 5. Telemetry (Decimated at 50Hz)
+    static uint8_t telemetry_div = 0;
+    if (telemetry_div++ >= 10) {
+        telemetry_div = 0;
+        line_follower_telemetry_t tele = {
+            .mode = MODE_FOLLOW_LINE,
+            .position = pos,
+            .error = error,
+            .p_term = p_term, .i_term = i_term, .d_term = d_term,
+            .kp = s_kp, .ki = s_ki, .kd = s_kd,
+            .pid_out = pid_out, .ff_val = s_ff_value,
+            .target_speed_l = target_l,
+            .target_speed_r = target_r,
+            .cycle_time_us = (float)(end_us - start_us)
+        };
+        memcpy(tele.norm, norm, sizeof(norm));
+        task_telemetry_send(&tele);
+    }
 }
 
 static void follow_exit(motor_driver_mcpwm_t* motors)

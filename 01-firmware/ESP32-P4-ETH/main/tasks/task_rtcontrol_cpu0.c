@@ -97,7 +97,6 @@ static void task_rtcontrol_cpu0(void *arg)
     };
     encoder_sensor_handle_t encoder_right = encoder_sensor_init(&enc_r_cfg);
 
-    line_sensor_init();
     modes_init();
 
     const float dt = (float)CONFIG_ROBOT_CONTROL_PERIOD_MS / 1000.0f;

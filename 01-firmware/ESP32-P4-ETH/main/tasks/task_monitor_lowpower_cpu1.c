@@ -104,8 +104,8 @@ static void task_monitor_lowpower_cpu1(void *arg)
 
             // 2. Refresh performance snapshots
             if (perf_mon_update() == ESP_OK) {
-                // 3. Print table to Console (matching legacy behavior)
-                perf_mon_print_report();
+                // 3. Print table to Console (matching legacy behavior) - DISABLED PER USER REQ
+                // perf_mon_print_report();
 
                 // 4. Publish Performance ILP to MQTT
                 if (mqtt_custom_client_is_connected()) {
