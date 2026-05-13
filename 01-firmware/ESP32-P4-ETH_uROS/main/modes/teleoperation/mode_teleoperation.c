@@ -36,7 +36,6 @@ static void execute(motor_driver_mcpwm_t* motors,
         motor_mcpwm_stop(motors);
         return;
     }
-    float bat_mv =0;
     if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(2)) != pdTRUE) {
         motor_mcpwm_stop(motors);
         return;
@@ -44,7 +43,7 @@ static void execute(motor_driver_mcpwm_t* motors,
 
     float target_l = shm->teleop.target_speed_left;
     float target_r = shm->teleop.target_speed_right;
-    // float bat_mv   = shm->sensors.battery_voltage;
+    float bat_mv   = shm->sensors.battery_voltage;
     uint32_t last_update_ms = shm->teleop.last_update_ms;
     float cur_l    = shm->sensors.motor_speed_left;
     float cur_r = -shm->sensors.motor_speed_right;

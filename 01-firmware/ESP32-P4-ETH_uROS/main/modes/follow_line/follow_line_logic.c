@@ -43,6 +43,7 @@ esp_err_t follow_line_logic_destroy(follow_line_logic_handle_t handle) {
 // PUBLIC API: EXECUTION
 // =============================================================================
 
+
 esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
                                    const follow_line_logic_input_t* input,
                                    follow_line_logic_output_t* out_output,
@@ -70,14 +71,14 @@ esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
         //ESP_LOGI(TAG, "Last known position=%.3f",ctx->last_known_position);
         if (ctx->last_known_position < -10.0f) {
             search_dir = -1;
-            ESP_LOGI(TAG, "Giro derecha");
+            // ESP_LOGI(TAG, "Giro derecha");
         } else if (ctx->last_known_position > 10.0f) {
             search_dir = 1;
-            ESP_LOGI(TAG, "Giro izquierda buscando la linea");
+            // ESP_LOGI(TAG, "Giro izquierda buscando la linea");
         }
         if (search_dir == 0) {
             search_dir = 1;
-            ESP_LOGI(TAG, "Giro derecha por default");
+            // ESP_LOGI(TAG, "Giro derecha por default");
         }
 
         float spin_speed = clamp(input->base_speed * 0.7f, 0.08f, ctx->config.max_speed);
@@ -126,7 +127,6 @@ esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
     ctx->previous_error = error;
     return ESP_OK;
 }
-
 // =============================================================================
 // PUBLIC API: CONFIGURATION
 // =============================================================================

@@ -21,7 +21,7 @@
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
 
-#include <std_msgs/msg/int32.h>
+#include <std_msgs/msg/float32.h>
 #include <std_msgs/msg/int8.h>
 #include <std_msgs/msg/string.h>
 #include <geometry_msgs/msg/twist.h>
@@ -52,13 +52,13 @@ static const char *TAG = "UROS_MGR";
 } while (0)
 
 static rcl_publisher_t diag_publisher;
-static rcl_publisher_t my_publisher;
+static rcl_publisher_t my_voltage_publisher;
 // static rcl_subscription_t my_subscriber;
 static rcl_subscription_t velocity_subscriber;
 static rcl_subscription_t mode_subscriber;
 
 static std_msgs__msg__String diag_msg;
-static std_msgs__msg__Int32 send_msg;
+static std_msgs__msg__Float32 send_battery_voltage;
 static std_msgs__msg__Int8 change_mode;
 // static std_msgs__msg__Int32 recv_msg;
 static geometry_msgs__msg__Twist cmd_vel;
@@ -81,6 +81,10 @@ static void mode_callback(const void *msvin)
     if ( mode_id == 10){
         audio_player_play(INTHEEND);
         ESP_LOGI(TAG, "Playing fight sound");
+        return;
+    }else if ( mode_id == 11){
+        audio_player_play(TOKYO);
+        ESP_LOGI(TAG, "Playing drift sound");
         return;
     }else if (mode_id < 0 || mode_id >= MODE_COUNT) {
         ESP_LOGW(TAG, "Ignoring invalid mode id: %d", mode_id);
@@ -161,8 +165,22 @@ static void timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 
     RCSOFTCHECK(rcl_publish(&diag_publisher, &diag_msg, NULL));
 
-    send_msg.data++;
-    RCSOFTCHECK(rcl_publish(&my_publisher, &send_msg, NULL));
+    shared_memory_t* shm = shared_memory_get();
+    if (shm == NULL) {
+        ESP_LOGW(TAG, "Shared memory unavailable, dropping cmd_vel");
+        return;
+    }
+
+    float battery_voltage = 0.0f;
+    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        battery_voltage = shm->sensors.battery_voltage;
+        xSemaphoreGive(shm->mutex);
+    } else {
+        ESP_LOGW(TAG, "Shared memory busy, dropping cmd_vel");
+    }
+    send_battery_voltage.data = battery_voltage;
+
+    RCSOFTCHECK(rcl_publish(&my_voltage_publisher, &send_battery_voltage, NULL));
 }
 
 static void micro_ros_task(void *arg)
@@ -209,10 +227,10 @@ static void micro_ros_task(void *arg)
         ));
 
         RCCHECK(rclc_publisher_init_default(
-            &my_publisher,
+            &my_voltage_publisher,
             &node,
-            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-            "/esp32/publisher"
+            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
+            "/robot/voltage"
         ));
 
         // RCCHECK(rclc_subscription_init_default(
@@ -276,7 +294,7 @@ static void micro_ros_task(void *arg)
         diag_msg.data.capacity = STRING_BUFFER_LEN;
         diag_msg.data.size = 0;
 
-        send_msg.data = 0;
+        send_battery_voltage.data = 0.0f;
 
         int64_t last_sync_time = 0;
 
@@ -329,7 +347,7 @@ static void micro_ros_task(void *arg)
         }
 
         rcl_publisher_fini(&diag_publisher, &node);
-        rcl_publisher_fini(&my_publisher, &node);
+        rcl_publisher_fini(&my_voltage_publisher, &node);
         // rcl_subscription_fini(&my_subscriber, &node);
         rcl_subscription_fini(&velocity_subscriber, &node);
         rcl_subscription_fini(&mode_subscriber, &node);

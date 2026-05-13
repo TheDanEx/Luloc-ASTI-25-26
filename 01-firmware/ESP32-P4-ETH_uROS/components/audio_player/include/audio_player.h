@@ -19,6 +19,7 @@ typedef enum {
     BATTERY_LOW,
     STARTUP,
     INTHEEND,
+    TOKYO,
     SOUND_MAX
 } audio_sound_t;
 

@@ -1,3 +1,10 @@
+import logging
+
+# Desactiva los logs de Werkzeug (el servidor de Flask)
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
+
+# Si quieres desactivar también los banners de Flask al arrancar
 import os
 
 from flask import Flask, Response
@@ -36,7 +43,7 @@ picam2.configure(
 )
 picam2.start()
 
-def frames():
+def capture_jpeg():
     while True:
         frame = picam2.capture_array()  # (H,W,3) BGR uint8
         threshold = 130   # ajustable
@@ -159,13 +166,13 @@ def frames():
 
 
         jpg = iio.imwrite("<bytes>", final_img, extension=".jpg", quality=JPEG_QUALITY)
-
-        yield (
-            b"--" + BOUNDARY + b"\r\n"
-            b"Content-Type: image/jpeg\r\n"
-            b"Content-Length: " + str(len(jpg)).encode() + b"\r\n\r\n" +
-            jpg + b"\r\n"
-        )
+        return jpg
+        # yield (
+        #     b"--" + BOUNDARY + b"\r\n"
+        #     b"Content-Type: image/jpeg\r\n"
+        #     b"Content-Length: " + str(len(jpg)).encode() + b"\r\n\r\n" +
+        #     jpg + b"\r\n"
+        # )
 
 def blobDetector(mask):
     mask = mask.astype(np.uint8)
@@ -183,6 +190,28 @@ def blobDetector(mask):
     cy = m01 / m00
 
     return cx, cy
+
+def frames():
+    """
+    Generador MJPEG para navegador.
+    """
+    while True:
+        jpg = capture_jpeg()
+        yield (
+            b"--" + BOUNDARY + b"\r\n"
+            b"Content-Type: image/jpeg\r\n"
+            b"Content-Length: " + str(len(jpg)).encode() + b"\r\n\r\n" +
+            jpg + b"\r\n"
+        )
+
+        
+@app.get("/snapshot")
+def snapshot():
+    """
+    Endpoint para Unity: devuelve una imagen JPG normal.
+    """
+    jpg = capture_jpeg()
+    return Response(jpg, mimetype="image/jpeg")
 
 @app.get("/")
 def index():
