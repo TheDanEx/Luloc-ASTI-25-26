@@ -125,4 +125,27 @@ menu "Luloc-ASTI: 1. Follow Line Configuration"
             Weighting factor for the curvature feed-forward multiplier. 
             0.0 = Ignore FF, 1.0 = Full application of FF.
 
+    config FOLLOW_LINE_KI_SEARCH
+        string "Line Follower: Ki Search (line-lost integral)"
+        default "2.0"
+        help
+            Integral gain used ONLY when the line is lost.
+            Typically higher than normal Ki to aggressively steer back.
+
+    config FOLLOW_LINE_VIRTUAL_OFFSET_MM
+        string "Line Follower: Virtual Sensor Offset (mm)"
+        default "80.0"
+        help
+            Distance in mm of the fictitious sensor from center.
+            Should be larger than the physical array half-width (e.g. 50mm)
+            to generate a strong recovery error.
+
+    config FOLLOW_LINE_CENTER_DEADBAND_MM
+        string "Line Follower: Center Deadband (mm)"
+        default "5.0"
+        help
+            When the line error is within this band the integral
+            accumulator resets to zero, preventing overshoot after
+            re-centering.
+
 endmenu

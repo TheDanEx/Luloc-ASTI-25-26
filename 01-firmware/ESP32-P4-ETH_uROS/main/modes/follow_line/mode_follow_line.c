@@ -17,7 +17,8 @@ static volatile float s_curvature_multiplier = 1.0f; // Default: No change
 static SemaphoreHandle_t s_mode_mutex = NULL;
 // Default configuration from Kconfig
 static follow_line_logic_config_t s_current_config = {
-    .kp = 0.0f, .ki = 0.0f, .kd = 0.0f, .max_speed = 0.0f
+    .kp = 0.0f, .ki = 0.0f, .kd = 0.0f, .max_speed = 0.0f,
+    .ki_search = 0.0f, .virtual_sensor_offset_mm = 0.0f, .center_deadband_mm = 0.0f
 };
 static float s_base_speed_nominal = 0.0f;
 static float s_ff_weight = 0.0f;
@@ -35,23 +36,30 @@ static void mqtt_config_callback(const char *topic, int topic_len, const char *d
     cJSON *root = cJSON_ParseWithLength(data, data_len);
     if (root == NULL) return;
 
-    cJSON *kp = cJSON_GetObjectItem(root, "kp");
-    cJSON *ki = cJSON_GetObjectItem(root, "ki");
-    cJSON *kd = cJSON_GetObjectItem(root, "kd");
+    cJSON *kp  = cJSON_GetObjectItem(root, "kp");
+    cJSON *ki  = cJSON_GetObjectItem(root, "ki");
+    cJSON *kd  = cJSON_GetObjectItem(root, "kd");
     cJSON *max = cJSON_GetObjectItem(root, "max_speed");
     cJSON *ffw = cJSON_GetObjectItem(root, "ff_weight");
+    cJSON *kis = cJSON_GetObjectItem(root, "ki_search");
+    cJSON *vso = cJSON_GetObjectItem(root, "virtual_offset");
+    cJSON *cdb = cJSON_GetObjectItem(root, "center_deadband");
 
-    if (kp) s_current_config.kp = kp->valuedouble;
-    if (ki) s_current_config.ki = ki->valuedouble;
-    if (kd) s_current_config.kd = kd->valuedouble;
+    if (kp)  s_current_config.kp = kp->valuedouble;
+    if (ki)  s_current_config.ki = ki->valuedouble;
+    if (kd)  s_current_config.kd = kd->valuedouble;
     if (max) s_current_config.max_speed = max->valuedouble;
     if (ffw) s_ff_weight = ffw->valuedouble;
+    if (kis) s_current_config.ki_search = kis->valuedouble;
+    if (vso) s_current_config.virtual_sensor_offset_mm = vso->valuedouble;
+    if (cdb) s_current_config.center_deadband_mm = cdb->valuedouble;
 
     if (s_logic) {
         follow_line_logic_set_config(s_logic, &s_current_config);
-        ESP_LOGI(TAG, "Dynamic Config Updated: P=%.2f I=%.2f D=%.2f Max=%.2f FFw=%.2f", 
+        ESP_LOGI(TAG, "Config Updated: P=%.2f I=%.2f D=%.2f Ki_s=%.2f Voff=%.1f Cdb=%.1f", 
                  s_current_config.kp, s_current_config.ki, s_current_config.kd, 
-                 s_current_config.max_speed, s_ff_weight);
+                 s_current_config.ki_search, s_current_config.virtual_sensor_offset_mm,
+                 s_current_config.center_deadband_mm);
     }
 
     cJSON_Delete(root);
@@ -84,17 +92,22 @@ static void enter(void) {
     }
     // 0. Load defaults from Kconfig only once. Live MQTT config can override later.
     if (!s_defaults_loaded) {
-        s_current_config.kp = atof(CONFIG_FOLLOW_LINE_KP);
-        s_current_config.ki = atof(CONFIG_FOLLOW_LINE_KI);
-        s_current_config.kd = atof(CONFIG_FOLLOW_LINE_KD);
+        s_current_config.kp        = atof(CONFIG_FOLLOW_LINE_KP);
+        s_current_config.ki        = atof(CONFIG_FOLLOW_LINE_KI);
+        s_current_config.kd        = atof(CONFIG_FOLLOW_LINE_KD);
         s_current_config.max_speed = atof(CONFIG_FOLLOW_LINE_MAX_SPEED);
+        s_current_config.ki_search = atof(CONFIG_FOLLOW_LINE_KI_SEARCH);
+        s_current_config.virtual_sensor_offset_mm = atof(CONFIG_FOLLOW_LINE_VIRTUAL_OFFSET_MM);
+        s_current_config.center_deadband_mm       = atof(CONFIG_FOLLOW_LINE_CENTER_DEADBAND_MM);
         s_base_speed_nominal = atof(CONFIG_FOLLOW_LINE_BASE_SPEED);
         s_ff_weight = atof(CONFIG_FOLLOW_LINE_FF_WEIGHT);
         s_defaults_loaded = true;
 
-        ESP_LOGI(TAG, "Loaded default follow_line config: P=%.2f I=%.2f D=%.2f Base=%.2f Max=%.2f FFw=%.2f",
+        ESP_LOGI(TAG, "Config: P=%.2f I=%.2f D=%.2f Base=%.2f Max=%.2f Ki_s=%.2f Voff=%.1f Cdb=%.1f",
                  s_current_config.kp, s_current_config.ki, s_current_config.kd,
-                 s_base_speed_nominal, s_current_config.max_speed, s_ff_weight);
+                 s_base_speed_nominal, s_current_config.max_speed,
+                 s_current_config.ki_search, s_current_config.virtual_sensor_offset_mm,
+                 s_current_config.center_deadband_mm);
     }
 
     // 1. Initialize logic with static or last known config
@@ -178,6 +191,7 @@ static void execute(motor_driver_mcpwm_t* motors,
                 telemetry_add_float(s_telemetry, "i_term",        output.i_term);
                 telemetry_add_float(s_telemetry, "d_term",        output.d_term);
                 telemetry_add_float(s_telemetry, "steering",      output.raw_steering);
+                telemetry_add_bool(s_telemetry,  "searching",     output.is_searching);
 
                 // Explicit per-motor PID effects (as requested)
                 telemetry_add_float(s_telemetry, "p_eff_l",      output.p_term);
