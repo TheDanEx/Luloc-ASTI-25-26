@@ -83,7 +83,8 @@ esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
     float p_term = ctx->config.kp * error;
     float i_term = ctx->config.ki * ctx->integral;
     float d_term = ctx->config.kd * derivative;
-    float total_steering = p_term + i_term + d_term;
+    float total_steering_relative = p_term + i_term + d_term;
+    float total_steering = total_steering_relative * input->base_speed;
 
     out_output->left_motor_speed = clamp(input->base_speed + total_steering, -ctx->config.max_speed, ctx->config.max_speed);
     out_output->right_motor_speed = clamp(input->base_speed - total_steering, -ctx->config.max_speed, ctx->config.max_speed);
