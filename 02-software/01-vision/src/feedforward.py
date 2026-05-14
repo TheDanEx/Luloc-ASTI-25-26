@@ -66,10 +66,11 @@ def capture_jpeg():
         )
         
         #puntos obtenidos mediante el script crearPerspectiva
-        puntos = [[301, 194],
-       [265, 398],
-       [566, 396],
-       [514, 186]]
+        puntos=[[301, 249],
+       [272, 460],
+       [545, 471],
+       [521, 244]]
+
 
         pts1 = np.float32(puntos)
         # pts2 = np.float32([[0,0],[OUT_H,0],[0,OUT_W],[OUT_H,OUT_W]])
