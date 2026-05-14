@@ -40,18 +40,20 @@ static void mqtt_config_callback(const char *topic, int topic_len, const char *d
     cJSON *kd = cJSON_GetObjectItem(root, "kd");
     cJSON *max = cJSON_GetObjectItem(root, "max_speed");
     cJSON *ffw = cJSON_GetObjectItem(root, "ff_weight");
+    cJSON *base = cJSON_GetObjectItem(root, "base_speed");
 
     if (kp) s_current_config.kp = kp->valuedouble;
     if (ki) s_current_config.ki = ki->valuedouble;
     if (kd) s_current_config.kd = kd->valuedouble;
     if (max) s_current_config.max_speed = max->valuedouble;
     if (ffw) s_ff_weight = ffw->valuedouble;
+    if (base) s_base_speed_nominal = base->valuedouble;
 
     if (s_logic) {
         follow_line_logic_set_config(s_logic, &s_current_config);
-        ESP_LOGI(TAG, "Dynamic Config Updated: P=%.2f I=%.2f D=%.2f Max=%.2f FFw=%.2f", 
+        ESP_LOGI(TAG, "Dynamic Config Updated: P=%.2f I=%.2f D=%.2f Base=%.2f Max=%.2f FFw=%.2f", 
                  s_current_config.kp, s_current_config.ki, s_current_config.kd, 
-                 s_current_config.max_speed, s_ff_weight);
+                 s_base_speed_nominal, s_current_config.max_speed, s_ff_weight);
     }
 
     cJSON_Delete(root);
@@ -130,9 +132,9 @@ static void execute(motor_driver_mcpwm_t* motors,
 
             shared_memory_t* shm = shared_memory_get();
             
-            // 1. Read Inputs
+            // 1. Read Inputs (TODO NATIVO EN METROS Y METROS/SEGUNDO)
             xSemaphoreTake(shm->mutex, portMAX_DELAY);
-            float line_pos = shm->sensors.line_position_mm;
+            float line_pos = shm->sensors.line_position_m;
             bool detected = shm->sensors.line_detected;
             float bat_mv = shm->sensors.battery_voltage;
             float cur_l = shm->sensors.motor_speed_left;
@@ -146,7 +148,7 @@ static void execute(motor_driver_mcpwm_t* motors,
             float dynamic_base_speed = s_base_speed_nominal * effective_multiplier;
 
             follow_line_logic_input_t input = {
-                .line_position_mm = line_pos,
+                .line_position_m = line_pos,
                 .line_detected = detected,
                 .base_speed = dynamic_base_speed
             };
@@ -167,7 +169,7 @@ static void execute(motor_driver_mcpwm_t* motors,
 
             // 5. Telemetry
             if (s_telemetry) {
-                telemetry_add_float(s_telemetry, "line_pos",      line_pos);
+                telemetry_add_float(s_telemetry, "line_pos_m",    line_pos);
                 telemetry_add_bool(s_telemetry,  "line_detected", detected);
                 telemetry_add_float(s_telemetry, "base_speed",    dynamic_base_speed);
                 telemetry_add_float(s_telemetry, "target_l",      output.left_motor_speed);

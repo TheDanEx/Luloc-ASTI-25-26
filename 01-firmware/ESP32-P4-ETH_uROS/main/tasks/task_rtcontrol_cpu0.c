@@ -38,7 +38,7 @@ static const adc_channel_t pines_frontales[] = {
 };
 
 static const float distancias_m[] = {
-    -0.05f, -0.035f, -0.02f, -0.005f, 0.005f, 0.02f, 0.035f, 0.05f
+    -0.028f, -0.020f, -0.0121f, -0.0043f, 0.0043f, 0.0121f, 0.020f, 0.028f
 };
 
 // =============================================================================
@@ -159,7 +159,7 @@ static void task_rtcontrol_cpu0(void *arg)
             
             // Update Line Sensor SHM
             shm->sensors.line_detected = line_data.line_detected;
-            shm->sensors.line_position_mm = line_data.line_position_mm;
+            shm->sensors.line_position_m = line_data.line_position_m;
             for (int i = 0; i < 8; i++) {
                 shm->sensors.line_norm[i] = line_data.normalized_values[i];
                 shm->sensors.line_raw[i]  = line_data.raw_values[i];
