@@ -6,17 +6,18 @@
 
 static const char *TAG = "MODE_SUMO";
 
-// Configurable parameters
-#define SUMO_DETECTION_DIST_M 1.5f
-#define SUMO_ATTACK_SPEED     0.8f
-#define SUMO_SEARCH_SPEED     0.4f
+// Configurable parameters (0.0 to 1.0 for velocity control, or 0-1000 for PWM)
+#define SUMO_DETECTION_DIST_M 1.2f
+#define SUMO_ATTACK_SPEED     0.4f  // m/s (Much slower as requested)
+#define SUMO_SEARCH_PWM       120   // 12% power for spinning in place
+#define SUMO_DETECTION_ARC    40    // +/- 40 degrees
 
 static void enter(void) {
-    ESP_LOGI(TAG, "Entering SUMO mode - PROTECT THE RING!");
+    ESP_LOGI(TAG, "SUMO: Entering ring. Target distance: %.1fm", SUMO_DETECTION_DIST_M);
 }
 
 static void exit_mode(motor_driver_mcpwm_t* motors) {
-    ESP_LOGI(TAG, "Exiting SUMO mode - At ease.");
+    ESP_LOGI(TAG, "SUMO: Stopping motors.");
     motor_mcpwm_set(motors, 0, 0);
 }
 
@@ -31,12 +32,13 @@ static void execute(motor_driver_mcpwm_t* motors,
     float min_dist_front = 10.0f;
     int best_angle = -1;
 
-    // 1. Scan Frontal Area (-30 to +30 degrees)
+    // 1. Scan Frontal Area
     if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
-        for (int i = -30; i <= 30; i++) {
+        for (int i = -SUMO_DETECTION_ARC; i <= SUMO_DETECTION_ARC; i++) {
             int idx = (i + 360) % 360;
             float d = shm->lidar.distances_m[idx];
-            if (d > 0.05f && d < min_dist_front) {
+            // Filter 0 (no data) and too close (self-collision/noise)
+            if (d > 0.10f && d < min_dist_front) {
                 min_dist_front = d;
                 best_angle = i;
             }
@@ -44,29 +46,32 @@ static void execute(motor_driver_mcpwm_t* motors,
         xSemaphoreGive(shm->mutex);
     }
 
-    // 2. State Machine: Search vs Attack
+    // 2. Behavior Logic
     if (min_dist_front < SUMO_DETECTION_DIST_M) {
-        // Opponent detected!
-        ESP_LOGI(TAG, "Target found at %.2fm, angle %d! ATTACK!", min_dist_front, best_angle);
+        // --- ENEMY DETECTED ---
+        ESP_LOGI(TAG, "!!! ENEMY DETECTED at %.2fm (Angle: %d) !!!", min_dist_front, best_angle);
         
-        // Simple proportional steering to center the target
-        float steering = best_angle * 0.01f; 
+        // Steering proportional to angle
+        float steering = best_angle * 0.005f; 
         float speed_l = SUMO_ATTACK_SPEED * (1.0f + steering);
         float speed_r = SUMO_ATTACK_SPEED * (1.0f - steering);
         
+        // Closed-loop velocity control for stable attack
         motor_velocity_input_t in_l = { .target_speed = speed_l, .current_speed = shm->sensors.motor_speed_left, .battery_mv = 16000 };
         motor_velocity_input_t in_r = { .target_speed = speed_r, .current_speed = shm->sensors.motor_speed_right, .battery_mv = 16000 };
         
-        float pwm_l, pwm_r;
-        motor_velocity_ctrl_update(ctrl_left,  &in_l, dt_s, &pwm_l, NULL);
-        motor_velocity_ctrl_update(ctrl_right, &in_r, dt_s, &pwm_r, NULL);
-        motor_mcpwm_set(motors, (int16_t)(pwm_l * 10.0f), (int16_t)(pwm_r * 10.0f));
+        float pwm_l_f, pwm_r_f;
+        motor_velocity_ctrl_update(ctrl_left,  &in_l, dt_s, &pwm_l_f, NULL);
+        motor_velocity_ctrl_update(ctrl_right, &in_r, dt_s, &pwm_r_f, NULL);
+        
+        // Convert -1.0..1.0 to -1000..1000
+        motor_mcpwm_set(motors, (int16_t)(pwm_l_f * 1000.0f), (int16_t)(pwm_r_f * 1000.0f));
 
     } else {
-        // Search: Spin slowly
-        float pwm_l = 15.0f; // 15% power
-        float pwm_r = -15.0f;
-        motor_mcpwm_set(motors, (int16_t)pwm_l, (int16_t)pwm_r);
+        // --- SEARCHING ---
+        // Spin in place: Symmetric opposite PWM
+        // Positive L, Negative R = Turn Right
+        motor_mcpwm_set(motors, SUMO_SEARCH_PWM, -SUMO_SEARCH_PWM);
     }
 }
 
