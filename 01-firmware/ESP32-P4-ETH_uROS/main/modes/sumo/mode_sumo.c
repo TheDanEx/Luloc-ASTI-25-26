@@ -38,7 +38,7 @@ static void execute(motor_driver_mcpwm_t* motors,
             int idx = (i + 360) % 360;
             float d = shm->lidar.distances_m[idx];
             // Filter 0 (no data) and too close (self-collision/noise)
-            if (d > 0.10f && d < min_dist_front) {
+            if (d > 0.20f && d < min_dist_front) {
                 min_dist_front = d;
                 best_angle = i;
             }
@@ -69,8 +69,12 @@ static void execute(motor_driver_mcpwm_t* motors,
 
     } else {
         // --- SEARCHING ---
-        // Spin in place: Symmetric opposite PWM
-        // Positive L, Negative R = Turn Right
+        static uint32_t last_log = 0;
+        if (xTaskGetTickCount() - last_log > pdMS_TO_TICKS(500)) {
+            ESP_LOGI(TAG, "Searching... Front min: %.2fm", min_dist_front);
+            last_log = xTaskGetTickCount();
+        }
+        // Spin in place
         motor_mcpwm_set(motors, SUMO_SEARCH_PWM, -SUMO_SEARCH_PWM);
     }
 }

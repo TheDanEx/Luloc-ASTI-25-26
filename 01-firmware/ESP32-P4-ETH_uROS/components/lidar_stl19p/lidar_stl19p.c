@@ -89,9 +89,9 @@ static void lidar_task(void *arg) {
 
                         // Debug "Heartbeat" at 0 degrees
                         if (start_angle < last_angle) {
-                            // Find distance at ~0 degrees (index 0 usually if start_angle is near 0)
                             uint16_t dist_0 = ctx->packet_buffer[6] | (ctx->packet_buffer[7] << 8);
-                            ESP_LOGI(TAG, "Sweep Reset | Speed: %d deg/s | Front Dist: %d mm", speed, dist_0);
+                            uint8_t int_0 = ctx->packet_buffer[8];
+                            ESP_LOGI(TAG, "Sweep Reset | Speed: %d deg/s | Front: %dmm (Int: %d)", speed, dist_0, int_0);
                         }
                         last_angle = start_angle;
 
@@ -108,9 +108,14 @@ static void lidar_task(void *arg) {
                             };
                             if (p.angle_deg >= 360.0f) p.angle_deg -= 360.0f;
 
-                            // Send to queue (non-blocking)
-                            if (ctx->point_queue) {
-                                xQueueSend(ctx->point_queue, &p, 0);
+                            // Filter: Front 180 degrees only (-90 to 90)
+                            bool is_front = (p.angle_deg <= 90.0f || p.angle_deg >= 270.0f);
+
+                            // Filter: Ignore 0, too close (self), low confidence, and BACK side
+                            if (is_front && p.distance_m > 0.15f && p.intensity > 50) {
+                                if (ctx->point_queue) {
+                                    xQueueSend(ctx->point_queue, &p, 0);
+                                }
                             }
                         }
                     } else {
