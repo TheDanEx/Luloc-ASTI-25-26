@@ -103,7 +103,6 @@ static void telemetry_task(void *arg)
         xSemaphoreGive(obj->mutex);
     }
 
-    vTaskDelete(NULL);
 }
 
 // =============================================================================
@@ -153,23 +152,35 @@ void telemetry_destroy(telemetry_handle_t handle)
     if (!handle) return;
     telemetry_obj_t *obj = (telemetry_obj_t *)handle;
 
+    // 1. Avisar a la tarea que pare
     obj->running = false;
-    vTaskDelay(pdMS_TO_TICKS(100)); 
 
+    // 2. IMPORTANTE: Esperar a que la tarea termine de verdad
+    // Si la tarea se borra a sí misma, debemos darle tiempo o usar un TaskHandle
+    if (obj->task_handle != NULL) {
+        // En lugar de un delay arbitrario, esperamos un poco y luego la forzamos
+        // si no ha terminado, aunque lo ideal es que la tarea confirme su salida.
+        vTaskDelay(pdMS_TO_TICKS(50)); 
+        vTaskDelete(obj->task_handle); 
+        obj->task_handle = NULL;
+    }
+
+    // 3. Ahora que la tarea NO existe, nadie tocará el mutex ni los buffers
+    // Liberamos los recursos con seguridad
     if (obj->topic) free(obj->topic);
     if (obj->measurement) free(obj->measurement);
     if (obj->tags) free(obj->tags);
     if (obj->batch_buffer) free(obj->batch_buffer);
     
-    xSemaphoreTake(obj->mutex, portMAX_DELAY);
+    // No hace falta tomar el mutex porque la tarea ya murió
     for (int i = 0; i < obj->field_count; i++) {
         free(obj->fields[i].key);
         free(obj->fields[i].value_str);
     }
-    xSemaphoreGive(obj->mutex);
-    vSemaphoreDelete(obj->mutex);
     
+    vSemaphoreDelete(obj->mutex);
     free(obj);
+    ESP_LOGI(TAG, "Telemetry destroyed safely");
 }
 
 void telemetry_set_tags(telemetry_handle_t handle, const char *tags)

@@ -1,3 +1,11 @@
+import logging
+
+# Desactiva los logs de Werkzeug (el servidor de Flask)
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
+
+# Si quieres desactivar también los banners de Flask al arrancar
+import os
 import threading
 from flask import Flask, Response
 import imageio.v3 as iio

@@ -10,6 +10,7 @@
 #include "modes.h"
 #include <stdlib.h>
 #include "encoder_sensor.h"
+#include "line_sensor.h"
 
 static const char *TAG = "rt_cntrl";
 
@@ -27,6 +28,18 @@ static const char *TAG = "rt_cntrl";
 #ifndef CONFIG_ROBOT_CONTROL_PERIOD_MS
 #define CONFIG_ROBOT_CONTROL_PERIOD_MS 2
 #endif
+
+// =============================================================================
+// Line Sensor Configuration
+// =============================================================================
+static const adc_channel_t pines_frontales[] = {
+    ADC_CHANNEL_7, ADC_CHANNEL_6, ADC_CHANNEL_5, ADC_CHANNEL_4,
+    ADC_CHANNEL_3, ADC_CHANNEL_2, ADC_CHANNEL_1, ADC_CHANNEL_0
+};
+
+static const float distancias_m[] = {
+    -0.028f, -0.020f, -0.0121f, -0.0043f, 0.0043f, 0.0121f, 0.020f, 0.028f
+};
 
 // =============================================================================
 // Motor Configuration
@@ -108,6 +121,19 @@ static void task_rtcontrol_cpu0(void *arg)
     };
     encoder_sensor_handle_t encoder_right = encoder_sensor_init(&enc_r_cfg);
 
+    // Initialize Line Sensor
+    line_sensor_config_t line_cfg = {
+        .num_sensors = 8,
+        .adc_unit = ADC_UNIT_1,
+        .adc_channels = pines_frontales,
+        .sensor_positions_m = distancias_m,
+        .oversample_count = 0,
+        .calibration_threshold = 0,
+        .detection_threshold = 0.0f
+    };
+    line_sensor_handle_t line_array = line_sensor_init(&line_cfg);
+    line_sensor_calibration_start(line_array); // Start auto-calibration 
+
     modes_init();
 
     const float dt = (float)CONFIG_ROBOT_CONTROL_PERIOD_MS / 1000.0f;
@@ -120,6 +146,10 @@ static void task_rtcontrol_cpu0(void *arg)
         float speed_r_ms = encoder_sensor_get_speed(encoder_right);
         float distance_r_m = encoder_sensor_get_distance(encoder_right);
         
+        // 2. Line Sensor Polling
+        line_sensor_data_t line_data;
+        line_sensor_read(line_array, &line_data);
+
         shared_memory_t* shm = shared_memory_get();
         if (shm != NULL && xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
             shm->sensors.motor_speed_left = speed_l_ms;
@@ -127,10 +157,27 @@ static void task_rtcontrol_cpu0(void *arg)
             shm->sensors.motor_speed_right = speed_r_ms;
             shm->sensors.motor_distance_right = distance_r_m;
             
+            // Update Line Sensor SHM
+            shm->sensors.line_detected = line_data.line_detected;
+            shm->sensors.line_position_m = line_data.line_position_m;
+            for (int i = 0; i < 8; i++) {
+                shm->sensors.line_norm[i] = line_data.normalized_values[i];
+                shm->sensors.line_raw[i]  = line_data.raw_values[i];
+            }
+            // Get calibration bounds from component internal state
+            // line_sensor_get_calibration_bounds(line_array, shm->sensors.line_min, shm->sensors.line_max);
+            shm->sensors.line_is_calibrated = line_sensor_is_calibrated(line_array);
+            
             xSemaphoreGive(shm->mutex);
         }
 
-        
+        // 2. Update PID live tuning if changes received from MQTT
+        for (int i = 0; i < 2; i++) {
+            float kp, ki, kd;
+            if (pid_tuner_check_and_clear_update(i, &kp, &ki, &kd)) {
+                motor_velocity_ctrl_set_pid((i == 0) ? ctrl_left : ctrl_right, kp, ki, kd);
+            }
+        }
 
         // 2. Execute Mode (Router Pattern / Dispatcher)
         modes_execute(&motors, ctrl_left, ctrl_right, dt);

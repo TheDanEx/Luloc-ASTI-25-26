@@ -27,7 +27,7 @@ typedef struct {
     
     // Line Sensor (Detailed)
     bool  line_detected;
-    float line_position;         // Centroid (error)
+    float line_position_m;         // Centroid (error) in meters
     float line_norm[8];          // Normalized values (0.0 - 1.0)
     uint16_t line_raw[8];        // Raw ADC values
     uint16_t line_min[8];        // Calibration Min

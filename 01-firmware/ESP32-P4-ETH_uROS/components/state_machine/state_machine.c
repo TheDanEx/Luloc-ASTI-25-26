@@ -23,7 +23,7 @@ static robot_state_context_t g_state = {
 
 static TickType_t g_state_start_time = 0;
 static bool g_mqtt_connected = false;
-
+static SemaphoreHandle_t state_mutex = NULL;
 // =============================================================================
 // Internal Handlers
 // =============================================================================
@@ -36,6 +36,9 @@ static bool g_mqtt_connected = false;
 
 void state_machine_init(void)
 {
+    if (state_mutex == NULL) {
+        state_mutex = xSemaphoreCreateMutex();
+    }
     g_state.current_state = STATE_INIT;
     g_state.current_mode = MODE_NONE;
     g_state_start_time = xTaskGetTickCount();
@@ -117,20 +120,13 @@ robot_state_t state_machine_update(void)
 
 
 
-bool state_machine_request_mode(robot_mode_t new_mode, bool force)
-{
-    const mode_config_t *config = get_mode_config(new_mode);
-    if (!config) {
-        ESP_LOGE(TAG, "Unknown mode requested: %d", new_mode);
-        return false;
-    }
-
-    if (force) {
-        ESP_LOGW(TAG, "FORCING Mode %s regardless of conditions", get_mode_name(new_mode));
-    }
-
-    ESP_LOGI(TAG, "Mode transition: %d -> %d", g_state.current_mode, new_mode);
+bool state_machine_request_mode(robot_mode_t new_mode, bool force) {
+    if (xSemaphoreTake(state_mutex, pdMS_TO_TICKS(10)) != pdTRUE) return false;
+    
+    // Realizar el cambio
     g_state.current_mode = new_mode;
+    
+    xSemaphoreGive(state_mutex);
     return true;
 }
 

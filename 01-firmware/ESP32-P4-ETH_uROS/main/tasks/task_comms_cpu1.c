@@ -85,7 +85,7 @@ static void collect_high_freq_sensor_data(void)
     bool detected, is_cal;
 
     xSemaphoreTake(shm->mutex, portMAX_DELAY);
-    err_line = shm->sensors.line_position;
+    err_line = shm->sensors.line_position_m;
     detected = shm->sensors.line_detected;
     is_cal   = shm->sensors.line_is_calibrated;
     target_l = shm->sensors.target_speed_left;

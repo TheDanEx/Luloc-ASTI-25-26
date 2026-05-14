@@ -44,6 +44,15 @@ extern const uint8_t battery_low_pcm_end[]   asm("_binary_battery_low_pcm_end");
 extern const uint8_t startup_pcm_start[] asm("_binary_startup_pcm_start");
 extern const uint8_t startup_pcm_end[]   asm("_binary_startup_pcm_end");
 
+extern const uint8_t in_the_end_pcm_start[] asm("_binary_in_the_end_pcm_start");
+extern const uint8_t in_the_end_pcm_end[]   asm("_binary_in_the_end_pcm_end");
+
+extern const uint8_t tokyo_pcm_start[] asm("_binary_tokyo_drift_pcm_start");
+extern const uint8_t tokyo_pcm_end[]   asm("_binary_tokyo_drift_pcm_end");
+
+extern const uint8_t hola_pcm_start[] asm("_binary_hola_pcm_start");
+extern const uint8_t hola_pcm_end[]   asm("_binary_hola_pcm_end");
+
 typedef struct {
     const uint8_t *start;
     const uint8_t *end;
@@ -61,6 +70,21 @@ static sound_asset_t get_sound_asset(audio_sound_t sound) {
         case STARTUP:
             asset.start = startup_pcm_start;
             asset.end = startup_pcm_end;
+            asset.volume = 70;
+            break;
+        case INTHEEND:
+            asset.start = in_the_end_pcm_start;
+            asset.end = in_the_end_pcm_end;
+            asset.volume = 70;
+            break;
+        case TOKYO:
+            asset.start = tokyo_pcm_start;
+            asset.end = tokyo_pcm_end;
+            asset.volume = 70;
+            break;
+        case HOLA:
+            asset.start = hola_pcm_start;
+            asset.end = hola_pcm_end;
             asset.volume = 70;
             break;
         default:
