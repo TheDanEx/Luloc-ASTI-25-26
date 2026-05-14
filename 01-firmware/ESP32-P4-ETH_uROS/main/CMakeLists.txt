@@ -5,11 +5,13 @@ idf_component_register(
         "tasks/uros_manager.c"
         "tasks/task_comms_cpu1.c"
         "tasks/task_rtcontrol_cpu0.c"
+        "tasks/task_lidar.c"
         "tasks/task_monitor_lowpower_cpu1.c"
         "modes/modes.c"
         "modes/idle/mode_idle.c"
         "modes/teleoperation/mode_teleoperation.c"
         "modes/follow_line/mode_follow_line.c"
+        "modes/sumo/mode_sumo.c"
         "modes/follow_line/follow_line_logic.c"
         "modes/calibrate/mode_calibrate.c"
     INCLUDE_DIRS
@@ -22,6 +24,7 @@ idf_component_register(
         "modes/follow_line"
     REQUIRES
         ina226_sensor
+        lidar_stl19p
         state_machine
         shared_memory
         audio_player

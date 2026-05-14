@@ -39,6 +39,13 @@ typedef struct {
     uint32_t timestamp_ms;       // Local timestamp
 } robot_sensor_data_t;
 
+#define LIDAR_SCAN_POINTS 360
+typedef struct {
+    float distances_m[LIDAR_SCAN_POINTS]; // Indexed by integer degree 0-359
+    uint8_t intensities[LIDAR_SCAN_POINTS];
+    uint32_t last_update_ms;
+} lidar_scan_t;
+
 
 typedef struct {
     // Commands received by CPU1 to execute on CPU0
@@ -70,6 +77,7 @@ typedef struct {
     shared_pid_config_t motor_pids[2]; // 0=Left, 1=Right
     shared_pid_config_t line_pid;      // Line following PD/PID
     uint8_t calibration_motor_mask;    // bitmask: 1=Left, 2=Right, 3=Both
+    lidar_scan_t lidar;               // LiDAR 360 Scan
 
     uint32_t heartbeat_cpu0;    // CPU0 heartbeat counter
     uint32_t heartbeat_cpu1;    // CPU1 heartbeat counter

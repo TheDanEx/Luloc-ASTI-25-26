@@ -9,6 +9,7 @@
 #include "system_init.h"
 #include "task_comms_cpu1.h"
 #include "task_monitor_lowpower_cpu1.h"
+#include "task_lidar.h"
 
 static const char *TAG = "MAIN";
 
@@ -33,6 +34,9 @@ void app_main(void)
     // Start monitoring and safety task on CPU 1
     task_monitor_lowpower_cpu1_start();
     printf("[CPU%d] %-40s [ OK ]\n", 1, "Started Monitor Task");
+
+    task_lidar_start();
+    printf("[CPU%d] %-40s [ OK ]\n", 1, "Started LiDAR Task");
 
     ESP_LOGI(TAG, "System started successfully");
 }
