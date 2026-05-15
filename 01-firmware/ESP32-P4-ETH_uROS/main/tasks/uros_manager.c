@@ -94,10 +94,6 @@ static void mode_callback(const void *msvin)
         ESP_LOGW(TAG, "Ignoring invalid mode id: %d", mode_id);
         return;
     }
-    if(mode_id == 0){
-        audio_player_stop();
-        ESP_LOGI(TAG, "Stoping fight sound");
-    }
     
     bool accepted = state_machine_request_mode((robot_mode_t)mode_id, true);
     ESP_LOGI(TAG, "Mode change request -> %d (%s)", mode_id, accepted ? "accepted" : "rejected");

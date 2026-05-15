@@ -9,7 +9,7 @@
 #include "system_init.h"
 #include "task_comms_cpu1.h"
 #include "task_monitor_lowpower_cpu1.h"
-#include "lidar_uart_test.h"
+
 
 static const char *TAG = "MAIN";
 
@@ -36,9 +36,6 @@ void app_main(void)
     printf("[CPU%d] %-40s [ OK ]\n", 1, "Started Monitor Task");
 
     ESP_LOGI(TAG, "System started successfully");
-
-    lidar_init();
-    printf("[CPU%d] %-40s [ OK ]\n", xPortGetCoreID(), "Started LiDAR UART");
 
     
 }

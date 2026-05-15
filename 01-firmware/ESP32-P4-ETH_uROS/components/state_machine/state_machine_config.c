@@ -62,6 +62,7 @@ const char* get_state_name(robot_state_t state) {
         "REMOTE_CONTROLLED",
         "TELEMETRY_ONLY",
         "WAITING_ORDERS",
+        "SUMO",
         "SHUTDOWN"
     };
     if (state < STATE_COUNT) return names[state];
@@ -78,6 +79,7 @@ const char* get_mode_name(robot_mode_t mode) {
         case MODE_TELEMETRY_STREAM: return "TELEMETRY";
         case MODE_CALIBRATE_MOTORS: return "CALIB_MOTORS";
         case MODE_CALIBRATE_LINE: return "CALIB_LINE";
+        case MODE_SUMO: return "SUMO";
         default: return "UNKNOWN";
     }
 }

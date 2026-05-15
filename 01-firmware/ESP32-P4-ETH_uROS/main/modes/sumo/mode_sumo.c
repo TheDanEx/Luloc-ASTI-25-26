@@ -41,21 +41,11 @@ static const char *TAG = "SUMO_MODE";
 
 #define LIDAR_PACKET_SIZE   47
 #define LIDAR_POINTS        12
+#define LIDAR_SCAN_SIZE     360
 
-// Ángulos reales que vas a usar para sumo.
-// Ajusta estos valores tras probar con la mano/objeto.
-#define SUMO_FRONT_ANGLE_DEG    0.0f
-#define SUMO_RIGHT_ANGLE_DEG    50.0f
-#define SUMO_LEFT_ANGLE_DEG     300.0f
-#define SUMO_BACK_ANGLE_DEG     180.0f
-
-#define ANGLE_TOLERANCE_DEG     4.0f
+#define PRINT_PERIOD_MS     1000
 
 #define SUMO_DETECT_DISTANCE_MM 800
-#define SUMO_MIN_CONFIDENCE     5
-#define SUMO_SAMPLE_TIMEOUT_MS  300
-
-#define PRINT_PERIOD_MS         1000
 
 #define SUMO_ATTACK_SPEED       0.45f
 #define SUMO_TURN_SPEED         0.30f
@@ -66,32 +56,29 @@ static const char *TAG = "SUMO_MODE";
 // =============================================================================
 
 typedef struct {
-    bool valid;
-    float angle_deg;
-    uint16_t distance_mm;
-    uint8_t confidence;
-    int64_t timestamp_ms;
-} lidar_axis_sample_t;
-
-typedef struct {
-    lidar_axis_sample_t front;
-    lidar_axis_sample_t right;
-    lidar_axis_sample_t back;
-    lidar_axis_sample_t left;
-} lidar_axis_data_t;
-
-typedef struct {
     bool obj_front;
     bool obj_right;
-    bool obj_back;
     bool obj_left;
+    bool obj_back;
 } sumo_context_t;
 
 // =============================================================================
 // Static state
 // =============================================================================
 
-static lidar_axis_data_t s_axis_data = {0};
+/*
+    Mapeo del array:
+
+    index 0   -> 181º
+    index 1   -> 182º
+    ...
+    index 178 -> 359º
+    index 179 -> 0º
+    index 180 -> 1º
+    ...
+    index 359 -> 180º
+*/
+static uint16_t s_lidar_scan[LIDAR_SCAN_SIZE] = {0};
 
 static TaskHandle_t s_lidar_task_handle = NULL;
 static bool s_uart_initialized = false;
@@ -107,48 +94,41 @@ static uint16_t read_u16_le(const uint8_t *data)
     return (uint16_t)data[0] | ((uint16_t)data[1] << 8);
 }
 
-static float abs_float(float x)
-{
-    return (x < 0.0f) ? -x : x;
-}
-
-static bool angle_near(float angle, float target, float tolerance)
-{
-    if (target == 0.0f) {
-        return (angle <= tolerance) || (angle >= (360.0f - tolerance));
-    }
-
-    return abs_float(angle - target) <= tolerance;
-}
-
 static int64_t now_ms(void)
 {
     return esp_timer_get_time() / 1000;
 }
 
-static bool lidar_sample_is_fresh_and_valid(const lidar_axis_sample_t *sample)
+static int angle_to_centered_index(float angle_deg)
 {
-    if (sample == NULL || !sample->valid) {
-        return false;
+    int angle_i = (int)(angle_deg + 0.5f);
+
+    while (angle_i >= 360) {
+        angle_i -= 360;
     }
 
-    if ((now_ms() - sample->timestamp_ms) > SUMO_SAMPLE_TIMEOUT_MS) {
-        return false;
+    while (angle_i < 0) {
+        angle_i += 360;
     }
 
-    if (sample->distance_mm == 0) {
-        return false;
+    if (angle_i >= 181 && angle_i <= 359) {
+        return angle_i - 181;
     }
 
-    if (sample->distance_mm > SUMO_DETECT_DISTANCE_MM) {
-        return false;
+    return angle_i + 179;
+}
+
+static int centered_index_to_angle(int index)
+{
+    if (index < 0 || index >= LIDAR_SCAN_SIZE) {
+        return -1;
     }
 
-    if (sample->confidence < SUMO_MIN_CONFIDENCE) {
-        return false;
+    if (index <= 178) {
+        return index + 181;
     }
 
-    return true;
+    return index - 179;
 }
 
 static bool lidar_packet_basic_valid(const uint8_t packet[LIDAR_PACKET_SIZE])
@@ -164,7 +144,7 @@ static bool lidar_packet_basic_valid(const uint8_t packet[LIDAR_PACKET_SIZE])
     uint16_t start_angle_raw = read_u16_le(&packet[4]);
     uint16_t end_angle_raw   = read_u16_le(&packet[42]);
 
-    // Ángulos en grados * 100.
+    // Los ángulos vienen en grados * 100.
     if (start_angle_raw >= 36000 || end_angle_raw >= 36000) {
         return false;
     }
@@ -172,27 +152,37 @@ static bool lidar_packet_basic_valid(const uint8_t packet[LIDAR_PACKET_SIZE])
     return true;
 }
 
-static void update_axis_sample(lidar_axis_sample_t *sample,
-                               float angle_deg,
-                               uint16_t distance_mm,
-                               uint8_t confidence)
+static bool distance_is_obstacle(uint16_t distance_mm)
 {
-    if (sample == NULL) {
-        return;
+    if (distance_mm == 0) {
+        return false;
     }
 
+    if (distance_mm > SUMO_DETECT_DISTANCE_MM) {
+        return false;
+    }
+
+    return true;
+}
+
+static void lidar_update_scan_point(float angle_deg, uint16_t distance_mm)
+{
     if (distance_mm == 0) {
         return;
     }
 
-    sample->valid = true;
-    sample->angle_deg = angle_deg;
-    sample->distance_mm = distance_mm;
-    sample->confidence = confidence;
-    sample->timestamp_ms = now_ms();
+    int idx = angle_to_centered_index(angle_deg);
+
+    if (idx < 0 || idx >= LIDAR_SCAN_SIZE) {
+        return;
+    }
+
+    portENTER_CRITICAL(&s_lidar_mux);
+    s_lidar_scan[idx] = distance_mm;
+    portEXIT_CRITICAL(&s_lidar_mux);
 }
 
-static void lidar_parse_packet_update_axes(const uint8_t packet[LIDAR_PACKET_SIZE])
+static void lidar_parse_packet_update_scan(const uint8_t packet[LIDAR_PACKET_SIZE])
 {
     uint16_t start_angle_raw = read_u16_le(&packet[4]);
     uint16_t end_angle_raw   = read_u16_le(&packet[42]);
@@ -206,13 +196,10 @@ static void lidar_parse_packet_update_axes(const uint8_t packet[LIDAR_PACKET_SIZ
         end_angle_for_interp += 360.0f;
     }
 
-    portENTER_CRITICAL(&s_lidar_mux);
-
     for (int p = 0; p < LIDAR_POINTS; p++) {
-        int idx = 6 + p * 3;
+        int packet_idx = 6 + p * 3;
 
-        uint16_t distance_mm = read_u16_le(&packet[idx]);
-        uint8_t confidence   = packet[idx + 2];
+        uint16_t distance_mm = read_u16_le(&packet[packet_idx]);
 
         float angle = start_angle_deg +
                       ((end_angle_for_interp - start_angle_deg) * p) / (LIDAR_POINTS - 1);
@@ -221,42 +208,86 @@ static void lidar_parse_packet_update_axes(const uint8_t packet[LIDAR_PACKET_SIZ
             angle -= 360.0f;
         }
 
-        if (angle_near(angle, SUMO_FRONT_ANGLE_DEG, ANGLE_TOLERANCE_DEG)) {
-            update_axis_sample(&s_axis_data.front, angle, distance_mm, confidence);
-        }
-
-        if (angle_near(angle, SUMO_RIGHT_ANGLE_DEG, ANGLE_TOLERANCE_DEG)) {
-            update_axis_sample(&s_axis_data.right, angle, distance_mm, confidence);
-        }
-
-        if (angle_near(angle, SUMO_LEFT_ANGLE_DEG, ANGLE_TOLERANCE_DEG)) {
-            update_axis_sample(&s_axis_data.left, angle, distance_mm, confidence);
-        }
-
-        if (angle_near(angle, SUMO_BACK_ANGLE_DEG, ANGLE_TOLERANCE_DEG)) {
-            update_axis_sample(&s_axis_data.back, angle, distance_mm, confidence);
-        }
+        lidar_update_scan_point(angle, distance_mm);
     }
-
-    portEXIT_CRITICAL(&s_lidar_mux);
 }
 
-static void print_axis_sample(const char *name, const lidar_axis_sample_t *sample)
+static void lidar_get_scan_copy(uint16_t out_scan[LIDAR_SCAN_SIZE])
 {
-    if (sample == NULL || !sample->valid) {
-        printf("%-10s | no data\n", name);
+    if (out_scan == NULL) {
         return;
     }
 
-    printf("%-10s | angle=%7.2f deg | distance=%5u mm | confidence=%3u | age=%lld ms\n",
-           name,
-           sample->angle_deg,
-           sample->distance_mm,
-           sample->confidence,
-           (long long)(now_ms() - sample->timestamp_ms));
+    portENTER_CRITICAL(&s_lidar_mux);
+    memcpy(out_scan, s_lidar_scan, sizeof(s_lidar_scan));
+    portEXIT_CRITICAL(&s_lidar_mux);
 }
 
-static void lidar_print_axes_once_per_second(void)
+static uint16_t get_min_distance_in_angle_range_locked(int angle_start, int angle_end)
+{
+    uint16_t min_distance = 0;
+
+    for (int i = 0; i < LIDAR_SCAN_SIZE; i++) {
+        int angle = centered_index_to_angle(i);
+
+        if (angle < 0) {
+            continue;
+        }
+
+        bool in_range = false;
+
+        if (angle_start <= angle_end) {
+            in_range = (angle >= angle_start && angle <= angle_end);
+        } else {
+            // Rango que cruza por 0º. Ejemplo: 340º..20º
+            in_range = (angle >= angle_start || angle <= angle_end);
+        }
+
+        if (!in_range) {
+            continue;
+        }
+
+        uint16_t distance_mm = s_lidar_scan[i];
+
+        if (!distance_is_obstacle(distance_mm)) {
+            continue;
+        }
+
+        if (min_distance == 0 || distance_mm < min_distance) {
+            min_distance = distance_mm;
+        }
+    }
+
+    return min_distance;
+}
+
+static sumo_context_t logica_sumo(void)
+{
+    sumo_context_t context = {0};
+
+    uint16_t front_min = 0;
+    uint16_t right_min = 0;
+    uint16_t left_min = 0;
+    uint16_t back_min = 0;
+
+    portENTER_CRITICAL(&s_lidar_mux);
+
+    front_min = get_min_distance_in_angle_range_locked(340, 20);
+    right_min = get_min_distance_in_angle_range_locked(40, 80);
+    left_min  = get_min_distance_in_angle_range_locked(280, 320);
+    back_min  = get_min_distance_in_angle_range_locked(160, 200);
+
+    portEXIT_CRITICAL(&s_lidar_mux);
+
+    context.obj_front = (front_min > 0);
+    context.obj_right = (right_min > 0);
+    context.obj_left  = (left_min > 0);
+    context.obj_back  = (back_min > 0);
+
+    return context;
+}
+
+static void lidar_print_scan_once_per_second(void)
 {
     static int64_t last_print_ms = 0;
 
@@ -268,35 +299,55 @@ static void lidar_print_axes_once_per_second(void)
 
     last_print_ms = current_ms;
 
-    lidar_axis_data_t snapshot;
+    uint16_t scan[LIDAR_SCAN_SIZE];
+    lidar_get_scan_copy(scan);
 
-    portENTER_CRITICAL(&s_lidar_mux);
-    snapshot = s_axis_data;
-    portEXIT_CRITICAL(&s_lidar_mux);
+    printf("\n========== LIDAR 360 ARRAY ==========\n");
 
-    printf("\n========== SUMO LIDAR ==========\n");
-    print_axis_sample("FRONT", &snapshot.front);
-    print_axis_sample("RIGHT", &snapshot.right);
-    print_axis_sample("LEFT",  &snapshot.left);
-    print_axis_sample("BACK",  &snapshot.back);
-    printf("================================\n");
+    for (int i = 0; i < LIDAR_SCAN_SIZE; i++) {
+        int angle = centered_index_to_angle(i);
+
+        printf("idx=%03d angle=%03d deg distance=%5u mm\n",
+               i,
+               angle,
+               scan[i]);
+    }
+
+    printf("=====================================\n");
 }
 
-static sumo_context_t logica_sumo(void)
+static void lidar_print_summary_once_per_second(void)
 {
-    sumo_context_t context = {0};
-    lidar_axis_data_t snapshot;
+    static int64_t last_print_ms = 0;
+
+    int64_t current_ms = now_ms();
+
+    if ((current_ms - last_print_ms) < PRINT_PERIOD_MS) {
+        return;
+    }
+
+    last_print_ms = current_ms;
+
+    uint16_t front_min = 0;
+    uint16_t right_min = 0;
+    uint16_t left_min = 0;
+    uint16_t back_min = 0;
 
     portENTER_CRITICAL(&s_lidar_mux);
-    snapshot = s_axis_data;
+
+    front_min = get_min_distance_in_angle_range_locked(340, 20);
+    right_min = get_min_distance_in_angle_range_locked(40, 80);
+    left_min  = get_min_distance_in_angle_range_locked(280, 320);
+    back_min  = get_min_distance_in_angle_range_locked(160, 200);
+
     portEXIT_CRITICAL(&s_lidar_mux);
 
-    context.obj_front = lidar_sample_is_fresh_and_valid(&snapshot.front);
-    context.obj_right = lidar_sample_is_fresh_and_valid(&snapshot.right);
-    context.obj_left  = lidar_sample_is_fresh_and_valid(&snapshot.left);
-    context.obj_back  = lidar_sample_is_fresh_and_valid(&snapshot.back);
-
-    return context;
+    printf("\n========== SUMO LIDAR SUMMARY ==========\n");
+    printf("FRONT 340..020 deg: %u mm\n", front_min);
+    printf("RIGHT 040..080 deg: %u mm\n", right_min);
+    printf("LEFT  280..320 deg: %u mm\n", left_min);
+    printf("BACK  160..200 deg: %u mm\n", back_min);
+    printf("========================================\n");
 }
 
 // =============================================================================
@@ -305,14 +356,15 @@ static sumo_context_t logica_sumo(void)
 
 static void lidar_task(void *arg)
 {
-    uint8_t header = 0;
-    uint8_t ver_len = 0;
     uint8_t packet[LIDAR_PACKET_SIZE];
+    int packet_pos = 0;
 
     while (1) {
+        uint8_t byte = 0;
+
         int len = uart_read_bytes(
             LIDAR_UART_PORT,
-            &header,
+            &byte,
             1,
             pdMS_TO_TICKS(100)
         );
@@ -322,46 +374,41 @@ static void lidar_task(void *arg)
             continue;
         }
 
-        if (header != LIDAR_HEADER) {
+        if (packet_pos == 0) {
+            if (byte == LIDAR_HEADER) {
+                packet[packet_pos++] = byte;
+            }
             continue;
         }
 
-        len = uart_read_bytes(
-            LIDAR_UART_PORT,
-            &ver_len,
-            1,
-            pdMS_TO_TICKS(100)
-        );
-
-        if (len <= 0) {
+        if (packet_pos == 1) {
+            if (byte == LIDAR_VER_LEN) {
+                packet[packet_pos++] = byte;
+            } else {
+                packet_pos = 0;
+            }
             continue;
         }
 
-        if (ver_len != LIDAR_VER_LEN) {
+        packet[packet_pos++] = byte;
+
+        if (packet_pos < LIDAR_PACKET_SIZE) {
             continue;
         }
 
-        packet[0] = header;
-        packet[1] = ver_len;
-
-        int read_len = uart_read_bytes(
-            LIDAR_UART_PORT,
-            &packet[2],
-            LIDAR_PACKET_SIZE - 2,
-            pdMS_TO_TICKS(100)
-        );
-
-        if (read_len != (LIDAR_PACKET_SIZE - 2)) {
-            ESP_LOGW(TAG, "Paquete incompleto: %d bytes", read_len);
-            continue;
-        }
+        packet_pos = 0;
 
         if (!lidar_packet_basic_valid(packet)) {
             continue;
         }
 
-        lidar_parse_packet_update_axes(packet);
-        lidar_print_axes_once_per_second();
+        lidar_parse_packet_update_scan(packet);
+
+        // Para depurar el array entero:
+        // lidar_print_scan_once_per_second();
+
+        // Para no saturar logs:
+        lidar_print_summary_once_per_second();
 
         vTaskDelay(pdMS_TO_TICKS(1));
     }
@@ -374,6 +421,7 @@ static void lidar_task(void *arg)
 static esp_err_t lidar_uart_start(void)
 {
     if (s_uart_initialized) {
+        uart_flush_input(LIDAR_UART_PORT);
         return ESP_OK;
     }
 
@@ -421,6 +469,8 @@ static esp_err_t lidar_uart_start(void)
         return err;
     }
 
+    uart_flush_input(LIDAR_UART_PORT);
+
     s_uart_initialized = true;
 
     ESP_LOGI(TAG, "LiDAR UART iniciado. RX GPIO=%d baud=%d",
@@ -464,7 +514,9 @@ static void enter(void)
 {
     ESP_LOGI(TAG, "Entering SUMO mode");
 
-    memset(&s_axis_data, 0, sizeof(s_axis_data));
+    portENTER_CRITICAL(&s_lidar_mux);
+    memset(s_lidar_scan, 0, sizeof(s_lidar_scan));
+    portEXIT_CRITICAL(&s_lidar_mux);
 
     if (lidar_uart_start() == ESP_OK) {
         lidar_task_start();
@@ -502,23 +554,20 @@ static void execute(motor_driver_mcpwm_t* motors,
     sumo_context_t context = logica_sumo();
 
     if (context.obj_front) {
-        // Atacar hacia delante
         target_left = SUMO_ATTACK_SPEED;
         target_right = SUMO_ATTACK_SPEED;
     } else if (context.obj_right) {
-        // Girar hacia la derecha
         target_left = SUMO_TURN_SPEED;
         target_right = -SUMO_TURN_SPEED;
     } else if (context.obj_left) {
-        // Girar hacia la izquierda
         target_left = -SUMO_TURN_SPEED;
         target_right = SUMO_TURN_SPEED;
-    } else if (context.obj_back) {
-        // Si lo detecta detrás, gira para buscarlo
-        target_left = SUMO_TURN_SPEED;
-        target_right = -SUMO_TURN_SPEED;
-    } else {
-        // Búsqueda si no ve nada
+    } 
+    // else if (context.obj_back) {
+    //     target_left = SUMO_TURN_SPEED;
+    //     target_right = -SUMO_TURN_SPEED;
+    // } 
+    else {
         target_left = SUMO_SEARCH_SPEED;
         target_right = -SUMO_SEARCH_SPEED;
     }
