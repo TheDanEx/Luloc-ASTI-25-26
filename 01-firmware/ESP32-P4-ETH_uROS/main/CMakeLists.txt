@@ -12,7 +12,7 @@ idf_component_register(
         "modes/follow_line/mode_follow_line.c"
         "modes/follow_line/follow_line_logic.c"
         "modes/calibrate/mode_calibrate.c"
-        "tasks/lidar_uart_test.c"
+        "modes/sumo/mode_sumo.c"
     INCLUDE_DIRS
         "."
         "tasks"

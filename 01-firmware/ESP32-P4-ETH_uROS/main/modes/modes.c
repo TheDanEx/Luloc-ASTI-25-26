@@ -11,6 +11,7 @@ extern const mode_interface_t mode_idle;
 extern const mode_interface_t mode_calibrate;
 extern const mode_interface_t mode_teleoperation;
 extern const mode_interface_t mode_follow_line;
+extern const mode_interface_t mode_sumo;
 
 // Local state
 static robot_mode_t s_active_mode = MODE_NONE;
@@ -27,6 +28,7 @@ static const mode_interface_t* get_interface_for_mode(robot_mode_t mode) {
         case MODE_REMOTE_DRIVE:       return &mode_teleoperation;
         case MODE_AUTONOMOUS_PATH:    return &mode_follow_line;
         case MODE_AUTONOMOUS_OBSTACLE: return &mode_follow_line; // Placeholder
+        case MODE_SUMO:                 return &mode_sumo;
         default:                      return &mode_idle;
     }
 }

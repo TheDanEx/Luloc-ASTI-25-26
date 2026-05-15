@@ -31,6 +31,7 @@ typedef enum {
     MODE_TELEMETRY_STREAM,
     MODE_CALIBRATE_MOTORS,
     MODE_CALIBRATE_LINE,
+    MODE_SUMO,
     MODE_COUNT // Always last
 } robot_mode_t;
 
