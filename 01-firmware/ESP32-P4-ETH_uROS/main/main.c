@@ -35,4 +35,6 @@ void app_main(void)
     printf("[CPU%d] %-40s [ OK ]\n", 1, "Started Monitor Task");
 
     ESP_LOGI(TAG, "System started successfully");
+
+    
 }

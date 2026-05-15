@@ -10,7 +10,6 @@
 #include "freertos/task.h"
 #include "nvs_flash.h"
 
-
 // =============================================================================
 // System Initialization Flow
 // =============================================================================
@@ -50,4 +49,6 @@ void system_init(void)
     printf("[CPU%d] %-40s [ OK ]\n", xPortGetCoreID(), "Started Shared Memory");
     state_machine_init();
     printf("[CPU%d] %-40s [ OK ]\n", xPortGetCoreID(), "Started State Machine");
+
+   
 }
