@@ -1,13 +1,8 @@
 #include "mode_interface.h"
+
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_timer.h"
-
-#include "shared_memory.h"
-#include "telemetry_manager.h"
-#include "state_machine.h"
-#include "mqtt_custom_client.h"
-#include "cJSON.h"
 
 #include "motor.h"
 #include "motor_velocity_ctrl.h"
@@ -18,56 +13,44 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include <stdlib.h>
-#include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 
 // =============================================================================
 // Config
 // =============================================================================
 
-static const char *TAG = "SUMO_MODE";
+static const char *TAG = "SUMO_LIDAR_TEST";
 
-#define LIDAR_UART_PORT     UART_NUM_1
-#define LIDAR_RX_PIN        GPIO_NUM_14
-#define LIDAR_TX_PIN        UART_PIN_NO_CHANGE
+#define LIDAR_UART_PORT      UART_NUM_1
+#define LIDAR_RX_PIN         GPIO_NUM_14
+#define LIDAR_TX_PIN         UART_PIN_NO_CHANGE
 
-#define LIDAR_BAUDRATE      230400
+#define LIDAR_BAUDRATE       230400
 
-#define LIDAR_HEADER        0x54
-#define LIDAR_VER_LEN       0x2C
+#define LIDAR_HEADER         0x54
+#define LIDAR_VER_LEN        0x2C
 
-#define LIDAR_PACKET_SIZE   47
-#define LIDAR_POINTS        12
-#define LIDAR_SCAN_SIZE     360
+#define LIDAR_PACKET_SIZE    47
+#define LIDAR_POINTS         12
+#define LIDAR_SCAN_SIZE      360
 
-#define PRINT_PERIOD_MS     1000
+#define PRINT_PERIOD_MS      1000
 
-#define SUMO_DETECT_DISTANCE_MM 800
+#define MIN_CONFIDENCE       0
 
-#define SUMO_ATTACK_SPEED       0.45f
-#define SUMO_TURN_SPEED         0.30f
-#define SUMO_SEARCH_SPEED       0.22f
-
-// =============================================================================
-// Data structs
-// =============================================================================
-
-typedef struct {
-    bool obj_front;
-    bool obj_right;
-    bool obj_left;
-    bool obj_back;
-} sumo_context_t;
+// Si un punto lleva más de esto sin actualizarse, lo imprimimos como 0.
+// Para depurar puedes subirlo a 2000 o 3000.
+#define POINT_MAX_AGE_MS     1500
 
 // =============================================================================
 // Static state
 // =============================================================================
 
 /*
-    Mapeo del array:
+    Mapeo:
 
     index 0   -> 181º
     index 1   -> 182º
@@ -78,9 +61,19 @@ typedef struct {
     ...
     index 359 -> 180º
 */
-static uint16_t s_lidar_scan[LIDAR_SCAN_SIZE] = {0};
 
-static TaskHandle_t s_lidar_task_handle = NULL;
+static uint16_t s_lidar_scan_mm[LIDAR_SCAN_SIZE] = {0};
+static uint8_t  s_lidar_scan_conf[LIDAR_SCAN_SIZE] = {0};
+static uint32_t s_lidar_scan_ts_ms[LIDAR_SCAN_SIZE] = {0};
+
+static volatile uint32_t s_packets_ok = 0;
+static volatile uint32_t s_packets_bad = 0;
+static volatile uint32_t s_points_ok = 0;
+static volatile uint32_t s_bytes_rx = 0;
+
+static TaskHandle_t s_lidar_rx_task_handle = NULL;
+static TaskHandle_t s_lidar_print_task_handle = NULL;
+
 static bool s_uart_initialized = false;
 
 static portMUX_TYPE s_lidar_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -94,22 +87,28 @@ static uint16_t read_u16_le(const uint8_t *data)
     return (uint16_t)data[0] | ((uint16_t)data[1] << 8);
 }
 
-static int64_t now_ms(void)
+static uint32_t now_ms_u32(void)
 {
-    return esp_timer_get_time() / 1000;
+    return (uint32_t)(esp_timer_get_time() / 1000);
+}
+
+static int normalize_angle_int(int angle)
+{
+    while (angle >= 360) {
+        angle -= 360;
+    }
+
+    while (angle < 0) {
+        angle += 360;
+    }
+
+    return angle;
 }
 
 static int angle_to_centered_index(float angle_deg)
 {
     int angle_i = (int)(angle_deg + 0.5f);
-
-    while (angle_i >= 360) {
-        angle_i -= 360;
-    }
-
-    while (angle_i < 0) {
-        angle_i += 360;
-    }
+    angle_i = normalize_angle_int(angle_i);
 
     if (angle_i >= 181 && angle_i <= 359) {
         return angle_i - 181;
@@ -144,30 +143,54 @@ static bool lidar_packet_basic_valid(const uint8_t packet[LIDAR_PACKET_SIZE])
     uint16_t start_angle_raw = read_u16_le(&packet[4]);
     uint16_t end_angle_raw   = read_u16_le(&packet[42]);
 
-    // Los ángulos vienen en grados * 100.
     if (start_angle_raw >= 36000 || end_angle_raw >= 36000) {
         return false;
     }
 
-    return true;
-}
+    float start_angle = start_angle_raw / 100.0f;
+    float end_angle = end_angle_raw / 100.0f;
 
-static bool distance_is_obstacle(uint16_t distance_mm)
-{
-    if (distance_mm == 0) {
+    float diff = end_angle - start_angle;
+    if (diff < 0.0f) {
+        diff += 360.0f;
+    }
+
+    /*
+        Un paquete normal ocupa pocos grados.
+        Si sale una barbaridad, seguramente hemos perdido sincronía.
+    */
+    if (diff <= 0.0f || diff > 40.0f) {
         return false;
     }
 
-    if (distance_mm > SUMO_DETECT_DISTANCE_MM) {
-        return false;
-    }
-
     return true;
 }
 
-static void lidar_update_scan_point(float angle_deg, uint16_t distance_mm)
+static void lidar_clear_scan(void)
+{
+    portENTER_CRITICAL(&s_lidar_mux);
+
+    memset(s_lidar_scan_mm, 0, sizeof(s_lidar_scan_mm));
+    memset(s_lidar_scan_conf, 0, sizeof(s_lidar_scan_conf));
+    memset(s_lidar_scan_ts_ms, 0, sizeof(s_lidar_scan_ts_ms));
+
+    s_packets_ok = 0;
+    s_packets_bad = 0;
+    s_points_ok = 0;
+    s_bytes_rx = 0;
+
+    portEXIT_CRITICAL(&s_lidar_mux);
+}
+
+static void lidar_update_scan_point(float angle_deg,
+                                    uint16_t distance_mm,
+                                    uint8_t confidence)
 {
     if (distance_mm == 0) {
+        return;
+    }
+
+    if (confidence < MIN_CONFIDENCE) {
         return;
     }
 
@@ -177,8 +200,15 @@ static void lidar_update_scan_point(float angle_deg, uint16_t distance_mm)
         return;
     }
 
+    uint32_t t_ms = now_ms_u32();
+
     portENTER_CRITICAL(&s_lidar_mux);
-    s_lidar_scan[idx] = distance_mm;
+
+    s_lidar_scan_mm[idx] = distance_mm;
+    s_lidar_scan_conf[idx] = confidence;
+    s_lidar_scan_ts_ms[idx] = t_ms;
+    s_points_ok++;
+
     portEXIT_CRITICAL(&s_lidar_mux);
 }
 
@@ -200,164 +230,54 @@ static void lidar_parse_packet_update_scan(const uint8_t packet[LIDAR_PACKET_SIZ
         int packet_idx = 6 + p * 3;
 
         uint16_t distance_mm = read_u16_le(&packet[packet_idx]);
+        uint8_t confidence = packet[packet_idx + 2];
 
         float angle = start_angle_deg +
-                      ((end_angle_for_interp - start_angle_deg) * p) / (LIDAR_POINTS - 1);
+                      ((end_angle_for_interp - start_angle_deg) * (float)p) /
+                      (float)(LIDAR_POINTS - 1);
 
         if (angle >= 360.0f) {
             angle -= 360.0f;
         }
 
-        lidar_update_scan_point(angle, distance_mm);
+        lidar_update_scan_point(angle, distance_mm, confidence);
     }
 }
 
-static void lidar_get_scan_copy(uint16_t out_scan[LIDAR_SCAN_SIZE])
+static void lidar_get_scan_copy(uint16_t out_dist[LIDAR_SCAN_SIZE],
+                                uint8_t out_conf[LIDAR_SCAN_SIZE],
+                                uint32_t out_ts[LIDAR_SCAN_SIZE],
+                                uint32_t *out_packets_ok,
+                                uint32_t *out_packets_bad,
+                                uint32_t *out_points_ok,
+                                uint32_t *out_bytes_rx)
 {
-    if (out_scan == NULL) {
-        return;
-    }
-
-    portENTER_CRITICAL(&s_lidar_mux);
-    memcpy(out_scan, s_lidar_scan, sizeof(s_lidar_scan));
-    portEXIT_CRITICAL(&s_lidar_mux);
-}
-
-static uint16_t get_min_distance_in_angle_range_locked(int angle_start, int angle_end)
-{
-    uint16_t min_distance = 0;
-
-    for (int i = 0; i < LIDAR_SCAN_SIZE; i++) {
-        int angle = centered_index_to_angle(i);
-
-        if (angle < 0) {
-            continue;
-        }
-
-        bool in_range = false;
-
-        if (angle_start <= angle_end) {
-            in_range = (angle >= angle_start && angle <= angle_end);
-        } else {
-            // Rango que cruza por 0º. Ejemplo: 340º..20º
-            in_range = (angle >= angle_start || angle <= angle_end);
-        }
-
-        if (!in_range) {
-            continue;
-        }
-
-        uint16_t distance_mm = s_lidar_scan[i];
-
-        if (!distance_is_obstacle(distance_mm)) {
-            continue;
-        }
-
-        if (min_distance == 0 || distance_mm < min_distance) {
-            min_distance = distance_mm;
-        }
-    }
-
-    return min_distance;
-}
-
-static sumo_context_t logica_sumo(void)
-{
-    sumo_context_t context = {0};
-
-    uint16_t front_min = 0;
-    uint16_t right_min = 0;
-    uint16_t left_min = 0;
-    uint16_t back_min = 0;
-
     portENTER_CRITICAL(&s_lidar_mux);
 
-    front_min = get_min_distance_in_angle_range_locked(340, 20);
-    right_min = get_min_distance_in_angle_range_locked(40, 80);
-    left_min  = get_min_distance_in_angle_range_locked(280, 320);
-    back_min  = get_min_distance_in_angle_range_locked(160, 200);
+    memcpy(out_dist, s_lidar_scan_mm, sizeof(s_lidar_scan_mm));
+    memcpy(out_conf, s_lidar_scan_conf, sizeof(s_lidar_scan_conf));
+    memcpy(out_ts, s_lidar_scan_ts_ms, sizeof(s_lidar_scan_ts_ms));
+
+    if (out_packets_ok)  *out_packets_ok  = s_packets_ok;
+    if (out_packets_bad) *out_packets_bad = s_packets_bad;
+    if (out_points_ok)   *out_points_ok   = s_points_ok;
+    if (out_bytes_rx)    *out_bytes_rx    = s_bytes_rx;
 
     portEXIT_CRITICAL(&s_lidar_mux);
-
-    context.obj_front = (front_min > 0);
-    context.obj_right = (right_min > 0);
-    context.obj_left  = (left_min > 0);
-    context.obj_back  = (back_min > 0);
-
-    return context;
-}
-
-static void lidar_print_scan_once_per_second(void)
-{
-    static int64_t last_print_ms = 0;
-
-    int64_t current_ms = now_ms();
-
-    if ((current_ms - last_print_ms) < PRINT_PERIOD_MS) {
-        return;
-    }
-
-    last_print_ms = current_ms;
-
-    uint16_t scan[LIDAR_SCAN_SIZE];
-    lidar_get_scan_copy(scan);
-
-    printf("\n========== LIDAR 360 ARRAY ==========\n");
-
-    for (int i = 0; i < LIDAR_SCAN_SIZE; i++) {
-        int angle = centered_index_to_angle(i);
-
-        printf("idx=%03d angle=%03d deg distance=%5u mm\n",
-               i,
-               angle,
-               scan[i]);
-    }
-
-    printf("=====================================\n");
-}
-
-static void lidar_print_summary_once_per_second(void)
-{
-    static int64_t last_print_ms = 0;
-
-    int64_t current_ms = now_ms();
-
-    if ((current_ms - last_print_ms) < PRINT_PERIOD_MS) {
-        return;
-    }
-
-    last_print_ms = current_ms;
-
-    uint16_t front_min = 0;
-    uint16_t right_min = 0;
-    uint16_t left_min = 0;
-    uint16_t back_min = 0;
-
-    portENTER_CRITICAL(&s_lidar_mux);
-
-    front_min = get_min_distance_in_angle_range_locked(340, 20);
-    right_min = get_min_distance_in_angle_range_locked(40, 80);
-    left_min  = get_min_distance_in_angle_range_locked(280, 320);
-    back_min  = get_min_distance_in_angle_range_locked(160, 200);
-
-    portEXIT_CRITICAL(&s_lidar_mux);
-
-    printf("\n========== SUMO LIDAR SUMMARY ==========\n");
-    printf("FRONT 340..020 deg: %u mm\n", front_min);
-    printf("RIGHT 040..080 deg: %u mm\n", right_min);
-    printf("LEFT  280..320 deg: %u mm\n", left_min);
-    printf("BACK  160..200 deg: %u mm\n", back_min);
-    printf("========================================\n");
 }
 
 // =============================================================================
-// LiDAR task
+// LiDAR RX task
 // =============================================================================
 
-static void lidar_task(void *arg)
+static void lidar_rx_task(void *arg)
 {
+    (void)arg;
+
     uint8_t packet[LIDAR_PACKET_SIZE];
     int packet_pos = 0;
+
+    ESP_LOGI(TAG, "LiDAR RX task started");
 
     while (1) {
         uint8_t byte = 0;
@@ -374,23 +294,33 @@ static void lidar_task(void *arg)
             continue;
         }
 
+        portENTER_CRITICAL(&s_lidar_mux);
+        s_bytes_rx += (uint32_t)len;
+        portEXIT_CRITICAL(&s_lidar_mux);
+
         if (packet_pos == 0) {
             if (byte == LIDAR_HEADER) {
-                packet[packet_pos++] = byte;
+                packet[0] = byte;
+                packet_pos = 1;
             }
             continue;
         }
 
         if (packet_pos == 1) {
             if (byte == LIDAR_VER_LEN) {
-                packet[packet_pos++] = byte;
+                packet[1] = byte;
+                packet_pos = 2;
+            } else if (byte == LIDAR_HEADER) {
+                packet[0] = byte;
+                packet_pos = 1;
             } else {
                 packet_pos = 0;
             }
             continue;
         }
 
-        packet[packet_pos++] = byte;
+        packet[packet_pos] = byte;
+        packet_pos++;
 
         if (packet_pos < LIDAR_PACKET_SIZE) {
             continue;
@@ -399,23 +329,113 @@ static void lidar_task(void *arg)
         packet_pos = 0;
 
         if (!lidar_packet_basic_valid(packet)) {
+            portENTER_CRITICAL(&s_lidar_mux);
+            s_packets_bad++;
+            portEXIT_CRITICAL(&s_lidar_mux);
             continue;
         }
 
+        portENTER_CRITICAL(&s_lidar_mux);
+        s_packets_ok++;
+        portEXIT_CRITICAL(&s_lidar_mux);
+
         lidar_parse_packet_update_scan(packet);
 
-        // Para depurar el array entero:
-        // lidar_print_scan_once_per_second();
-
-        // Para no saturar logs:
-        lidar_print_summary_once_per_second();
-
-        vTaskDelay(pdMS_TO_TICKS(1));
+        /*
+            No imprimir aquí.
+            Esta tarea debe leer UART lo más rápido posible.
+        */
     }
 }
 
 // =============================================================================
-// UART init/deinit
+// LiDAR print task
+// =============================================================================
+
+static void lidar_print_task(void *arg)
+{
+    (void)arg;
+
+    uint16_t dist[LIDAR_SCAN_SIZE];
+    uint8_t conf[LIDAR_SCAN_SIZE];
+    uint32_t ts[LIDAR_SCAN_SIZE];
+
+    ESP_LOGI(TAG, "LiDAR print task started");
+
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(PRINT_PERIOD_MS));
+
+        uint32_t current_ms = now_ms_u32();
+
+        uint32_t packets_ok = 0;
+        uint32_t packets_bad = 0;
+        uint32_t points_ok = 0;
+        uint32_t bytes_rx = 0;
+
+        lidar_get_scan_copy(
+            dist,
+            conf,
+            ts,
+            &packets_ok,
+            &packets_bad,
+            &points_ok,
+            &bytes_rx
+        );
+
+        uint16_t nonzero_count = 0;
+
+        for (int i = 0; i < LIDAR_SCAN_SIZE; i++) {
+            if (dist[i] > 0 && ts[i] > 0 && (current_ms - ts[i]) <= POINT_MAX_AGE_MS) {
+                nonzero_count++;
+            }
+        }
+
+        printf("\n========== LIDAR 360 ARRAY ==========\n");
+        printf("packets_ok=%lu packets_bad=%lu points_ok=%lu bytes_rx=%lu nonzero_angles=%u\n",
+               (unsigned long)packets_ok,
+               (unsigned long)packets_bad,
+               (unsigned long)points_ok,
+               (unsigned long)bytes_rx,
+               nonzero_count);
+
+        /*
+            Array completo en una sola línea.
+            Orden:
+            [181, 182, ..., 359, 0, 1, ..., 180]
+        */
+        // printf("angles=[");
+        // for (int i = 0; i < LIDAR_SCAN_SIZE; i++) {
+        //     int angle = centered_index_to_angle(i);
+        //     printf("%d", angle);
+        //     if (i < LIDAR_SCAN_SIZE - 1) {
+        //         printf(",");
+        //     }
+        // }
+        // printf("]\n");
+
+        printf("dist_mm=[");
+
+        for (int i = 0; i < LIDAR_SCAN_SIZE; i++) {
+            uint16_t value = 0;
+
+            if (dist[i] > 0 && ts[i] > 0 && (current_ms - ts[i]) <= POINT_MAX_AGE_MS) {
+                value = dist[i];
+            }
+
+            printf("%u\n", value);
+
+            if (i < LIDAR_SCAN_SIZE - 1) {
+                printf(",");
+            }
+        }
+
+        printf("]\n");
+        printf("=====================================\n");
+    }
+}
+
+// =============================================================================
+// UART init / task start-stop
 // =============================================================================
 
 static esp_err_t lidar_uart_start(void)
@@ -434,11 +454,11 @@ static esp_err_t lidar_uart_start(void)
         .source_clk = UART_SCLK_DEFAULT,
     };
 
-    esp_err_t err;
+    esp_err_t err = ESP_OK;
 
     err = uart_driver_install(
         LIDAR_UART_PORT,
-        4096,
+        8192,
         0,
         0,
         NULL,
@@ -480,28 +500,55 @@ static esp_err_t lidar_uart_start(void)
     return ESP_OK;
 }
 
-static void lidar_task_start(void)
+static void lidar_tasks_start(void)
 {
-    if (s_lidar_task_handle != NULL) {
-        return;
+    if (s_lidar_rx_task_handle == NULL) {
+        BaseType_t ok = xTaskCreatePinnedToCore(
+            lidar_rx_task,
+            "lidar_rx_task",
+            4096,
+            NULL,
+            4,
+            &s_lidar_rx_task_handle,
+            1
+        );
+
+        if (ok != pdPASS) {
+            ESP_LOGE(TAG, "No se pudo crear lidar_rx_task");
+            s_lidar_rx_task_handle = NULL;
+        }
     }
 
-    xTaskCreatePinnedToCore(
-        lidar_task,
-        "sumo_lidar_task",
-        4096,
-        NULL,
-        2,
-        &s_lidar_task_handle,
-        1
-    );
+    //solo para debug, no imprimir en cada ejecución normal del modo sumo
+    if (s_lidar_print_task_handle == NULL) {
+        BaseType_t ok = xTaskCreatePinnedToCore(
+            lidar_print_task,
+            "lidar_print_task",
+            8192,
+            NULL,
+            1,
+            &s_lidar_print_task_handle,
+            1
+        );
+
+        if (ok != pdPASS) {
+            ESP_LOGE(TAG, "No se pudo crear lidar_print_task");
+            s_lidar_print_task_handle = NULL;
+        }
+    }
 }
 
-static void lidar_task_stop(void)
+static void lidar_tasks_stop(void)
 {
-    if (s_lidar_task_handle != NULL) {
-        TaskHandle_t task = s_lidar_task_handle;
-        s_lidar_task_handle = NULL;
+    if (s_lidar_rx_task_handle != NULL) {
+        TaskHandle_t task = s_lidar_rx_task_handle;
+        s_lidar_rx_task_handle = NULL;
+        vTaskDelete(task);
+    }
+
+    if (s_lidar_print_task_handle != NULL) {
+        TaskHandle_t task = s_lidar_print_task_handle;
+        s_lidar_print_task_handle = NULL;
         vTaskDelete(task);
     }
 }
@@ -512,14 +559,12 @@ static void lidar_task_stop(void)
 
 static void enter(void)
 {
-    ESP_LOGI(TAG, "Entering SUMO mode");
+    ESP_LOGI(TAG, "Entering SUMO LiDAR test mode");
 
-    portENTER_CRITICAL(&s_lidar_mux);
-    memset(s_lidar_scan, 0, sizeof(s_lidar_scan));
-    portEXIT_CRITICAL(&s_lidar_mux);
+    lidar_clear_scan();
 
     if (lidar_uart_start() == ESP_OK) {
-        lidar_task_start();
+        lidar_tasks_start();
     }
 }
 
@@ -528,80 +573,22 @@ static void execute(motor_driver_mcpwm_t* motors,
                     motor_velocity_ctrl_handle_t ctrl_right,
                     float dt_s)
 {
-    shared_memory_t* shm = shared_memory_get();
-    if (shm == NULL) {
-        return;
-    }
+    (void)ctrl_left;
+    (void)ctrl_right;
+    (void)dt_s;
 
-    float bat_mv = 16800.0f;
-    float cur_spd_left = 0.0f;
-    float cur_spd_right = 0.0f;
-
-    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
-        bat_mv = shm->sensors.battery_voltage;
-        cur_spd_left = shm->sensors.motor_speed_left;
-        cur_spd_right = shm->sensors.motor_speed_right;
-        xSemaphoreGive(shm->mutex);
-    }
-
-    if (bat_mv < 5000.0f) {
-        bat_mv = 16800.0f;
-    }
-
-    float target_left = 0.0f;
-    float target_right = 0.0f;
-
-    sumo_context_t context = logica_sumo();
-
-    if (context.obj_front) {
-        target_left = SUMO_ATTACK_SPEED;
-        target_right = SUMO_ATTACK_SPEED;
-    } else if (context.obj_right) {
-        target_left = SUMO_TURN_SPEED;
-        target_right = -SUMO_TURN_SPEED;
-    } else if (context.obj_left) {
-        target_left = -SUMO_TURN_SPEED;
-        target_right = SUMO_TURN_SPEED;
-    } 
-    // else if (context.obj_back) {
-    //     target_left = SUMO_TURN_SPEED;
-    //     target_right = -SUMO_TURN_SPEED;
-    // } 
-    else {
-        target_left = SUMO_SEARCH_SPEED;
-        target_right = -SUMO_SEARCH_SPEED;
-    }
-
-    motor_velocity_input_t input_l = {
-        .target_speed = target_left,
-        .current_speed = cur_spd_left,
-        .battery_mv = bat_mv
-    };
-
-    motor_velocity_input_t input_r = {
-        .target_speed = target_right,
-        .current_speed = cur_spd_right,
-        .battery_mv = bat_mv
-    };
-
-    float raw_pwm_l = 0.0f;
-    float raw_pwm_r = 0.0f;
-
-    motor_velocity_ctrl_update(ctrl_left,  &input_l, dt_s, &raw_pwm_l, NULL);
-    motor_velocity_ctrl_update(ctrl_right, &input_r, dt_s, &raw_pwm_r, NULL);
-
-    motor_mcpwm_set(
-        motors,
-        (int16_t)(raw_pwm_l * 10.0f),
-        (int16_t)(raw_pwm_r * 10.0f)
-    );
+    /*
+        Modo prueba:
+        motores siempre parados.
+    */
+    motor_mcpwm_set(motors, 0, 0);
 }
 
 static void exit_mode(motor_driver_mcpwm_t* motors)
 {
-    ESP_LOGI(TAG, "Exiting SUMO mode");
+    ESP_LOGI(TAG, "Exiting SUMO LiDAR test mode");
 
-    lidar_task_stop();
+    lidar_tasks_stop();
 
     motor_mcpwm_stop(motors);
 }
