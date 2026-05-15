@@ -11,7 +11,6 @@
 #include <stdlib.h>
 #include "encoder_sensor.h"
 #include "line_sensor.h"
-#include "lidar_uart_test.h"
 
 static const char *TAG = "rt_cntrl";
 
@@ -136,8 +135,7 @@ static void task_rtcontrol_cpu0(void *arg)
     line_sensor_calibration_start(line_array); // Start auto-calibration 
 
     modes_init();
-    lidar_init();
-    printf("[CPU%d] %-40s [ OK ]\n", xPortGetCoreID(), "Started LiDAR UART");
+    
     const float dt = (float)CONFIG_ROBOT_CONTROL_PERIOD_MS / 1000.0f;
     const TickType_t poll_rate = pdMS_TO_TICKS(CONFIG_ROBOT_CONTROL_PERIOD_MS); 
 

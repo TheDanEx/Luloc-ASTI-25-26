@@ -2,14 +2,14 @@
 
 Cada paquete que envia el lidar por el uart corresponde a:
 
-byte 0 = 0x54
-byte 1 = 0x2C
-byte 2-3 = speed
-byte 4-5 = start_angle
-byte 6-41 = 12 mediciones
-byte 42-43 = end_angle
-byte 44-45 = timestamp
-byte 46 = crc
+packet[0] = 0x54
+packet[1] = 0x2C
+packet[2..3] = speed
+packet[4..5] = start_angle
+packet[6..41] = 12 puntos (cada uno de 2 bytes)
+packet[42..43] = end_angle
+packet[44..45] = timestamp
+packet[46] = crc
 
 Cada paquete contiene 12 medionces entre el angulo start_angle y el angulo end_angle
 
