@@ -13,24 +13,66 @@ static const char *TAG = "LIDAR";
 
 static void lidar_task(void *arg)
 {
-    uint8_t data[256];
+    uint8_t header = 0;
+    uint8_t ver_len = 0;
+    uint8_t packet[47];
 
     while (1) {
 
+        // 1. Buscar cabecera 0x54
         int len = uart_read_bytes(
             LIDAR_UART_PORT,
-            data,
-            sizeof(data),
+            &header,
+            1,
             pdMS_TO_TICKS(100)
         );
 
-        if (len > 0) {
-            ESP_LOGI(TAG, "Bytes recibidos: %d", len);
-            ESP_LOG_BUFFER_HEX(TAG, data, len);
+        if (len <= 0) {
+            continue;
         }
+
+        if (header != 0x54) {
+            continue;
+        }
+
+        // 2. Leer segundo byte y comprobar que es 0x2C
+        len = uart_read_bytes(
+            LIDAR_UART_PORT,
+            &ver_len,
+            1,
+            pdMS_TO_TICKS(100)
+        );
+
+        if (len <= 0) {
+            continue;
+        }
+
+        if (ver_len != 0x2C) {
+            continue;
+        }
+
+        // 3. Guardar cabecera en el paquete
+        packet[0] = header;
+        packet[1] = ver_len;
+
+        // 4. Leer los 45 bytes restantes
+        int read_len = uart_read_bytes(
+            LIDAR_UART_PORT,
+            &packet[2],
+            45,
+            pdMS_TO_TICKS(100)
+        );
+
+        if (read_len != 45) {
+            ESP_LOGW(TAG, "Paquete incompleto: %d bytes", read_len);
+            continue;
+        }
+
+        // 5. Imprimir paquete completo
+        ESP_LOGI(TAG, "Paquete LiDAR completo:");
+        ESP_LOG_BUFFER_HEX(TAG, packet, sizeof(packet));
     }
 }
-
 void lidar_init(void)
 {
     uart_config_t uart_config = {
