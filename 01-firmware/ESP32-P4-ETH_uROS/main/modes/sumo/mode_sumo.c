@@ -9,22 +9,23 @@
 
 #include "driver/uart.h"
 #include "driver/gpio.h"
-
+#include "mqtt_custom_client.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "shared_memory.h"
 #include "telemetry_manager.h"
 
+#include "cJSON.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-
+#include <inttypes.h>
 // =============================================================================
 // Config
 // =============================================================================
 
-static const char *TAG = "SUMO_LIDAR_TEST";
+static const char *TAG = "MODE_SUMO";
 
 #define LIDAR_UART_PORT      UART_NUM_1
 #define LIDAR_RX_PIN         GPIO_NUM_14
@@ -40,7 +41,7 @@ static const char *TAG = "SUMO_LIDAR_TEST";
 #define LIDAR_SCAN_SIZE      360
 
 #define ANGLE_INI_POS        40 //en esta posicion esta el angulo 181+40=221
-#define ANGLE_END_POS        320 //en esta posicion esta el angulo 180-40=140
+#define ANGLE_END_POS        280 //en esta posicion esta el angulo 180-40=140
 
 #define VALID_SCAN_SIZE      280
 
@@ -48,22 +49,17 @@ static const char *TAG = "SUMO_LIDAR_TEST";
 
 #define MIN_CONFIDENCE       5
 
-#define WHEEL_BASE_M 0.170f
-#define V_BASE 0.5f
-#define V_MAX 1.5f
-#define W_BASE 0.5f
-#define W_MAX 1.5f
-#define KP_LINEAL 0.1f
-#define KP_ANGULAR 0.1f
-
+#define WHEEL_BASE_M        0.170f
 
 //el tiempo total de giro para que le de tiempo a girar 180 grados
-#define TOTAL_GIRO_180 20000
-
+#define TOTAL_GIRO_180      20000
 
 // Si un punto lleva más de esto sin actualizarse, lo imprimimos como 0.
 // Para depurar puedes subirlo a 2000 o 3000.
 #define POINT_MAX_AGE_MS     1500
+
+#define CONFIG_TOPIC    "robot/config/sumo"
+
 
 // =============================================================================
 // Static state
@@ -99,7 +95,73 @@ static bool s_uart_initialized = false;
 static portMUX_TYPE s_lidar_mux = portMUX_INITIALIZER_UNLOCKED;
 
 static bool giro_180 = false;
-static uint32_t contador_giro_180 = 0;
+
+static uint32_t s_giro_180_start_ms = 0;
+
+// =============================================================================
+// MQTT CONFIG
+// =============================================================================
+
+typedef struct {
+    float kp_v;
+    float kp_w;
+    float max_v;
+    float max_w;
+    float base_v;
+    float base_w;
+    uint32_t tiempo_giro_180_ms;
+} sumo_logic_config_t;
+
+static sumo_logic_config_t s_current_config = {
+    .kp_v = 0.01f, 
+    .kp_w = 0.01f, 
+    .max_v = 1.0f,
+    .max_w = 1.0f,
+    .base_v = 0.5f,
+    .base_w = 0.5f,
+    .tiempo_giro_180_ms = 2000
+};
+
+static void mqtt_config_callback(const char *topic, int topic_len, const char *data, int data_len) {
+    if (data == NULL || data_len <= 0 || data_len > 1024) return;
+    
+    cJSON *root = cJSON_ParseWithLength(data, data_len);
+    if (root == NULL) return;
+
+    cJSON *kp_v = cJSON_GetObjectItem(root, "kp_v");
+    cJSON *kp_w = cJSON_GetObjectItem(root, "kp_w");
+    cJSON *max_v = cJSON_GetObjectItem(root, "max_v");
+    cJSON *max_w = cJSON_GetObjectItem(root, "max_w");
+    cJSON *base_v = cJSON_GetObjectItem(root, "base_v");
+    cJSON *base_w = cJSON_GetObjectItem(root, "base_w");
+    cJSON *tiempo_giro_180_ms = cJSON_GetObjectItem(root, "tiempo_giro_180_ms");
+
+    if (kp_v) s_current_config.kp_v = kp_v->valuedouble;
+    if (kp_w) s_current_config.kp_w = kp_w->valuedouble;
+    if (max_v) s_current_config.max_v = max_v->valuedouble;
+    if (max_w) s_current_config.max_w = max_w->valuedouble;
+    if (base_v) s_current_config.base_v = base_v->valuedouble;
+    if (base_w) s_current_config.base_w = base_w->valuedouble;
+    if (cJSON_IsNumber(tiempo_giro_180_ms) && tiempo_giro_180_ms->valueint >= 0) {
+        s_current_config.tiempo_giro_180_ms = (uint32_t)tiempo_giro_180_ms->valueint;
+    }
+    ESP_LOGI(TAG,
+         "Dynamic Config Updated: kp_v=%.3f kp_w=%.3f max_v=%.3f max_w=%.3f base_v=%.3f base_w=%.3f tiempo_giro_180_ms=%" PRIu32,
+         s_current_config.kp_v,
+         s_current_config.kp_w,
+         s_current_config.max_v,
+         s_current_config.max_w,
+         s_current_config.base_v,
+         s_current_config.base_w,
+         s_current_config.tiempo_giro_180_ms);
+
+
+
+    cJSON_Delete(root);
+}
+
+
+
 
 // =============================================================================
 // Helpers
@@ -640,31 +702,27 @@ void sumo(float* vL, float* vR){
 
     if(pos_object==0 && dist_object==0){    //no he encontrado el objeto, por lo que giro a la izquierda
         v=0;
-        w=W_BASE;
+        w=s_current_config.base_w;
         *vL = v-(w*WHEEL_BASE_M/2.0f);
         *vR = v+(w*WHEEL_BASE_M/2.0f);
         return;
     }
 
-
     uint8_t pos_centro = VALID_SCAN_SIZE/2;
-
     int8_t dif_centro = pos_object-pos_centro;  
-
-    
 
     if(dif_centro>-5&&dif_centro<5){
         dif_centro=1;
     }else{
-        w = W_BASE + KP_ANGULAR*dif_centro; //no hace falta mirar si es izquierda o derecha porque ya lo dice el signo
-        if(w>W_MAX){
-            w=W_MAX;
+        w = s_current_config.base_w + s_current_config.kp_w*dif_centro; //no hace falta mirar si es izquierda o derecha porque ya lo dice el signo
+        if(w>s_current_config.max_w){
+            w=s_current_config.max_w;
         }
     }
 
-    v = V_BASE + KP_LINEAL*dist_object*(1.0f/abs(dif_centro));
-    if(v>V_MAX){
-        v=V_MAX;
+    v = s_current_config.base_v + s_current_config.kp_v*dist_object*(1.0f/abs(dif_centro));
+    if(v>s_current_config.max_v){
+        v=s_current_config.max_v;
     }
 
     *vL = v-(w*WHEEL_BASE_M/2.0f);
@@ -681,7 +739,7 @@ static void enter(void)
     ESP_LOGI(TAG, "Entering SUMO LiDAR test mode");
 
     lidar_clear_scan();
-
+    mqtt_custom_client_register_topic_callback(CONFIG_TOPIC,    mqtt_config_callback);
     if (lidar_uart_start() == ESP_OK) {
         lidar_tasks_start();
     }
@@ -705,15 +763,18 @@ static void execute(motor_driver_mcpwm_t* motors,
     float bat_mv = shm->sensors.battery_voltage;
     xSemaphoreGive(shm->mutex);
 
-    if (detected) giro_180=true;
+    if (detected) {
+        giro_180=true;
+        s_giro_180_start_ms = now_ms_u32();
+    }
 
     float vL=0;
     float vR=0;
 
     if(giro_180){
-        if(contador_giro_180>= TOTAL_GIRO_180){
-            contador_giro_180 = 0;
-            giro_180 = false;
+        if(now_ms_u32()-s_giro_180_start_ms>=s_current_config.tiempo_giro_180_ms){
+            giro_180=false;
+            contador_giro_180=0;
             vL = 0;
             vR = 0;
         }else{
