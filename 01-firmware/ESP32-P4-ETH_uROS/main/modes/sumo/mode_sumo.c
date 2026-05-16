@@ -14,6 +14,7 @@
 #include "freertos/task.h"
 #include "shared_memory.h"
 #include "telemetry_manager.h"
+#include "audio_player.h"
 
 #include "cJSON.h"
 #include <stdint.h>
@@ -764,6 +765,7 @@ static void execute(motor_driver_mcpwm_t* motors,
     xSemaphoreGive(shm->mutex);
 
     if (detected) {
+        audio_player_play(DEMACIA);
         giro_180=true;
         s_giro_180_start_ms = now_ms_u32();
     }
@@ -774,13 +776,11 @@ static void execute(motor_driver_mcpwm_t* motors,
     if(giro_180){
         if(now_ms_u32()-s_giro_180_start_ms>=s_current_config.tiempo_giro_180_ms){
             giro_180=false;
-            contador_giro_180=0;
             vL = 0;
             vR = 0;
         }else{
             vL=-1;
             vR=1;
-            contador_giro_180++;
         }
     }else{
         sumo(&vL,&vR);
