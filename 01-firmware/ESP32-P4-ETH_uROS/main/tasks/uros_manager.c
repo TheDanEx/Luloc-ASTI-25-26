@@ -90,6 +90,10 @@ static void mode_callback(const void *msvin)
         audio_player_play(HOLA);
         ESP_LOGI(TAG, "Playing hola sound");
         return;
+    }else if ( mode_id == 13){
+        audio_player_play(DEMACIA);
+        ESP_LOGI(TAG, "Playing demacia sound");
+        return;
     }else if (mode_id < 0 || mode_id >= MODE_COUNT) {
         ESP_LOGW(TAG, "Ignoring invalid mode id: %d", mode_id);
         return;

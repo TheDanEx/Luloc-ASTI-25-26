@@ -53,6 +53,9 @@ extern const uint8_t tokyo_pcm_end[]   asm("_binary_tokyo_drift_pcm_end");
 extern const uint8_t hola_pcm_start[] asm("_binary_hola_pcm_start");
 extern const uint8_t hola_pcm_end[]   asm("_binary_hola_pcm_end");
 
+extern const uint8_t demacia_pcm_start[] asm("_binary_demacia_pcm_start");
+extern const uint8_t demacia_pcm_end[]   asm("_binary_demacia_pcm_end");
+
 typedef struct {
     const uint8_t *start;
     const uint8_t *end;
@@ -85,6 +88,11 @@ static sound_asset_t get_sound_asset(audio_sound_t sound) {
         case HOLA:
             asset.start = hola_pcm_start;
             asset.end = hola_pcm_end;
+            asset.volume = 70;
+            break;
+        case DEMACIA:
+            asset.start = demacia_pcm_start;
+            asset.end = demacia_pcm_end;
             asset.volume = 70;
             break;
         default:
