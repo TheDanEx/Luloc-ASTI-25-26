@@ -12,6 +12,8 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "shared_memory.h"
+#include "telemetry_manager.h"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -37,9 +39,27 @@ static const char *TAG = "SUMO_LIDAR_TEST";
 #define LIDAR_POINTS         12
 #define LIDAR_SCAN_SIZE      360
 
+#define ANGLE_INI_POS        40 //en esta posicion esta el angulo 181+40=221
+#define ANGLE_END_POS        320 //en esta posicion esta el angulo 180-40=140
+
+#define VALID_SCAN_SIZE      280
+
 #define PRINT_PERIOD_MS      1000
 
-#define MIN_CONFIDENCE       0
+#define MIN_CONFIDENCE       5
+
+#define WHEEL_BASE_M 0.170f
+#define V_BASE 0.5f
+#define V_MAX 1.5f
+#define W_BASE 0.5f
+#define W_MAX 1.5f
+#define KP_LINEAL 0.1f
+#define KP_ANGULAR 0.1f
+
+
+//el tiempo total de giro para que le de tiempo a girar 180 grados
+#define TOTAL_GIRO_180 20000
+
 
 // Si un punto lleva más de esto sin actualizarse, lo imprimimos como 0.
 // Para depurar puedes subirlo a 2000 o 3000.
@@ -77,6 +97,9 @@ static TaskHandle_t s_lidar_print_task_handle = NULL;
 static bool s_uart_initialized = false;
 
 static portMUX_TYPE s_lidar_mux = portMUX_INITIALIZER_UNLOCKED;
+
+static bool giro_180 = false;
+static uint32_t contador_giro_180 = 0;
 
 // =============================================================================
 // Helpers
@@ -553,6 +576,102 @@ static void lidar_tasks_stop(void)
     }
 }
 
+
+// =============================================================================
+// LOGICA SUMO
+// =============================================================================
+
+void find_closest_object(uint16_t array_lidar[], uint16_t* pos_object, uint16_t* dist_object){
+    uint16_t pos_ini_objeto;
+    uint16_t pos_end_objeto;
+    *dist_object=1000;
+
+    for(int i=0;i<VALID_SCAN_SIZE;i++){
+        if(array_lidar[i]<*dist_object && array_lidar[i]>0){  //si el punto es más cercano que el más cercano encontrado hasta ahora, y es un punto válido (distancia > 0)
+            pos_ini_objeto=i;
+            while(i<VALID_SCAN_SIZE && array_lidar[i]<1000){
+                i++;
+            }
+            pos_end_objeto=i;
+            *pos_object=(pos_ini_objeto+pos_end_objeto)/2;
+            *dist_object = array_lidar[*pos_object];
+        }
+    }
+}
+
+
+void sumo(float* vL, float* vR){
+      
+    uint16_t dist[LIDAR_SCAN_SIZE];
+    uint8_t conf[LIDAR_SCAN_SIZE];
+    uint32_t ts[LIDAR_SCAN_SIZE];
+    uint32_t packets_ok = 0;
+    uint32_t packets_bad = 0;
+    uint32_t points_ok = 0;
+    uint32_t bytes_rx = 0;
+
+    lidar_get_scan_copy(
+        dist,
+        conf,
+        ts,
+        &packets_ok,
+        &packets_bad,
+        &points_ok,
+        &bytes_rx
+    );
+    
+    //Descarto la parte trasera del lidar, ya que esta el robot, y me quedo con los puntos desde ANGLE_INI_POS hasta ANGLE_END
+    uint16_t array_lidar[VALID_SCAN_SIZE];
+    uint16_t pos_real_array=0;
+
+    for(int i=0;i<VALID_SCAN_SIZE;i++){
+        if(i>=ANGLE_INI_POS && i<=ANGLE_END_POS){
+            array_lidar[pos_real_array]=dist[i];
+            pos_real_array++;
+        }
+    }
+
+    uint16_t pos_object=0;
+    uint16_t dist_object=0;
+    float v=0;
+    float w=0;
+
+    find_closest_object(array_lidar,&pos_object,&dist_object);
+
+    if(pos_object==0 && dist_object==0){    //no he encontrado el objeto, por lo que giro a la izquierda
+        v=0;
+        w=W_BASE;
+        *vL = v-(w*WHEEL_BASE_M/2.0f);
+        *vR = v+(w*WHEEL_BASE_M/2.0f);
+        return;
+    }
+
+
+    uint8_t pos_centro = VALID_SCAN_SIZE/2;
+
+    int8_t dif_centro = pos_object-pos_centro;  
+
+    
+
+    if(dif_centro>-5&&dif_centro<5){
+        dif_centro=1;
+    }else{
+        w = W_BASE + KP_ANGULAR*dif_centro; //no hace falta mirar si es izquierda o derecha porque ya lo dice el signo
+        if(w>W_MAX){
+            w=W_MAX;
+        }
+    }
+
+    v = V_BASE + KP_LINEAL*dist_object*(1.0f/abs(dif_centro));
+    if(v>V_MAX){
+        v=V_MAX;
+    }
+
+    *vL = v-(w*WHEEL_BASE_M/2.0f);
+    *vR = v+(w*WHEEL_BASE_M/2.0f);
+    
+}
+
 // =============================================================================
 // Mode callbacks
 // =============================================================================
@@ -573,15 +692,47 @@ static void execute(motor_driver_mcpwm_t* motors,
                     motor_velocity_ctrl_handle_t ctrl_right,
                     float dt_s)
 {
-    (void)ctrl_left;
-    (void)ctrl_right;
+
     (void)dt_s;
 
-    /*
-        Modo prueba:
-        motores siempre parados.
-    */
-    motor_mcpwm_set(motors, 0, 0);
+    shared_memory_t* shm = shared_memory_get();
+    
+    // 1. Read Inputs (TODO NATIVO EN METROS Y METROS/SEGUNDO)
+    xSemaphoreTake(shm->mutex, portMAX_DELAY);
+    bool detected = shm->sensors.line_detected;
+    float cur_l = shm->sensors.motor_speed_left;
+    float cur_r = -shm->sensors.motor_speed_right;
+    float bat_mv = shm->sensors.battery_voltage;
+    xSemaphoreGive(shm->mutex);
+
+    if (detected) giro_180=true;
+
+    float vL=0;
+    float vR=0;
+
+    if(giro_180){
+        if(contador_giro_180>= TOTAL_GIRO_180){
+            contador_giro_180 = 0;
+            giro_180 = false;
+            vL = 0;
+            vR = 0;
+        }else{
+            vL=-1;
+            vR=1;
+            contador_giro_180++;
+        }
+    }else{
+        sumo(&vL,&vR);
+    }
+
+    motor_velocity_input_t motor_l = { .target_speed = vL, .current_speed = cur_l, .battery_mv = bat_mv };
+    motor_velocity_input_t motor_r = { .target_speed = vR, .current_speed = cur_r, .battery_mv = bat_mv };
+
+    float pwm_l, pwm_r;
+    motor_velocity_ctrl_update(ctrl_left,  &motor_l, dt_s, &pwm_l, NULL);
+    motor_velocity_ctrl_update(ctrl_right, &motor_r, dt_s, &pwm_r, NULL);
+
+    motor_mcpwm_set(motors, (int16_t)(pwm_l * 10.0f), (int16_t)(pwm_r * 10.0f));
 }
 
 static void exit_mode(motor_driver_mcpwm_t* motors)
