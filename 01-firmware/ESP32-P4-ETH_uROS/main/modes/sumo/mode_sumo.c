@@ -38,7 +38,7 @@ static const char *TAG = "MODE_SUMO";
 
 #define LIDAR_PACKET_SIZE    47
 #define LIDAR_POINTS         12
-#define LIDAR_SCAN_SIZE      360
+#define LIDAR_SCAN_SIZE      720
 
 #define ANGLE_INI_POS        40 //en esta posicion esta el angulo 181+40=221
 #define ANGLE_END_POS        320 //en esta posicion esta el angulo 180-40=140
@@ -70,14 +70,17 @@ static const char *TAG = "MODE_SUMO";
 /*
     Mapeo:
 
-    index 0   -> 181º
-    index 1   -> 182º
+    index 0   -> 0
+    index 1   -> 0.5º
+    index 2   -> 1º
+    index 3   -> 1.5º
+    index 4   -> 2º
+    index 5   -> 2.5º
+    index 6  -> 3º
+    index 7  -> 3.5º
     ...
-    index 178 -> 359º
-    index 179 -> 0º
-    index 180 -> 1º
-    ...
-    index 359 -> 180º
+    index 718 -> 359º
+    index 719 -> 359.5º
 */
 
 static uint16_t s_lidar_scan_mm[LIDAR_SCAN_SIZE] = {0};
@@ -193,30 +196,40 @@ static uint32_t now_ms_u32(void)
     return (uint32_t)(esp_timer_get_time() / 1000);
 }
 
-static int normalize_angle_int(int angle)
+static int normalize_angle_int(float angle)
 {
-    while (angle >= 360) {
-        angle -= 360;
+    while (angle >= 360.0) {
+        angle -= 360.0;
     }
 
     while (angle < 0) {
-        angle += 360;
+        angle += 360.0;
     }
 
-    return angle;
-}
-
-static int angle_to_centered_index(float angle_deg)
-{
-    int angle_i = (int)(angle_deg + 0.5f);
-    angle_i = normalize_angle_int(angle_i);
-
-    if (angle_i >= 181 && angle_i <= 359) {
-        return angle_i - 181;
+    int angle_int = (int)(angle * 2.0f);
+    
+    if (angle_int % 2 != 0) {
+        // ESP_LOGE(TAG,"Es un angulo decimal: %.2f", angle);
+        angle_int++; // Es un numero decimal
     }
+    return angle_int;
 
-    return angle_i + 179;
+    
 }
+
+// static int angle_to_centered_index(float angle_deg)
+// {
+//     int angle_i = (int)(angle_deg + 0.5f);
+//     angle_i = normalize_angle_int(angle_i);
+
+//     if (angle_i >= 181 && angle_i <= 359) {
+//         return angle_i - 181;
+//     }
+
+//     return angle_i + 179;
+
+
+// }
 
 static int centered_index_to_angle(int index)
 {
@@ -295,7 +308,7 @@ static void lidar_update_scan_point(float angle_deg,
         return;
     }
 
-    int idx = angle_to_centered_index(angle_deg);
+    int idx = normalize_angle_int(angle_deg);
 
     if (idx < 0 || idx >= LIDAR_SCAN_SIZE) {
         return;
@@ -334,8 +347,7 @@ static void lidar_parse_packet_update_scan(const uint8_t packet[LIDAR_PACKET_SIZ
         uint8_t confidence = packet[packet_idx + 2];
 
         float angle = start_angle_deg +
-                      ((end_angle_for_interp - start_angle_deg) * (float)p) /
-                      (float)(LIDAR_POINTS - 1);
+                      ((end_angle_for_interp - start_angle_deg) * (float)p) /(float)(LIDAR_POINTS - 1);
 
         if (angle >= 360.0f) {
             angle -= 360.0f;
@@ -495,7 +507,7 @@ static void lidar_print_task(void *arg)
             }
         }
 
-        printf("\n========== LIDAR 360 ARRAY ==========\n");
+        printf("\n========== LIDAR 720 ARRAY ==========\n");
         printf("packets_ok=%lu packets_bad=%lu points_ok=%lu bytes_rx=%lu nonzero_angles=%u\n",
                (unsigned long)packets_ok,
                (unsigned long)packets_bad,
@@ -508,15 +520,15 @@ static void lidar_print_task(void *arg)
             Orden:
             [181, 182, ..., 359, 0, 1, ..., 180]
         */
-        // printf("angles=[");
-        // for (int i = 0; i < LIDAR_SCAN_SIZE; i++) {
-        //     int angle = centered_index_to_angle(i);
-        //     printf("%d", angle);
-        //     if (i < LIDAR_SCAN_SIZE - 1) {
-        //         printf(",");
-        //     }
-        // }
-        // printf("]\n");
+        printf("angles=[");
+        for (int i = 0; i < LIDAR_SCAN_SIZE; i++) {
+            int angle = centered_index_to_angle(i);
+            printf("%d", angle);
+            if (i < LIDAR_SCAN_SIZE - 1) {
+                printf(",");
+            }
+        }
+        printf("]\n");
 
         printf("dist_mm=[");
 
@@ -626,22 +638,22 @@ static void lidar_tasks_start(void)
     }
 
     //solo para debug, no imprimir en cada ejecución normal del modo sumo
-    // if (s_lidar_print_task_handle == NULL) {
-    //     BaseType_t ok = xTaskCreatePinnedToCore(
-    //         lidar_print_task,
-    //         "lidar_print_task",
-    //         8192,
-    //         NULL,
-    //         1,
-    //         &s_lidar_print_task_handle,
-    //         1
-    //     );
+    if (s_lidar_print_task_handle == NULL) {
+        BaseType_t ok = xTaskCreatePinnedToCore(
+            lidar_print_task,
+            "lidar_print_task",
+            8192,
+            NULL,
+            1,
+            &s_lidar_print_task_handle,
+            1
+        );
 
-    //     if (ok != pdPASS) {
-    //         ESP_LOGE(TAG, "No se pudo crear lidar_print_task");
-    //         s_lidar_print_task_handle = NULL;
-    //     }
-    // }
+        if (ok != pdPASS) {
+            ESP_LOGE(TAG, "No se pudo crear lidar_print_task");
+            s_lidar_print_task_handle = NULL;
+        }
+    }
 }
 
 static void lidar_tasks_stop(void)
@@ -832,63 +844,64 @@ static void execute(motor_driver_mcpwm_t* motors,
                     float dt_s)
 {
 
-    (void)dt_s;
-    float vL;
-    float vR;
-    shared_memory_t* shm = shared_memory_get();
+    // (void)dt_s;
+    // float vL;
+    // float vR;
+    // shared_memory_t* shm = shared_memory_get();
     
-    if (shm == NULL) {
-        ESP_LOGW(TAG, "shared_memory_get() returned NULL");
-        return;
-    }
+    // if (shm == NULL) {
+    //     ESP_LOGW(TAG, "shared_memory_get() returned NULL");
+    //     return;
+    // }
 
-    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(10)) != pdTRUE) {
-        ESP_LOGW(TAG, "Timeout leyendo shared memory");
-        return;
-    }
-    bool detected = shm->sensors.line_detected;
-    float cur_l = shm->sensors.motor_speed_left;
-    float cur_r = -shm->sensors.motor_speed_right;
-    float bat_mv = shm->sensors.battery_voltage;
+    // if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(10)) != pdTRUE) {
+    //     ESP_LOGW(TAG, "Timeout leyendo shared memory");
+    //     return;
+    // }
+    // bool detected = shm->sensors.line_detected;
+    // float cur_l = shm->sensors.motor_speed_left;
+    // float cur_r = -shm->sensors.motor_speed_right;
+    // float bat_mv = shm->sensors.battery_voltage;
 
-    xSemaphoreGive(shm->mutex);
+    // xSemaphoreGive(shm->mutex);
+    // //desactivo temporalmente la detección de línea para probar solo la lógica de sumo con el lidar
+    // detected = false;
+    // if (detected && !giro_180) {
+    //     ESP_LOGI(TAG, "Línea detectada, iniciando giro de 180 grados");
+    //     giro_180 = true;
+    //     s_giro_180_start_ms = now_ms_u32();
+    // }
 
-    if (detected && !giro_180) {
-        ESP_LOGI(TAG, "Línea detectada, iniciando giro de 180 grados");
-        giro_180 = true;
-        s_giro_180_start_ms = now_ms_u32();
-    }
+    // if (giro_180) {
+    //     uint32_t elapsed = now_ms_u32() - s_giro_180_start_ms;
+    //     //si se ha detectado la linea, freno los motores, voy hacia atras durante 400ms para alejarme de la linea, y luego giro sobre mi mismo hasta completar el tiempo total de giro
+    //     if (elapsed >= s_current_config.tiempo_giro_180_ms) {
+    //         giro_180 = false;
+    //         vL = 0.0f;
+    //         vR = 0.0f;
+    //     } else if (elapsed < 400) {
+    //         vL = -s_current_config.base_v;
+    //         vR = -s_current_config.base_v;
+    //     } else {
+    //         float w = s_current_config.max_w;
+    //         if (w == 0.0f) {
+    //             w = s_current_config.base_w > 0.0f ? s_current_config.base_w : 0.8f;
+    //         }
+    //         vL = -w * WHEEL_BASE_M / 2.0f;
+    //         vR =  w * WHEEL_BASE_M / 2.0f;
+    //     }
+    // } else {
+    //     sumo(&vL, &vR);
+    // }
 
-    if (giro_180) {
-        uint32_t elapsed = now_ms_u32() - s_giro_180_start_ms;
-        //si se ha detectado la linea, freno los motores, voy hacia atras durante 400ms para alejarme de la linea, y luego giro sobre mi mismo hasta completar el tiempo total de giro
-        if (elapsed >= s_current_config.tiempo_giro_180_ms) {
-            giro_180 = false;
-            vL = 0.0f;
-            vR = 0.0f;
-        } else if (elapsed < 400) {
-            vL = -s_current_config.base_v;
-            vR = -s_current_config.base_v;
-        } else {
-            float w = s_current_config.max_w;
-            if (w == 0.0f) {
-                w = s_current_config.base_w > 0.0f ? s_current_config.base_w : 0.8f;
-            }
-            vL = -w * WHEEL_BASE_M / 2.0f;
-            vR =  w * WHEEL_BASE_M / 2.0f;
-        }
-    } else {
-        sumo(&vL, &vR);
-    }
+    // motor_velocity_input_t motor_l = { .target_speed = vL, .current_speed = cur_l, .battery_mv = bat_mv };
+    // motor_velocity_input_t motor_r = { .target_speed = vR, .current_speed = cur_r, .battery_mv = bat_mv };
 
-    motor_velocity_input_t motor_l = { .target_speed = vL, .current_speed = cur_l, .battery_mv = bat_mv };
-    motor_velocity_input_t motor_r = { .target_speed = vR, .current_speed = cur_r, .battery_mv = bat_mv };
+    // float pwm_l, pwm_r;
+    // motor_velocity_ctrl_update(ctrl_left,  &motor_l, dt_s, &pwm_l, NULL);
+    // motor_velocity_ctrl_update(ctrl_right, &motor_r, dt_s, &pwm_r, NULL);
 
-    float pwm_l, pwm_r;
-    motor_velocity_ctrl_update(ctrl_left,  &motor_l, dt_s, &pwm_l, NULL);
-    motor_velocity_ctrl_update(ctrl_right, &motor_r, dt_s, &pwm_r, NULL);
-
-    motor_mcpwm_set(motors, (int16_t)(pwm_l * 10.0f), (int16_t)(pwm_r * 10.0f));
+    // motor_mcpwm_set(motors, (int16_t)(pwm_l * 10.0f), (int16_t)(pwm_r * 10.0f));
 }
 
 static void exit_mode(motor_driver_mcpwm_t* motors)
