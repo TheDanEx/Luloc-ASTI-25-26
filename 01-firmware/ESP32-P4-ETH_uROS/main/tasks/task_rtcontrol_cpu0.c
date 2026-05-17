@@ -193,5 +193,5 @@ static void task_rtcontrol_cpu0(void *arg)
 
 void task_rtcontrol_cpu0_start(void)
 {
-    xTaskCreatePinnedToCore(task_rtcontrol_cpu0, "rtcontrol_cpu0", 4096, NULL, 10, NULL, 0);
+    xTaskCreatePinnedToCore(task_rtcontrol_cpu0, "rtcontrol_cpu0", 8192, NULL, 10, NULL, 0);
 }

@@ -13,7 +13,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "shared_memory.h"
-#include "telemetry_manager.h"
 #include "audio_player.h"
 
 #include "cJSON.h"
@@ -46,7 +45,7 @@ static const char *TAG = "MODE_SUMO";
 #define VALID_SCAN_SIZE       (ANGLE_END_POS - ANGLE_INI_POS + 1)
 
 #define OBJECT_MAX_DIST_MM 1000
-#define UMBRAL_CENTRO 5
+#define UMBRAL_CENTRO 2
 
 #define PRINT_PERIOD_MS      1000
 
@@ -93,13 +92,28 @@ static volatile uint32_t s_bytes_rx = 0;
 static TaskHandle_t s_lidar_rx_task_handle = NULL;
 static TaskHandle_t s_lidar_print_task_handle = NULL;
 
+
+
 static bool s_uart_initialized = false;
 
 static portMUX_TYPE s_lidar_mux = portMUX_INITIALIZER_UNLOCKED;
 
 static bool giro_180 = false;
-
+static volatile bool stop_task = false;
 static uint32_t s_giro_180_start_ms = 0;
+
+
+static uint16_t s_sumo_dist[LIDAR_SCAN_SIZE];
+static uint8_t  s_sumo_conf[LIDAR_SCAN_SIZE];
+static uint32_t s_sumo_ts[LIDAR_SCAN_SIZE];
+
+static uint16_t s_sumo_array_lidar[VALID_SCAN_SIZE];
+
+uint32_t time_delta_debug = 1000;
+
+uint32_t t_debug_enemy_not_f = 0;
+uint32_t t_debug_frente = 0;
+uint32_t t_debug_enemy_f = 0;
 
 // =============================================================================
 // MQTT CONFIG
@@ -122,10 +136,11 @@ static sumo_logic_config_t s_current_config = {
     .max_w = 1.0f,
     .base_v = 0.5f,
     .base_w = 0.5f,
-    .tiempo_giro_180_ms = 2000
+    .tiempo_giro_180_ms = 3000
 };
 
 static void mqtt_config_callback(const char *topic, int topic_len, const char *data, int data_len) {
+    // ESP_LOGI(TAG, "Received MQTT config update (len=%d): %.*s", data_len, data_len, data);
     if (data == NULL || data_len <= 0 || data_len > 1024) return;
     
     cJSON *root = cJSON_ParseWithLength(data, data_len);
@@ -365,14 +380,14 @@ static void lidar_rx_task(void *arg)
 
     ESP_LOGI(TAG, "LiDAR RX task started");
 
-    while (1) {
+    while (!stop_task) {
         uint8_t byte = 0;
 
         int len = uart_read_bytes(
             LIDAR_UART_PORT,
             &byte,
             1,
-            pdMS_TO_TICKS(100)
+            pdMS_TO_TICKS(20)
         );
 
         if (len <= 0) {
@@ -431,7 +446,11 @@ static void lidar_rx_task(void *arg)
             No imprimir aquí.
             Esta tarea debe leer UART lo más rápido posible.
         */
+        
     }
+    ESP_LOGI(TAG, "LiDAR RX task stopped");
+    s_lidar_rx_task_handle = NULL;
+    vTaskDelete(NULL);
 }
 
 // =============================================================================
@@ -588,13 +607,14 @@ static esp_err_t lidar_uart_start(void)
 
 static void lidar_tasks_start(void)
 {
+    stop_task = false;
     if (s_lidar_rx_task_handle == NULL) {
         BaseType_t ok = xTaskCreatePinnedToCore(
             lidar_rx_task,
             "lidar_rx_task",
             4096,
             NULL,
-            4,
+            2,
             &s_lidar_rx_task_handle,
             1
         );
@@ -626,17 +646,19 @@ static void lidar_tasks_start(void)
 
 static void lidar_tasks_stop(void)
 {
-    if (s_lidar_rx_task_handle != NULL) {
-        TaskHandle_t task = s_lidar_rx_task_handle;
-        s_lidar_rx_task_handle = NULL;
-        vTaskDelete(task);
+    stop_task = true;
+    uart_flush_input(LIDAR_UART_PORT);
+
+    for (int i = 0; i < 20; i++) {
+        if (s_lidar_rx_task_handle == NULL) {
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 
-    // if (s_lidar_print_task_handle != NULL) {
-    //     TaskHandle_t task = s_lidar_print_task_handle;
-    //     s_lidar_print_task_handle = NULL;
-    //     vTaskDelete(task);
-    // }
+    if (s_lidar_rx_task_handle != NULL) {
+        ESP_LOGW(TAG, "LiDAR RX task no se ha parado todavía");
+    }
 }
 
 
@@ -698,20 +720,18 @@ bool find_closest_object(uint16_t array_lidar[],
 }
 
 
+
 void sumo(float* vL, float* vR){
       
-    uint16_t dist[LIDAR_SCAN_SIZE];
-    uint8_t conf[LIDAR_SCAN_SIZE];
-    uint32_t ts[LIDAR_SCAN_SIZE];
     uint32_t packets_ok = 0;
     uint32_t packets_bad = 0;
     uint32_t points_ok = 0;
     uint32_t bytes_rx = 0;
 
     lidar_get_scan_copy(
-        dist,
-        conf,
-        ts,
+        s_sumo_dist,
+        s_sumo_conf,
+        s_sumo_ts,
         &packets_ok,
         &packets_bad,
         &points_ok,
@@ -719,20 +739,20 @@ void sumo(float* vL, float* vR){
     );
     
     //Descarto la parte trasera del lidar, ya que esta el robot, y me quedo con los puntos desde ANGLE_INI_POS hasta ANGLE_END
-    uint16_t array_lidar[VALID_SCAN_SIZE];
     uint16_t pos_real_array=0;
 
     uint32_t current_ms = now_ms_u32();
+    memset(s_sumo_array_lidar, 0, sizeof(s_sumo_array_lidar));
 
     for (int i = 0; i < LIDAR_SCAN_SIZE; i++) {
         if (i >= ANGLE_INI_POS && i <= ANGLE_END_POS &&
-            dist[i] > 0 &&
-            ts[i] > 0 &&
-            (current_ms - ts[i]) <= POINT_MAX_AGE_MS)
+            s_sumo_dist[i] > 0 &&
+            s_sumo_ts[i] > 0 &&
+            (current_ms - s_sumo_ts[i]) <= POINT_MAX_AGE_MS)
         {
-            array_lidar[pos_real_array++] = dist[i];
+            s_sumo_array_lidar[pos_real_array++] = s_sumo_dist[i];
         } else if (i >= ANGLE_INI_POS && i <= ANGLE_END_POS) {
-            array_lidar[pos_real_array++] = 0;
+            s_sumo_array_lidar[pos_real_array++] = 0;
         }
     }
     uint16_t pos_object=0;
@@ -740,10 +760,13 @@ void sumo(float* vL, float* vR){
     float v=0;
     float w=0;
 
-    bool found = find_closest_object(array_lidar,&pos_object,&dist_object);
+    bool found = find_closest_object(s_sumo_array_lidar,&pos_object,&dist_object);
 
     if (!found) {
-        ESP_LOGI(TAG, "No se detecta objetivo, buscando...");
+        if(now_ms_u32()-t_debug_enemy_not_f>time_delta_debug){
+            t_debug_enemy_not_f=now_ms_u32();
+            ESP_LOGI(TAG, "No se detecta objetivo, buscando...");
+        }
         v = 0.0f;
         w = s_current_config.max_w;
         if (w == 0.0f) {
@@ -758,8 +781,12 @@ void sumo(float* vL, float* vR){
     int pos_centro = VALID_SCAN_SIZE/2;
     int dif_centro = pos_object-pos_centro;  
     float v_direccion_frente=0;
-
+    if(now_ms_u32()-t_debug_enemy_f>time_delta_debug){
+            t_debug_enemy_f=now_ms_u32();
+            ESP_LOGI(TAG, "Enemigo detectado en %d...", pos_object);
+        }
     if(dif_centro>-UMBRAL_CENTRO&&dif_centro<UMBRAL_CENTRO){
+        
         dif_centro=1;
         v_direccion_frente=0.5f;
     }else{
@@ -788,9 +815,12 @@ void sumo(float* vL, float* vR){
 static void enter(void)
 {
     ESP_LOGI(TAG, "Entering SUMO LiDAR test mode");
-
+    
     lidar_clear_scan();
-    mqtt_custom_client_register_topic_callback(CONFIG_TOPIC,    mqtt_config_callback);
+    mqtt_custom_client_register_topic_callback(CONFIG_TOPIC, mqtt_config_callback);
+    if (mqtt_custom_client_is_connected()) {
+        mqtt_custom_client_subscribe(CONFIG_TOPIC, 0);
+    }
     if (lidar_uart_start() == ESP_OK) {
         lidar_tasks_start();
     }
@@ -830,9 +860,8 @@ static void execute(motor_driver_mcpwm_t* motors,
     }
 
     if (giro_180) {
-        ESP_LOGI(TAG, "Giro de 180 grados en curso");
         uint32_t elapsed = now_ms_u32() - s_giro_180_start_ms;
-
+        //si se ha detectado la linea, freno los motores, voy hacia atras durante 400ms para alejarme de la linea, y luego giro sobre mi mismo hasta completar el tiempo total de giro
         if (elapsed >= s_current_config.tiempo_giro_180_ms) {
             giro_180 = false;
             vL = 0.0f;
@@ -865,10 +894,9 @@ static void execute(motor_driver_mcpwm_t* motors,
 static void exit_mode(motor_driver_mcpwm_t* motors)
 {
     ESP_LOGI(TAG, "Exiting SUMO LiDAR test mode");
-
-    lidar_tasks_stop();
-
     motor_mcpwm_stop(motors);
+    lidar_tasks_stop();
+    giro_180 = false;
 }
 
 const mode_interface_t mode_sumo = {
