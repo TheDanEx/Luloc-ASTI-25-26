@@ -110,7 +110,7 @@ static uint32_t s_sumo_ts[LIDAR_SCAN_SIZE];
 static uint16_t s_sumo_array_lidar[VALID_SCAN_SIZE];
 
 uint32_t time_delta_debug = 1000;
-
+uint32_t td_debug_obj_pos = 200;
 uint32_t t_debug_enemy_not_f = 0;
 uint32_t t_debug_frente = 0;
 uint32_t t_debug_enemy_f = 0;
@@ -781,9 +781,9 @@ void sumo(float* vL, float* vR){
     int pos_centro = VALID_SCAN_SIZE/2;
     int dif_centro = pos_object-pos_centro;  
     float v_direccion_frente=0;
-    if(now_ms_u32()-t_debug_enemy_f>time_delta_debug){
+    if(now_ms_u32()-t_debug_enemy_f>td_debug_obj_pos){
             t_debug_enemy_f=now_ms_u32();
-            ESP_LOGI(TAG, "Enemigo detectado en %d...", pos_object);
+            ESP_LOGI(TAG, "Enemigo detectado en la poscion %d del vector a %d mm de distancia", pos_object, dist_object);
         }
     if(dif_centro>-UMBRAL_CENTRO&&dif_centro<UMBRAL_CENTRO){
         
