@@ -37,6 +37,7 @@ const mode_config_t mode_config_table[] = {
     { .mode = MODE_AUTONOMOUS_PATH,    .sensor_mask = SENSOR_ODOMETRY | SENSOR_LiDAR | SENSOR_LINE },
     { .mode = MODE_AUTONOMOUS_OBSTACLE,.sensor_mask = SENSOR_LiDAR },
     { .mode = MODE_REMOTE_DRIVE,       .sensor_mask = SENSOR_ODOMETRY },
+    { .mode = MODE_SUMO,                .sensor_mask = SENSOR_LiDAR },
     // Telemetry stream uses SENSOR_TEST for this initial test
     { .mode = MODE_TELEMETRY_STREAM,   .sensor_mask = SENSOR_TEST },
     // Calibration Modes

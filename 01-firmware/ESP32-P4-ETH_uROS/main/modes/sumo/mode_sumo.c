@@ -42,9 +42,11 @@ static const char *TAG = "MODE_SUMO";
 #define LIDAR_SCAN_SIZE      360
 
 #define ANGLE_INI_POS        40 //en esta posicion esta el angulo 181+40=221
-#define ANGLE_END_POS        280 //en esta posicion esta el angulo 180-40=140
+#define ANGLE_END_POS        320 //en esta posicion esta el angulo 180-40=140
+#define VALID_SCAN_SIZE       (ANGLE_END_POS - ANGLE_INI_POS + 1)
 
-#define VALID_SCAN_SIZE      280
+#define OBJECT_MAX_DIST_MM 1000
+#define UMBRAL_CENTRO 5
 
 #define PRINT_PERIOD_MS      1000
 
@@ -155,8 +157,6 @@ static void mqtt_config_callback(const char *topic, int topic_len, const char *d
          s_current_config.base_v,
          s_current_config.base_w,
          s_current_config.tiempo_giro_180_ms);
-
-
 
     cJSON_Delete(root);
 }
@@ -606,22 +606,22 @@ static void lidar_tasks_start(void)
     }
 
     //solo para debug, no imprimir en cada ejecución normal del modo sumo
-    if (s_lidar_print_task_handle == NULL) {
-        BaseType_t ok = xTaskCreatePinnedToCore(
-            lidar_print_task,
-            "lidar_print_task",
-            8192,
-            NULL,
-            1,
-            &s_lidar_print_task_handle,
-            1
-        );
+    // if (s_lidar_print_task_handle == NULL) {
+    //     BaseType_t ok = xTaskCreatePinnedToCore(
+    //         lidar_print_task,
+    //         "lidar_print_task",
+    //         8192,
+    //         NULL,
+    //         1,
+    //         &s_lidar_print_task_handle,
+    //         1
+    //     );
 
-        if (ok != pdPASS) {
-            ESP_LOGE(TAG, "No se pudo crear lidar_print_task");
-            s_lidar_print_task_handle = NULL;
-        }
-    }
+    //     if (ok != pdPASS) {
+    //         ESP_LOGE(TAG, "No se pudo crear lidar_print_task");
+    //         s_lidar_print_task_handle = NULL;
+    //     }
+    // }
 }
 
 static void lidar_tasks_stop(void)
@@ -632,11 +632,11 @@ static void lidar_tasks_stop(void)
         vTaskDelete(task);
     }
 
-    if (s_lidar_print_task_handle != NULL) {
-        TaskHandle_t task = s_lidar_print_task_handle;
-        s_lidar_print_task_handle = NULL;
-        vTaskDelete(task);
-    }
+    // if (s_lidar_print_task_handle != NULL) {
+    //     TaskHandle_t task = s_lidar_print_task_handle;
+    //     s_lidar_print_task_handle = NULL;
+    //     vTaskDelete(task);
+    // }
 }
 
 
@@ -644,22 +644,57 @@ static void lidar_tasks_stop(void)
 // LOGICA SUMO
 // =============================================================================
 
-void find_closest_object(uint16_t array_lidar[], uint16_t* pos_object, uint16_t* dist_object){
+bool find_closest_object(uint16_t array_lidar[],
+                         uint16_t* pos_object,
+                         uint16_t* dist_object)
+{
     uint16_t pos_ini_objeto;
     uint16_t pos_end_objeto;
-    *dist_object=1000;
 
-    for(int i=0;i<VALID_SCAN_SIZE;i++){
-        if(array_lidar[i]<*dist_object && array_lidar[i]>0){  //si el punto es más cercano que el más cercano encontrado hasta ahora, y es un punto válido (distancia > 0)
-            pos_ini_objeto=i;
-            while(i<VALID_SCAN_SIZE && array_lidar[i]<1000){
+    *dist_object = 0;
+    *pos_object = 0;
+
+    uint16_t best_dist = UINT16_MAX;
+    bool found = false;
+
+    for (int i = 0; i < VALID_SCAN_SIZE; i++) {
+
+        if (array_lidar[i] < best_dist && array_lidar[i] > 0) {
+
+            pos_ini_objeto = i;
+
+            while (i < VALID_SCAN_SIZE && array_lidar[i] < OBJECT_MAX_DIST_MM) {
                 i++;
             }
-            pos_end_objeto=i;
-            *pos_object=(pos_ini_objeto+pos_end_objeto)/2;
-            *dist_object = array_lidar[*pos_object];
+
+            pos_end_objeto = i;
+
+            uint32_t suma_distancias = 0;
+            uint16_t puntos_validos = 0;
+
+            for (int j = pos_ini_objeto; j < pos_end_objeto; j++) {
+                if (array_lidar[j] > 0) {
+                    suma_distancias += array_lidar[j];
+                    puntos_validos++;
+                }
+            }
+
+            if (puntos_validos == 0) {
+                continue;
+            }
+
+            uint16_t media_distancia = suma_distancias / puntos_validos;
+
+            if (media_distancia < best_dist) {
+                *pos_object = (pos_end_objeto + pos_ini_objeto) / 2;
+                *dist_object = media_distancia;
+                best_dist = media_distancia;
+                found = true;
+            }
         }
     }
+
+    return found;
 }
 
 
@@ -687,41 +722,56 @@ void sumo(float* vL, float* vR){
     uint16_t array_lidar[VALID_SCAN_SIZE];
     uint16_t pos_real_array=0;
 
-    for(int i=0;i<VALID_SCAN_SIZE;i++){
-        if(i>=ANGLE_INI_POS && i<=ANGLE_END_POS){
-            array_lidar[pos_real_array]=dist[i];
-            pos_real_array++;
+    uint32_t current_ms = now_ms_u32();
+
+    for (int i = 0; i < LIDAR_SCAN_SIZE; i++) {
+        if (i >= ANGLE_INI_POS && i <= ANGLE_END_POS &&
+            dist[i] > 0 &&
+            ts[i] > 0 &&
+            (current_ms - ts[i]) <= POINT_MAX_AGE_MS)
+        {
+            array_lidar[pos_real_array++] = dist[i];
+        } else if (i >= ANGLE_INI_POS && i <= ANGLE_END_POS) {
+            array_lidar[pos_real_array++] = 0;
         }
     }
-
     uint16_t pos_object=0;
     uint16_t dist_object=0;
     float v=0;
     float w=0;
 
-    find_closest_object(array_lidar,&pos_object,&dist_object);
+    bool found = find_closest_object(array_lidar,&pos_object,&dist_object);
 
-    if(pos_object==0 && dist_object==0){    //no he encontrado el objeto, por lo que giro a la izquierda
-        v=0;
-        w=s_current_config.base_w;
-        *vL = v-(w*WHEEL_BASE_M/2.0f);
-        *vR = v+(w*WHEEL_BASE_M/2.0f);
+    if (!found) {
+        ESP_LOGI(TAG, "No se detecta objetivo, buscando...");
+        v = 0.0f;
+        w = s_current_config.max_w;
+        if (w == 0.0f) {
+            w = s_current_config.base_w > 0.0f ? s_current_config.base_w : 0.6f;
+        }
+
+        *vL = -w * WHEEL_BASE_M / 2.0f;
+        *vR =  w * WHEEL_BASE_M / 2.0f;
         return;
     }
 
-    uint8_t pos_centro = VALID_SCAN_SIZE/2;
-    int8_t dif_centro = pos_object-pos_centro;  
+    int pos_centro = VALID_SCAN_SIZE/2;
+    int dif_centro = pos_object-pos_centro;  
+    float v_direccion_frente=0;
 
-    if(dif_centro>-5&&dif_centro<5){
+    if(dif_centro>-UMBRAL_CENTRO&&dif_centro<UMBRAL_CENTRO){
         dif_centro=1;
+        v_direccion_frente=0.5f;
     }else{
         w = s_current_config.base_w + s_current_config.kp_w*dif_centro; //no hace falta mirar si es izquierda o derecha porque ya lo dice el signo
-        if(w>s_current_config.max_w){
-            w=s_current_config.max_w;
+        if (w > s_current_config.max_w) {
+            w = s_current_config.max_w;
+        } else if (w < -s_current_config.max_w) {
+            w = -s_current_config.max_w;
         }
     }
 
-    v = s_current_config.base_v + s_current_config.kp_v*dist_object*(1.0f/abs(dif_centro));
+    v = v_direccion_frente+ s_current_config.kp_v*dist_object*(1.0f/abs(dif_centro));
     if(v>s_current_config.max_v){
         v=s_current_config.max_v;
     }
@@ -753,37 +803,53 @@ static void execute(motor_driver_mcpwm_t* motors,
 {
 
     (void)dt_s;
-
+    float vL;
+    float vR;
     shared_memory_t* shm = shared_memory_get();
     
-    // 1. Read Inputs (TODO NATIVO EN METROS Y METROS/SEGUNDO)
-    xSemaphoreTake(shm->mutex, portMAX_DELAY);
+    if (shm == NULL) {
+        ESP_LOGW(TAG, "shared_memory_get() returned NULL");
+        return;
+    }
+
+    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(10)) != pdTRUE) {
+        ESP_LOGW(TAG, "Timeout leyendo shared memory");
+        return;
+    }
     bool detected = shm->sensors.line_detected;
     float cur_l = shm->sensors.motor_speed_left;
     float cur_r = -shm->sensors.motor_speed_right;
     float bat_mv = shm->sensors.battery_voltage;
+
     xSemaphoreGive(shm->mutex);
 
-    if (detected) {
-        audio_player_play(DEMACIA);
-        giro_180=true;
+    if (detected && !giro_180) {
+        ESP_LOGI(TAG, "Línea detectada, iniciando giro de 180 grados");
+        giro_180 = true;
         s_giro_180_start_ms = now_ms_u32();
     }
 
-    float vL=0;
-    float vR=0;
+    if (giro_180) {
+        ESP_LOGI(TAG, "Giro de 180 grados en curso");
+        uint32_t elapsed = now_ms_u32() - s_giro_180_start_ms;
 
-    if(giro_180){
-        if(now_ms_u32()-s_giro_180_start_ms>=s_current_config.tiempo_giro_180_ms){
-            giro_180=false;
-            vL = 0;
-            vR = 0;
-        }else{
-            vL=-1;
-            vR=1;
+        if (elapsed >= s_current_config.tiempo_giro_180_ms) {
+            giro_180 = false;
+            vL = 0.0f;
+            vR = 0.0f;
+        } else if (elapsed < 400) {
+            vL = -s_current_config.base_v;
+            vR = -s_current_config.base_v;
+        } else {
+            float w = s_current_config.max_w;
+            if (w == 0.0f) {
+                w = s_current_config.base_w > 0.0f ? s_current_config.base_w : 0.8f;
+            }
+            vL = -w * WHEEL_BASE_M / 2.0f;
+            vR =  w * WHEEL_BASE_M / 2.0f;
         }
-    }else{
-        sumo(&vL,&vR);
+    } else {
+        sumo(&vL, &vR);
     }
 
     motor_velocity_input_t motor_l = { .target_speed = vL, .current_speed = cur_l, .battery_mv = bat_mv };
