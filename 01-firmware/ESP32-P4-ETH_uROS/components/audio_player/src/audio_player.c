@@ -56,6 +56,15 @@ extern const uint8_t hola_pcm_end[]   asm("_binary_hola_pcm_end");
 extern const uint8_t demacia_pcm_start[] asm("_binary_demacia_pcm_start");
 extern const uint8_t demacia_pcm_end[]   asm("_binary_demacia_pcm_end");
 
+extern const uint8_t round_1_pcm_start[] asm("_binary_round_1_fight_pcm_start");
+extern const uint8_t round_1_pcm_end[]   asm("_binary_round_1_fight_pcm_end");
+
+extern const uint8_t round_2_pcm_start[] asm("_binary_round_2_fight_pcm_start");
+extern const uint8_t round_2_pcm_end[]   asm("_binary_round_2_fight_pcm_end");
+
+extern const uint8_t round_3_pcm_start[] asm("_binary_round_3_fight_pcm_start");
+extern const uint8_t round_3_pcm_end[]   asm("_binary_round_3_fight_pcm_end");
+
 typedef struct {
     const uint8_t *start;
     const uint8_t *end;
@@ -94,6 +103,21 @@ static sound_asset_t get_sound_asset(audio_sound_t sound) {
             asset.start = demacia_pcm_start;
             asset.end = demacia_pcm_end;
             asset.volume = 70;
+            break;
+        case ROUND_1:
+            asset.start = round_1_pcm_start;
+            asset.end = round_1_pcm_end;
+            asset.volume = 80;
+            break;
+        case ROUND_2:
+            asset.start = round_2_pcm_start;
+            asset.end = round_2_pcm_end;
+            asset.volume = 80;
+            break;
+        case ROUND_3:
+            asset.start = round_3_pcm_start;
+            asset.end = round_3_pcm_end;
+            asset.volume = 80;
             break;
         default:
             break;

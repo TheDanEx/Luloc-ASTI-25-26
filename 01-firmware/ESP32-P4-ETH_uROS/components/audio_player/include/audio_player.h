@@ -22,6 +22,9 @@ typedef enum {
     TOKYO,
     HOLA,
     DEMACIA,
+    ROUND_1,
+    ROUND_2,
+    ROUND_3,
     SOUND_MAX
 } audio_sound_t;
 

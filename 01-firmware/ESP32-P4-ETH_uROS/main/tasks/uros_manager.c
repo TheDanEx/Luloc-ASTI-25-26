@@ -94,6 +94,18 @@ static void mode_callback(const void *msvin)
         audio_player_play(DEMACIA);
         ESP_LOGI(TAG, "Playing demacia sound");
         return;
+    }else if ( mode_id == 14){
+        audio_player_play(ROUND_1);
+        ESP_LOGI(TAG, "Playing round 1 sound");
+        mode_id = 7;
+    }else if ( mode_id == 15){
+        audio_player_play(ROUND_2);
+        ESP_LOGI(TAG, "Playing round 2 sound");
+        mode_id = 7;
+    }else if ( mode_id == 16){
+        audio_player_play(ROUND_3);
+        ESP_LOGI(TAG, "Playing round 3 sound");
+        mode_id = 7;
     }else if (mode_id < 0 || mode_id >= MODE_COUNT) {
         ESP_LOGW(TAG, "Ignoring invalid mode id: %d", mode_id);
         return;

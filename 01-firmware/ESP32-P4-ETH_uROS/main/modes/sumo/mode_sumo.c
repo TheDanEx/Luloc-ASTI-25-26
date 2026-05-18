@@ -132,15 +132,24 @@ typedef struct {
     uint32_t tiempo_giro_180_ms;
     uint8_t umbral_centro;
 } sumo_logic_config_t;
-
+// {
+//     "kp_v" : 0.0, 
+//     "kp_w" : 0.04, 
+//     "max_v" : 0.5,
+//     "max_w" : 3.0,
+//     "base_v" : 1.5,
+//     "base_w" : 0.8,
+//     "tiempo_giro_180_ms" : 2000,
+//     "umbral_centro": 15
+// }
 static sumo_logic_config_t s_current_config = {
-    .kp_v = 0.01f, 
-    .kp_w = 0.01f, 
-    .max_v = 1.2f,
+    .kp_v = 0.0f, 
+    .kp_w = 0.04f, 
+    .max_v = 0.5f,
     .max_w = 3.0f,
-    .base_v = 0.3f,
-    .base_w = 0.5f,
-    .tiempo_giro_180_ms = 3000,
+    .base_v = 1.5f,
+    .base_w = 0.8f,
+    .tiempo_giro_180_ms = 2000,
     .umbral_centro = 15
 };
 
@@ -816,19 +825,24 @@ void sumo(float* vL, float* vR){
         if(dif_centro>-s_current_config.umbral_centro&&dif_centro<s_current_config.umbral_centro){
             ESP_LOGI(TAG, "ATACOO El objetivo está centrado. Dif centro: %d", dif_centro);
         }else{
-            if(dif_centro<0){
+            if(dif_centro>0){
                 ESP_LOGI(TAG,"Giro izquierda. Dif centro: %d", dif_centro);
             }else{
                 ESP_LOGI(TAG,"Giro derecha. Dif centro: %d", dif_centro);    
             }
-        }
+            }
     }
     if(dif_centro>-s_current_config.umbral_centro&&dif_centro<s_current_config.umbral_centro){
-       
+        w=0;
         v=s_current_config.max_v;
         dif_centro=1;
+        // audio_player_play(DEMACIA);
     }else{
-        w = s_current_config.base_w + s_current_config.kp_w*dif_centro; //no hace falta mirar si es izquierda o derecha porque ya lo dice el signo
+        int base_w = s_current_config.base_w;
+        if(dif_centro<0){
+            base_w=-base_w;
+        }
+        w = base_w + s_current_config.kp_w*dif_centro; //no hace falta mirar si es izquierda o derecha porque ya lo dice el signo
         if (w > s_current_config.max_w) {
             w = s_current_config.max_w;
         } else if (w < -s_current_config.max_w) {
@@ -861,12 +875,12 @@ void sumo(float* vL, float* vR){
 
 static void enter(void)
 {
-    ESP_LOGI(TAG, "Entering SUMO LiDAR test mode");
-    for(int i=0; i<LIDAR_SCAN_SIZE; i++){
-        int angle_i = angle_to_centered_index(i);
-        s_lidar_angles_valids[i] = angle_i;
-        ESP_LOGW(TAG, "Ángulo válido %d: %d", i, angle_i);
-    }
+    // ESP_LOGI(TAG, "Entering SUMO LiDAR test mode");
+    // for(int i=0; i<LIDAR_SCAN_SIZE; i++){
+    //     int angle_i = angle_to_centered_index(i);
+    //     s_lidar_angles_valids[i] = angle_i;
+    //     ESP_LOGW(TAG, "Ángulo válido %d: %d", i, angle_i);
+    // }
 
     
     lidar_clear_scan();
