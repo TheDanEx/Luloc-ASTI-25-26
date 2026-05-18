@@ -40,12 +40,12 @@ static const char *TAG = "MODE_SUMO";
 #define LIDAR_POINTS         12
 #define LIDAR_SCAN_SIZE      360
 
-#define ANGLE_INI_POS        40 //en esta posicion esta el angulo 181+40=221
-#define ANGLE_END_POS        320 //en esta posicion esta el angulo 180-40=140
+#define ANGLE_INI_POS        90 //en esta posicion esta el angulo 181+40=221
+#define ANGLE_END_POS        270 //en esta posicion esta el angulo 180-40=140
 #define VALID_SCAN_SIZE       (ANGLE_END_POS - ANGLE_INI_POS + 1)
 
-#define OBJECT_MAX_DIST_MM 1000
-#define UMBRAL_CENTRO 2
+#define OBJECT_MAX_DIST_MM    1000
+#define UMBRAL_CENTRO         10
 
 #define PRINT_PERIOD_MS      1000
 
@@ -84,6 +84,7 @@ static uint16_t s_lidar_scan_mm[LIDAR_SCAN_SIZE] = {0};
 static uint8_t  s_lidar_scan_conf[LIDAR_SCAN_SIZE] = {0};
 static uint32_t s_lidar_scan_ts_ms[LIDAR_SCAN_SIZE] = {0};
 
+static uint16_t s_lidar_angles_valids[LIDAR_SCAN_SIZE] = {0};
 static volatile uint32_t s_packets_ok = 0;
 static volatile uint32_t s_packets_bad = 0;
 static volatile uint32_t s_points_ok = 0;
@@ -111,10 +112,12 @@ static uint16_t s_sumo_array_lidar[VALID_SCAN_SIZE];
 
 uint32_t time_delta_debug = 1000;
 uint32_t td_debug_obj_pos = 200;
-uint32_t t_debug_enemy_not_f = 0;
-uint32_t t_debug_frente = 0;
-uint32_t t_debug_enemy_f = 0;
 
+uint32_t t_debug_enemy_not_f = 0;
+uint32_t t_debug_enemy_f = 0;
+uint32_t t_debug_ataco= 0;
+uint32_t t_debug_v= 0;
+uint32_t t_debug_w= 0;
 // =============================================================================
 // MQTT CONFIG
 // =============================================================================
@@ -127,17 +130,21 @@ typedef struct {
     float base_v;
     float base_w;
     uint32_t tiempo_giro_180_ms;
+    uint8_t umbral_centro;
 } sumo_logic_config_t;
 
 static sumo_logic_config_t s_current_config = {
     .kp_v = 0.01f, 
     .kp_w = 0.01f, 
-    .max_v = 1.0f,
-    .max_w = 1.0f,
-    .base_v = 0.5f,
+    .max_v = 1.2f,
+    .max_w = 3.0f,
+    .base_v = 0.3f,
     .base_w = 0.5f,
-    .tiempo_giro_180_ms = 3000
+    .tiempo_giro_180_ms = 3000,
+    .umbral_centro = 15
 };
+
+
 
 static void mqtt_config_callback(const char *topic, int topic_len, const char *data, int data_len) {
     // ESP_LOGI(TAG, "Received MQTT config update (len=%d): %.*s", data_len, data_len, data);
@@ -153,6 +160,7 @@ static void mqtt_config_callback(const char *topic, int topic_len, const char *d
     cJSON *base_v = cJSON_GetObjectItem(root, "base_v");
     cJSON *base_w = cJSON_GetObjectItem(root, "base_w");
     cJSON *tiempo_giro_180_ms = cJSON_GetObjectItem(root, "tiempo_giro_180_ms");
+    cJSON *umbral_centro = cJSON_GetObjectItem(root, "umbral_centro");
 
     if (kp_v) s_current_config.kp_v = kp_v->valuedouble;
     if (kp_w) s_current_config.kp_w = kp_w->valuedouble;
@@ -163,15 +171,18 @@ static void mqtt_config_callback(const char *topic, int topic_len, const char *d
     if (cJSON_IsNumber(tiempo_giro_180_ms) && tiempo_giro_180_ms->valueint >= 0) {
         s_current_config.tiempo_giro_180_ms = (uint32_t)tiempo_giro_180_ms->valueint;
     }
+    if (umbral_centro) s_current_config.umbral_centro = (uint8_t)umbral_centro->valueint;
     ESP_LOGI(TAG,
-         "Dynamic Config Updated: kp_v=%.3f kp_w=%.3f max_v=%.3f max_w=%.3f base_v=%.3f base_w=%.3f tiempo_giro_180_ms=%" PRIu32,
+         "Dynamic Config Updated: kp_v=%.3f kp_w=%.3f max_v=%.3f max_w=%.3f base_v=%.3f base_w=%.3f umbral_centro=%d tiempo_giro_180_ms=%" PRIu32 ,
          s_current_config.kp_v,
          s_current_config.kp_w,
          s_current_config.max_v,
          s_current_config.max_w,
          s_current_config.base_v,
          s_current_config.base_w,
+         s_current_config.umbral_centro,
          s_current_config.tiempo_giro_180_ms);
+         
 
     cJSON_Delete(root);
 }
@@ -192,7 +203,17 @@ static uint32_t now_ms_u32(void)
 {
     return (uint32_t)(esp_timer_get_time() / 1000);
 }
+static bool time_debug_ready(uint32_t *last_time, uint32_t period_ms)
+{
+    uint32_t now = now_ms_u32();
 
+    if (now - *last_time > period_ms) {
+        *last_time = now;
+        return true;
+    }
+
+    return false;
+}
 static int normalize_angle_int(int angle)
 {
     while (angle >= 360) {
@@ -206,6 +227,17 @@ static int normalize_angle_int(int angle)
     return angle;
 }
 
+// static int angle_to_centered_index(float angle_deg)
+// {
+//     int angle_i = (int)(angle_deg + 0.5f);
+//     angle_i = normalize_angle_int(angle_i);
+
+//     // if (angle_i >= 181 && angle_i <= 359) {
+//     //     return angle_i - 181;
+//     // }
+
+//     return angle_i ;
+// }
 static int angle_to_centered_index(float angle_deg)
 {
     int angle_i = (int)(angle_deg + 0.5f);
@@ -763,14 +795,13 @@ void sumo(float* vL, float* vR){
     bool found = find_closest_object(s_sumo_array_lidar,&pos_object,&dist_object);
 
     if (!found) {
-        if(now_ms_u32()-t_debug_enemy_not_f>time_delta_debug){
-            t_debug_enemy_not_f=now_ms_u32();
+        if (time_debug_ready(&t_debug_enemy_not_f, 1000)) {
             ESP_LOGI(TAG, "No se detecta objetivo, buscando...");
         }
         v = 0.0f;
-        w = s_current_config.max_w;
+        w = s_current_config.base_w;
         if (w == 0.0f) {
-            w = s_current_config.base_w > 0.0f ? s_current_config.base_w : 0.6f;
+            w = s_current_config.base_w > 0.0f ? s_current_config.base_w : 0.5f;
         }
 
         *vL = -w * WHEEL_BASE_M / 2.0f;
@@ -779,16 +810,23 @@ void sumo(float* vL, float* vR){
     }
 
     int pos_centro = VALID_SCAN_SIZE/2;
-    int dif_centro = pos_object-pos_centro;  
-    float v_direccion_frente=0;
-    if(now_ms_u32()-t_debug_enemy_f>td_debug_obj_pos){
-            t_debug_enemy_f=now_ms_u32();
-            ESP_LOGI(TAG, "Enemigo detectado en la poscion %d del vector a %d mm de distancia", pos_object, dist_object);
+    int dif_centro = pos_centro-pos_object;  
+    if(time_debug_ready(&t_debug_enemy_not_f, 200)){
+        ESP_LOGI(TAG, "Enemigo detectado en la poscion %d del vector a %d mm de distancia. Angle: %u", pos_object, dist_object, s_lidar_angles_valids[pos_object]);
+        if(dif_centro>-s_current_config.umbral_centro&&dif_centro<s_current_config.umbral_centro){
+            ESP_LOGI(TAG, "ATACOO El objetivo está centrado. Dif centro: %d", dif_centro);
+        }else{
+            if(dif_centro<0){
+                ESP_LOGI(TAG,"Giro izquierda. Dif centro: %d", dif_centro);
+            }else{
+                ESP_LOGI(TAG,"Giro derecha. Dif centro: %d", dif_centro);    
+            }
         }
-    if(dif_centro>-UMBRAL_CENTRO&&dif_centro<UMBRAL_CENTRO){
-        
+    }
+    if(dif_centro>-s_current_config.umbral_centro&&dif_centro<s_current_config.umbral_centro){
+       
+        v=s_current_config.max_v;
         dif_centro=1;
-        v_direccion_frente=0.5f;
     }else{
         w = s_current_config.base_w + s_current_config.kp_w*dif_centro; //no hace falta mirar si es izquierda o derecha porque ya lo dice el signo
         if (w > s_current_config.max_w) {
@@ -796,17 +834,26 @@ void sumo(float* vL, float* vR){
         } else if (w < -s_current_config.max_w) {
             w = -s_current_config.max_w;
         }
+        // v = s_current_config.base_v+ s_current_config.kp_v*dist_object*(1.0f/(abs(dif_centro)));
+        // if(v>s_current_config.max_v){
+        //     v=s_current_config.max_v;
+        // }
+        v=0;
     }
 
-    v = v_direccion_frente+ s_current_config.kp_v*dist_object*(1.0f/abs(dif_centro));
-    if(v>s_current_config.max_v){
-        v=s_current_config.max_v;
-    }
+    
+    // if(time_debug_ready(&t_debug_v, 200)) {
+    //     ESP_LOGI(TAG, "Velocidad lineal: %f", v);
+    // }
+    // if(time_debug_ready(&t_debug_w, 200)) {
+    //     ESP_LOGI(TAG, "Velocidad angular: %f", w);
+    // }
 
     *vL = v-(w*WHEEL_BASE_M/2.0f);
     *vR = v+(w*WHEEL_BASE_M/2.0f);
     
 }
+
 
 // =============================================================================
 // Mode callbacks
@@ -815,6 +862,12 @@ void sumo(float* vL, float* vR){
 static void enter(void)
 {
     ESP_LOGI(TAG, "Entering SUMO LiDAR test mode");
+    for(int i=0; i<LIDAR_SCAN_SIZE; i++){
+        int angle_i = angle_to_centered_index(i);
+        s_lidar_angles_valids[i] = angle_i;
+        ESP_LOGW(TAG, "Ángulo válido %d: %d", i, angle_i);
+    }
+
     
     lidar_clear_scan();
     mqtt_custom_client_register_topic_callback(CONFIG_TOPIC, mqtt_config_callback);
@@ -852,7 +905,8 @@ static void execute(motor_driver_mcpwm_t* motors,
     float bat_mv = shm->sensors.battery_voltage;
 
     xSemaphoreGive(shm->mutex);
-
+    //desactivo para hacer pruebas
+    // detected = false;
     if (detected && !giro_180) {
         ESP_LOGI(TAG, "Línea detectada, iniciando giro de 180 grados");
         giro_180 = true;
