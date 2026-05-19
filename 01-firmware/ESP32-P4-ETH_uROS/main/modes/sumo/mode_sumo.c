@@ -42,17 +42,15 @@ typedef struct {
     uint8_t  confidence;
 } lidar_point_t;
 
-/* ── Double-buffer: RX writes scan_a, ctrl swaps on rotation ───── */
-
-static lidar_point_t s_scan_a[MAX_SCAN_POINTS];
-static lidar_point_t s_scan_b[MAX_SCAN_POINTS];
-static volatile uint16_t s_scan_count;        /* rx writes here */
+static lidar_point_t s_buf0[MAX_SCAN_POINTS];
+static lidar_point_t s_buf1[MAX_SCAN_POINTS];
+static lidar_point_t *s_rx_buf = s_buf0;
+static lidar_point_t *s_ctl_buf = s_buf1;
+static volatile uint16_t s_rx_count;
 static volatile bool     s_scan_ready;
 static lidar_point_t s_forward[MAX_FORWARD_POINTS];
 static volatile uint16_t s_forward_count;
-
 static portMUX_TYPE s_lidar_mux = portMUX_INITIALIZER_UNLOCKED;
-
 static volatile uint32_t s_packets_ok, s_packets_bad, s_bytes_rx;
 static volatile float    s_rot_hz;
 static volatile uint16_t s_speed_deg_s, s_timestamp_ms;
@@ -61,31 +59,30 @@ static volatile uint32_t s_rotations, s_buf_ovf;
 static TaskHandle_t s_lidar_rx_task_handle;
 static bool s_uart_initialized;
 static volatile bool stop_task;
-
 static bool giro_180;
 static uint32_t s_giro_180_start_ms;
 
-/* ── Timing ────────────────────────────────────────────────────── */
+typedef struct {
+    int64_t min_us, max_us, total_us;
+    uint32_t samples, spikes;
+} timing_slot_t;
 
-typedef struct { int64_t min_us,max_us,total_us; uint32_t samples; } timing_slot_t;
 enum { T_EXEC_TOTAL=0, T_SHM_READ, T_SCAN_SWAP, T_FILTER_FWD,
        T_SEARCH, T_KINEMATICS, T_MOTOR_CTRL, T_COUNT };
-static timing_slot_t s_t[T_COUNT];
-static void t0(int s) { s_t[s].total_us -= esp_timer_get_time(); }
-static void t1(int s) {
-    int64_t v = esp_timer_get_time() + s_t[s].total_us;
-    s_t[s].total_us = v;
-    if (!s_t[s].samples || v < s_t[s].min_us) s_t[s].min_us = v;
-    if (v > s_t[s].max_us) s_t[s].max_us = v;
-    s_t[s].samples++;
-}
 
-/* spike counters: how many times > 1ms */
-static volatile uint32_t s_spike_shm, s_spike_swap, s_spike_filt;
-static volatile uint32_t s_spike_search, s_spike_kine, s_spike_motor;
+static timing_slot_t s_t[T_COUNT];
+static int64_t t_start_us[T_COUNT];
 static volatile uint32_t s_giro_blocked;
 
-/* ── MQTT config ───────────────────────────────────────────────── */
+static void t0(int s) { t_start_us[s] = esp_timer_get_time(); }
+static void t1(int s) {
+    int64_t v = esp_timer_get_time() - t_start_us[s];
+    if (!s_t[s].samples || v < s_t[s].min_us) s_t[s].min_us = v;
+    if (v > s_t[s].max_us) s_t[s].max_us = v;
+    if (v > 1000) s_t[s].spikes++;
+    s_t[s].total_us += v;
+    s_t[s].samples++;
+}
 
 typedef struct {
     float kp_w, max_v, max_w, base_v, base_w;
@@ -98,16 +95,13 @@ static sumo_logic_config_t s_cfg = {
     .tiempo_giro_180_ms=2000,.umbral_centro=15
 };
 
-/* ── Helpers ───────────────────────────────────────────────────── */
-
 static uint16_t r16(const uint8_t *d) { return d[0]|(d[1]<<8); }
 static uint32_t ms(void) { return (uint32_t)(esp_timer_get_time()/1000); }
 static bool fwd_ang(float a) {
-    { if(a<0)a+=360.0f; if(a>=360.0f)a-=360.0f; }
-    return a>=FORWARD_MIN_DEG||a<=FORWARD_MAX_DEG;
+    if (a < 0) { a += 360.0f; }
+    if (a >= 360.0f) { a -= 360.0f; }
+    return a >= FORWARD_MIN_DEG || a <= FORWARD_MAX_DEG;
 }
-
-/* ── LiDAR RX task ─────────────────────────────────────────────── */
 
 static void lidar_rx_task(void *arg) {
     (void)arg; uint8_t p[LIDAR_PACKET_SIZE]; int pos=0;
@@ -119,15 +113,22 @@ static void lidar_rx_task(void *arg) {
         if(pos==0){if(b==LIDAR_HEADER){p[0]=b;pos=1;}continue;}
         if(pos==1){if(b==LIDAR_VER_LEN){p[1]=b;pos=2;}else if(b==LIDAR_HEADER){p[0]=b;pos=1;}else pos=0;continue;}
         p[pos++]=b; if(pos<LIDAR_PACKET_SIZE)continue; pos=0;
-        if(p[0]!=LIDAR_HEADER||p[1]!=LIDAR_VER_LEN){portENTER_CRITICAL(&s_lidar_mux);s_packets_bad++;portEXIT_CRITICAL(&s_lidar_mux);continue;}
+        if(p[0]!=LIDAR_HEADER||p[1]!=LIDAR_VER_LEN){
+            portENTER_CRITICAL(&s_lidar_mux);s_packets_bad++;portEXIT_CRITICAL(&s_lidar_mux);continue;
+        }
         uint16_t sa=r16(&p[4]),ea=r16(&p[42]);
-        if(sa>=36000||ea>=36000){portENTER_CRITICAL(&s_lidar_mux);s_packets_bad++;portEXIT_CRITICAL(&s_lidar_mux);continue;}
-
+        if(sa>=36000||ea>=36000){
+            portENTER_CRITICAL(&s_lidar_mux);s_packets_bad++;portEXIT_CRITICAL(&s_lidar_mux);continue;
+        }
         portENTER_CRITICAL(&s_lidar_mux);
         s_packets_ok++; s_speed_deg_s=r16(&p[2]); s_timestamp_ms=r16(&p[44]);
-        if(!first&&ea<last_end){ s_scan_ready=true; s_rotations++;
+        if(!first&&ea<last_end){
+            s_scan_ready=true; s_rotations++;
             int64_t now=esp_timer_get_time();
-            if(s_last_rot_us>0){ float dt=(now-s_last_rot_us)/1000000.0f; if(dt>0)s_rot_hz=1.0f/dt; }
+            if(s_last_rot_us>0){
+                float dt=(now-s_last_rot_us)/1000000.0f;
+                if(dt>0)s_rot_hz=1.0f/dt;
+            }
             s_last_rot_us=now;
         }
         first=false; last_end=ea;
@@ -135,19 +136,17 @@ static void lidar_rx_task(void *arg) {
         float step=(ei-sd)/(float)(LIDAR_POINTS-1);
         for(int i=0;i<LIDAR_POINTS;i++){
             int o=6+i*3; float ang=sd+step*i; if(ang>=360.0f)ang-=360.0f;
-            if(s_scan_count<MAX_SCAN_POINTS){
-                s_scan_a[s_scan_count].angle=ang;
-                s_scan_a[s_scan_count].distance=r16(&p[o]);
-                s_scan_a[s_scan_count].confidence=p[o+2];
-                s_scan_count++;
+            if(s_rx_count<MAX_SCAN_POINTS){
+                s_rx_buf[s_rx_count].angle=ang;
+                s_rx_buf[s_rx_count].distance=r16(&p[o]);
+                s_rx_buf[s_rx_count].confidence=p[o+2];
+                s_rx_count++;
             }else s_buf_ovf++;
         }
         portEXIT_CRITICAL(&s_lidar_mux);
     }
     s_lidar_rx_task_handle=NULL; vTaskDelete(NULL);
 }
-
-/* ── UART init ─────────────────────────────────────────────────── */
 
 static esp_err_t lidar_uart_start(void) {
     if(s_uart_initialized){uart_flush_input(LIDAR_UART_PORT);return ESP_OK;}
@@ -160,7 +159,7 @@ static esp_err_t lidar_uart_start(void) {
     e=uart_set_pin(LIDAR_UART_PORT,LIDAR_TX_PIN,LIDAR_RX_PIN,UART_PIN_NO_CHANGE,UART_PIN_NO_CHANGE);
     if(e!=ESP_OK)return e;
     uart_flush_input(LIDAR_UART_PORT); s_uart_initialized=true;
-    ESP_LOGI(TAG,"LiDAR UART GPIO%d @%d",LIDAR_RX_PIN,LIDAR_BAUDRATE);
+    ESP_LOGI(TAG,"LiDAR GPIO%d @%d",LIDAR_RX_PIN,LIDAR_BAUDRATE);
     return ESP_OK;
 }
 static void lidar_tasks_start(void) {
@@ -171,8 +170,6 @@ static void lidar_tasks_stop(void) {
     stop_task=true; uart_flush_input(LIDAR_UART_PORT);
     for(int i=0;i<20;i++){if(!s_lidar_rx_task_handle)break;vTaskDelay(pdMS_TO_TICKS(10));}
 }
-
-/* ── Sumo logic ────────────────────────────────────────────────── */
 
 static bool find_enemy(lidar_point_t *pts,uint16_t n,uint16_t *pos,uint16_t *dist) {
     if(!n)return false;
@@ -194,39 +191,32 @@ static void sumo(float *vL,float *vR) {
     t0(T_SEARCH);
     bool found=(s_forward_count>0)?find_enemy(s_forward,s_forward_count,&po,&d0):false;
     t1(T_SEARCH);
-    if(s_t[T_SEARCH].total_us>1000)s_spike_search++;
-
     t0(T_KINEMATICS);
     float v=0,w=0;
     if(!found){ w=s_cfg.base_w; if(!w)w=0.5f; }
     else {
         int c=s_forward_count/2,d=c-(int)po;
         if(d>-(int)s_cfg.umbral_centro&&d<(int)s_cfg.umbral_centro){w=0;v=s_cfg.max_v;}
-        else{ float bw=d<0?-s_cfg.base_w:s_cfg.base_w; w=bw+s_cfg.kp_w*d;
-              if(w>s_cfg.max_w)w=s_cfg.max_w;
-              if(w<-s_cfg.max_w)w=-s_cfg.max_w; }
+        else{
+            float bw=d<0?-s_cfg.base_w:s_cfg.base_w;
+            w=bw+s_cfg.kp_w*d;
+            if(w>s_cfg.max_w){w=s_cfg.max_w;}
+            if(w<-s_cfg.max_w){w=-s_cfg.max_w;}
+        }
     }
     *vL=v-(w*WHEEL_BASE_M/2.0f); *vR=v+(w*WHEEL_BASE_M/2.0f);
     t1(T_KINEMATICS);
-    if(s_t[T_KINEMATICS].total_us>1000)s_spike_kine++;
 }
-
-/* ── Timing report ─────────────────────────────────────────────── */
 
 static uint32_t s_exec_cycle;
 
 static void timing_report(void) {
     const char *nm[]={"exec_total","shm_read","scan_swap","filter_fwd",
                       "search","kinematics","motor_ctrl"};
-    printf("\n========== SUMO TIMING (%lu cycles) ==========\n",
+    printf("\n========== SUMO TIMING (%lu cyc) ==========\n",
            (unsigned long)s_t[0].samples);
-    printf("%-16s %8s %8s %8s %6s %6s\n","SECTION","MIN(us)","AVG(us)","MAX(us)","SAMPLES","SPIKES");
+    printf("%-16s %8s %8s %8s %6s %6s\n","SECTION","MIN(us)","AVG(us)","MAX(us)","SMP","SPIKE");
     printf("-------------------------------------------------------------------\n");
-
-    /* spike refs */
-    uint32_t spk[]={0,s_spike_shm,s_spike_swap,s_spike_filt,
-                    s_spike_search,s_spike_kine,s_spike_motor};
-
     for(int i=0;i<T_COUNT;i++){
         if(!s_t[i].samples)continue;
         printf("%-16s %8lld %8lld %8lld %6lu %6lu\n",nm[i],
@@ -234,31 +224,22 @@ static void timing_report(void) {
             (long long)(s_t[i].total_us/s_t[i].samples),
             (long long)s_t[i].max_us,
             (unsigned long)s_t[i].samples,
-            (unsigned long)spk[i]);
+            (unsigned long)s_t[i].spikes);
     }
     printf("-------------------------------------------------------------------\n");
-
-    uint32_t pok,pbad,rx,rots,ovf,gb;
-    float hz; uint16_t speed,ts,fwd;
+    uint32_t pok,pbad,rx,rots,ovf; float hz; uint16_t speed,ts,fwd;
     portENTER_CRITICAL(&s_lidar_mux);
     pok=s_packets_ok; pbad=s_packets_bad; rx=s_bytes_rx;
     rots=s_rotations; hz=s_rot_hz; speed=s_speed_deg_s;
     ts=s_timestamp_ms; fwd=s_forward_count; ovf=s_buf_ovf;
     portEXIT_CRITICAL(&s_lidar_mux);
-    gb=s_giro_blocked;
-
-    printf("LiDAR: fwd=%u ok=%lu bad=%lu ovf=%lu rx=%luB speed=%urpm hz=%.1f rots=%lu\n",
+    printf("LiDAR: fwd=%u ok=%lu bad=%lu ovf=%lu rx=%luB rpm=%u hz=%.1f rots=%lu\n",
            fwd,(unsigned long)pok,(unsigned long)pbad,(unsigned long)ovf,(unsigned long)rx,
            speed/6, hz,(unsigned long)rots);
-    printf("Giro180: blocked=%lu (line_sensor preventing sumo)\n",(unsigned long)gb);
+    printf("Giro180: blocked=%lu\n",(unsigned long)s_giro_blocked);
     printf("==================================================\n\n");
-
-    memset(s_t,0,sizeof(s_t));
-    s_spike_shm=s_spike_swap=s_spike_filt=s_spike_search=s_spike_kine=s_spike_motor=0;
-    s_giro_blocked=0;
+    memset(s_t,0,sizeof(s_t)); s_giro_blocked=0;
 }
-
-/* ── MQTT config ───────────────────────────────────────────────── */
 
 static void mqtt_config_cb(const char *t,int tl,const char *d,int dl) {
     if(!d||dl<=0||dl>1024)return;
@@ -267,40 +248,35 @@ static void mqtt_config_cb(const char *t,int tl,const char *d,int dl) {
     cJSON *mxw=cJSON_GetObjectItem(r,"max_w"),*bsv=cJSON_GetObjectItem(r,"base_v");
     cJSON *bsw=cJSON_GetObjectItem(r,"base_w"),*tg=cJSON_GetObjectItem(r,"tiempo_giro_180_ms");
     cJSON *uc=cJSON_GetObjectItem(r,"umbral_centro");
-    if(kpw)s_cfg.kp_w=kpw->valuedouble;
-    if(mxv)s_cfg.max_v=mxv->valuedouble;
-    if(mxw)s_cfg.max_w=mxw->valuedouble;
-    if(bsv)s_cfg.base_v=bsv->valuedouble;
-    if(bsw)s_cfg.base_w=bsw->valuedouble;
-    if(cJSON_IsNumber(tg)&&tg->valueint>=0)s_cfg.tiempo_giro_180_ms=(uint32_t)tg->valueint;
-    if(uc)s_cfg.umbral_centro=(uint8_t)uc->valueint;
+    if(kpw){s_cfg.kp_w=kpw->valuedouble;}
+    if(mxv){s_cfg.max_v=mxv->valuedouble;}
+    if(mxw){s_cfg.max_w=mxw->valuedouble;}
+    if(bsv){s_cfg.base_v=bsv->valuedouble;}
+    if(bsw){s_cfg.base_w=bsw->valuedouble;}
+    if(cJSON_IsNumber(tg)&&tg->valueint>=0){s_cfg.tiempo_giro_180_ms=(uint32_t)tg->valueint;}
+    if(uc){s_cfg.umbral_centro=(uint8_t)uc->valueint;}
     cJSON_Delete(r);
 }
 
-/* ── Mode callbacks ────────────────────────────────────────────── */
-
 static void enter(void) {
-    ESP_LOGI(TAG,"Enter SUMO (seq scan, 220deg fwd)");
+    ESP_LOGI(TAG,"Enter SUMO (ptr-swap, 220deg)");
     portENTER_CRITICAL(&s_lidar_mux);
-    memset(s_scan_a,0,sizeof(s_scan_a)); memset(s_scan_b,0,sizeof(s_scan_b));
-    s_scan_count=0; s_scan_ready=false; s_forward_count=0;
+    memset(s_buf0,0,sizeof(s_buf0)); memset(s_buf1,0,sizeof(s_buf1));
+    s_rx_buf=s_buf0; s_ctl_buf=s_buf1;
+    s_rx_count=0; s_scan_ready=false; s_forward_count=0;
     s_packets_ok=s_packets_bad=s_bytes_rx=0;
     s_rotations=0; s_rot_hz=0; s_buf_ovf=0; s_last_rot_us=0;
     portEXIT_CRITICAL(&s_lidar_mux);
     mqtt_custom_client_register_topic_callback(CONFIG_TOPIC,mqtt_config_cb);
     if(mqtt_custom_client_is_connected()) mqtt_custom_client_subscribe(CONFIG_TOPIC,0);
     if(lidar_uart_start()==ESP_OK) lidar_tasks_start();
-    memset(s_t,0,sizeof(s_t)); s_exec_cycle=0;
-    s_spike_shm=s_spike_swap=s_spike_filt=s_spike_search=s_spike_kine=s_spike_motor=0;
-    s_giro_blocked=0; giro_180=false;
+    memset(s_t,0,sizeof(s_t)); s_exec_cycle=0; s_giro_blocked=0; giro_180=false;
 }
 
 static void execute(motor_driver_mcpwm_t *motors,
                     motor_velocity_ctrl_handle_t cl,
                     motor_velocity_ctrl_handle_t cr, float dt) {
     t0(T_EXEC_TOTAL); (void)dt; float vL,vR;
-
-    /* ── Shared memory read ──────────────────────────────────── */
     t0(T_SHM_READ);
     shared_memory_t *shm=shared_memory_get();
     if(!shm){t1(T_SHM_READ);t1(T_EXEC_TOTAL);return;}
@@ -309,51 +285,52 @@ static void execute(motor_driver_mcpwm_t *motors,
     float curl=shm->sensors.motor_speed_left, curr=-shm->sensors.motor_speed_right;
     float bat=shm->sensors.battery_voltage;
     xSemaphoreGive(shm->mutex);
-    int64_t shm_t = esp_timer_get_time() + s_t[T_SHM_READ].total_us; /* peek */
     t1(T_SHM_READ);
-    if(shm_t>1000)s_spike_shm++;
 
-    /* ── Scan swap: atomically grab scan_count + reset ────────── */
+    /* Pointer swap on rotation (NO memcpy) */
     t0(T_SCAN_SWAP);
-    uint16_t n_pts=0;
-    bool has_scan=false;
+    bool has_scan=false; uint16_t n_pts=0;
     if(s_scan_ready){
         portENTER_CRITICAL(&s_lidar_mux);
         s_scan_ready=false;
-        n_pts=s_scan_count;
-        s_scan_count=0;
+        lidar_point_t *tmp=s_ctl_buf;
+        s_ctl_buf=s_rx_buf;
+        s_rx_buf=tmp;
+        n_pts=s_rx_count;
+        s_rx_count=0;
         has_scan=true;
         portEXIT_CRITICAL(&s_lidar_mux);
     }
     t1(T_SCAN_SWAP);
 
-    /* ── Filter: do memcpy OUTSIDE critical section ───────────── */
+    /* Filter 220deg from ctl_buf (NO memcpy needed) */
     t0(T_FILTER_FWD);
-    if(has_scan&&n_pts){
-        memcpy(s_scan_b,s_scan_a,n_pts*sizeof(lidar_point_t));
+    if(has_scan){
         uint16_t n=0;
-        for(uint16_t i=0;i<n_pts&&n<MAX_FORWARD_POINTS;i++)
-            if(fwd_ang(s_scan_b[i].angle)) s_forward[n++]=s_scan_b[i];
+        for(uint16_t i=0;i<n_pts&&n<MAX_FORWARD_POINTS;i++){
+            if(fwd_ang(s_ctl_buf[i].angle)){
+                s_forward[n++]=s_ctl_buf[i];
+            }
+        }
         s_forward_count=n;
     }
-    int64_t filt_t = esp_timer_get_time() + s_t[T_FILTER_FWD].total_us;
     t1(T_FILTER_FWD);
-    if(filt_t>1000)s_spike_filt++;
 
-    /* ── Movement logic ──────────────────────────────────────── */
     if(det&&!giro_180){giro_180=true;s_giro_180_start_ms=ms();}
     if(giro_180){
         uint32_t el=ms()-s_giro_180_start_ms;
         if(el>=s_cfg.tiempo_giro_180_ms){giro_180=false;vL=0;vR=0;}
         else if(el<400){vL=-s_cfg.base_v;vR=-s_cfg.base_v;}
-        else{ float w=s_cfg.max_w; if(!w)w=s_cfg.base_w>0?s_cfg.base_w:0.8f;
-              vL=-w*WHEEL_BASE_M/2.0f;vR=w*WHEEL_BASE_M/2.0f; }
+        else{
+            float w=s_cfg.max_w;
+            if(!w)w=s_cfg.base_w>0?s_cfg.base_w:0.8f;
+            vL=-w*WHEEL_BASE_M/2.0f;vR=w*WHEEL_BASE_M/2.0f;
+        }
         s_giro_blocked++;
     }else{
         sumo(&vL,&vR);
     }
 
-    /* ── Motor control ───────────────────────────────────────── */
     t0(T_MOTOR_CTRL);
     motor_velocity_input_t ml={.target_speed=vL,.current_speed=curl,.battery_mv=bat};
     motor_velocity_input_t mr={.target_speed=vR,.current_speed=curr,.battery_mv=bat};
@@ -362,9 +339,7 @@ static void execute(motor_driver_mcpwm_t *motors,
     motor_velocity_ctrl_update(cr,&mr,dt,&pr,NULL);
     motor_mcpwm_set(motors,(int16_t)(pl*10.0f),(int16_t)(pr*10.0f));
     t1(T_MOTOR_CTRL);
-    if(s_t[T_MOTOR_CTRL].total_us>1000)s_spike_motor++;
     t1(T_EXEC_TOTAL);
-
     if(++s_exec_cycle>=TIMING_REPORT_CYCLES){s_exec_cycle=0;timing_report();}
 }
 
