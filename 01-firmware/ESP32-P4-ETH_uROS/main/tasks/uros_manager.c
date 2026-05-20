@@ -24,7 +24,6 @@
 #include <std_msgs/msg/float32.h>
 #include <std_msgs/msg/int8.h>
 #include <std_msgs/msg/string.h>
-#include <std_msgs/msg/float32_multi_array.h>
 #include <geometry_msgs/msg/twist.h>
 
 #ifdef CONFIG_MICRO_ROS_ESP_XRCE_DDS_MIDDLEWARE
@@ -37,9 +36,7 @@ static const char *TAG = "UROS_MGR";
 #define SYNC_INTERVAL_MS 5000
 #define WHEEL_BASE_M 0.170f
 
-#define SENSOR_ARRAY_LEN 18
-#define MOTOR_ARRAY_LEN 14
-#define STATUS_ARRAY_LEN 5
+
 
 #define RCCHECK(fn) do { \
     rcl_ret_t temp_rc = (fn); \
@@ -73,20 +70,14 @@ static rcl_subscription_t pid_subscriber;
 // --- Messages ---
 static std_msgs__msg__String diag_msg;
 static std_msgs__msg__Float32 voltage_msg;
-static std_msgs__msg__Float32MultiArray sensors_msg;
-static std_msgs__msg__Float32MultiArray motors_msg;
-static std_msgs__msg__Float32MultiArray status_msg;
+static std_msgs__msg__String sensors_msg;
+static std_msgs__msg__String motors_msg;
+static std_msgs__msg__String status_msg;
 static geometry_msgs__msg__Twist cmd_vel;
 static std_msgs__msg__Int8 mode_msg;
 static std_msgs__msg__String config_msg;
 static std_msgs__msg__Float32 curvature_msg;
-static std_msgs__msg__Float32MultiArray pid_msg;
-
-// --- MultiArray storage (static to avoid malloc) ---
-static float sensors_data[SENSOR_ARRAY_LEN];
-static float motors_data[MOTOR_ARRAY_LEN];
-static float status_data[STATUS_ARRAY_LEN];
-static float pid_data[4];
+static std_msgs__msg__String pid_msg;
 
 // --- Shared state ---
 static float g_latency_ms = 0.0f;
@@ -171,14 +162,8 @@ static void curvature_callback(const void *msvin)
 
 static void pid_callback(const void *msvin)
 {
-    const std_msgs__msg__Float32MultiArray *msg = (const std_msgs__msg__Float32MultiArray *)msvin;
-    if (msg->data.size >= 4) {
-        uint8_t idx = (uint8_t)msg->data.data[0];
-        float kp = msg->data.data[1];
-        float ki = msg->data.data[2];
-        float kd = msg->data.data[3];
-        ESP_LOGI(TAG, "PID motor %d -> Kp:%.3f Ki:%.3f Kd:%.3f", idx, kp, ki, kd);
-    }
+    const std_msgs__msg__String *msg = (const std_msgs__msg__String *)msvin;
+    ESP_LOGI(TAG, "PID received: %s", msg->data.data);
 }
 
 // ============================================================
@@ -222,45 +207,37 @@ static void telemetry_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 
     if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
-    // Fill sensors_msg (Float32MultiArray)
-    sensors_data[0] = shm->sensors.motor_speed_left;
-    sensors_data[1] = shm->sensors.motor_speed_right;
-    sensors_data[2] = shm->sensors.motor_distance_left;
-    sensors_data[3] = shm->sensors.motor_distance_right;
-    sensors_data[4] = shm->sensors.battery_voltage;
-    sensors_data[5] = shm->sensors.robot_current;
-    sensors_data[6] = shm->sensors.line_position_m;
-    sensors_data[7] = shm->sensors.line_detected ? 1.0f : 0.0f;
-    sensors_data[8] = shm->sensors.line_is_calibrated ? 1.0f : 0.0f;
-    for (int i = 0; i < 8; i++) sensors_data[9 + i] = shm->sensors.line_norm[i];
-    // sensors_data[17] reserved for raw[0] pack if needed
+    // Pack sensors as JSON
+    snprintf(sensors_msg.data.data, sensors_msg.data.capacity,
+        "{\"sl\":%.4f,\"sr\":%.4f,\"dl\":%.4f,\"dr\":%.4f,\"bat\":%.2f,\"cur\":%.2f,"
+        "\"lp\":%.4f,\"ld\":%d,\"lc\":%d,"
+        "\"n0\":%.3f,\"n1\":%.3f,\"n2\":%.3f,\"n3\":%.3f,\"n4\":%.3f,\"n5\":%.3f,\"n6\":%.3f,\"n7\":%.3f}",
+        shm->sensors.motor_speed_left, shm->sensors.motor_speed_right,
+        shm->sensors.motor_distance_left, shm->sensors.motor_distance_right,
+        shm->sensors.battery_voltage, shm->sensors.robot_current,
+        shm->sensors.line_position_m, shm->sensors.line_detected ? 1 : 0,
+        shm->sensors.line_is_calibrated ? 1 : 0,
+        shm->sensors.line_norm[0], shm->sensors.line_norm[1],
+        shm->sensors.line_norm[2], shm->sensors.line_norm[3],
+        shm->sensors.line_norm[4], shm->sensors.line_norm[5],
+        shm->sensors.line_norm[6], shm->sensors.line_norm[7]);
+    sensors_msg.data.size = strlen(sensors_msg.data.data);
 
-    sensors_msg.data.data = sensors_data;
-    sensors_msg.data.size = SENSOR_ARRAY_LEN;
-    sensors_msg.data.capacity = SENSOR_ARRAY_LEN;
-
-    // Fill motors_msg (Float32MultiArray)
-    motors_data[0] = shm->sensors.target_speed_left;
-    motors_data[1] = shm->sensors.target_speed_right;
-    motors_data[2] = shm->sensors.motor_speed_left;
-    motors_data[3] = shm->sensors.motor_speed_right;
-
-    motors_msg.data.data = motors_data;
-    motors_msg.data.size = MOTOR_ARRAY_LEN;
-    motors_msg.data.capacity = MOTOR_ARRAY_LEN;
-
-    // Fill status_msg (Float32MultiArray)
-    status_data[0] = (float)(esp_timer_get_time() / 1000000);
-    status_data[1] = (float)state_machine_get_context()->current_mode;
-    status_data[2] = 0.0f;
-    status_data[3] = 0.0f;
-    status_data[4] = 0.0f;
-
-    status_msg.data.data = status_data;
-    status_msg.data.size = STATUS_ARRAY_LEN;
-    status_msg.data.capacity = STATUS_ARRAY_LEN;
+    // Pack motors as JSON
+    snprintf(motors_msg.data.data, motors_msg.data.capacity,
+        "{\"tl\":%.4f,\"tr\":%.4f,\"al\":%.4f,\"ar\":%.4f}",
+        shm->sensors.target_speed_left, shm->sensors.target_speed_right,
+        shm->sensors.motor_speed_left, shm->sensors.motor_speed_right);
+    motors_msg.data.size = strlen(motors_msg.data.data);
 
     xSemaphoreGive(shm->mutex);
+
+    // Pack status as JSON
+    snprintf(status_msg.data.data, status_msg.data.capacity,
+        "{\"up\":%lu,\"mode\":%d}",
+        (unsigned long)(esp_timer_get_time() / 1000000),
+        (int)state_machine_get_context()->current_mode);
+    status_msg.data.size = strlen(status_msg.data.data);
 
     // Publish all three
     RCSOFTCHECK(rcl_publish(&sensors_publisher, &sensors_msg, NULL));
@@ -287,56 +264,93 @@ static void micro_ros_task(void *arg)
         rclc_executor_t executor;
 
         rcl_init_options_t init_options = rcl_get_zero_initialized_init_options();
-        RCCHECK(rcl_init_options_init(&init_options, allocator));
+        ESP_LOGI(TAG, "calling rcl_init_options_init");
+        if (rcl_init_options_init(&init_options, allocator) != RCL_RET_OK) {
+            ESP_LOGE(TAG, "FAILED init_options_init");
+            return;
+        }
+        ESP_LOGI(TAG, "OK init_options_init");
 
 #ifdef CONFIG_MICRO_ROS_ESP_XRCE_DDS_MIDDLEWARE
         rmw_init_options_t *rmw_options = rcl_init_options_get_rmw_init_options(&init_options);
+        if (rmw_options == NULL) {
+            ESP_LOGE(TAG, "FAILED get_rmw_init_options (NULL)");
+            return;
+        }
+        ESP_LOGI(TAG, "set udp addr %s:%s", CONFIG_MICRO_ROS_AGENT_IP, CONFIG_MICRO_ROS_AGENT_PORT);
         rmw_uros_options_set_udp_address(
             CONFIG_MICRO_ROS_AGENT_IP,
             CONFIG_MICRO_ROS_AGENT_PORT,
             rmw_options);
 #endif
 
+        ESP_LOGI(TAG, "calling support_init (connect %s:%s)...",
+            CONFIG_MICRO_ROS_AGENT_IP, CONFIG_MICRO_ROS_AGENT_PORT);
         if (rclc_support_init_with_options(&support, 0, NULL, &init_options, &allocator) != RCL_RET_OK) {
             { rcl_ret_t _r = rcl_init_options_fini(&init_options); (void)_r; }
+            ESP_LOGE(TAG, "FAILED support init");
             vTaskDelay(pdMS_TO_TICKS(2000));
             continue;
         }
+        ESP_LOGI(TAG, "OK support init");
 
         node = rcl_get_zero_initialized_node();
-        RCCHECK(rclc_node_init_default(&node, "esp32_p4_robot", "", &support));
+        if (rclc_node_init_default(&node, "esp32_p4_robot", "", &support) != RCL_RET_OK) {
+            ESP_LOGE(TAG, "FAILED node init");
+            return;
+        }
+        ESP_LOGI(TAG, "OK node init");
 
         // === 5 PUBLISHERS ===
 
         // 1. Diagnostics (String)
-        RCCHECK(rclc_publisher_init_default(
-            &diag_publisher, &node,
+        // Use unique topic name to avoid DDS conflicts with other robots
+        rcl_ret_t rc_pub = rclc_publisher_init_default(&diag_publisher, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
-            "/microROS/esp_diag_time"));
+            "/sumo5/diag");
+        if (rc_pub != RCL_RET_OK) {
+            ESP_LOGE(TAG, "FAILED diag pub: ret=%d, node_ok=%d, ts_ok=%d",
+                (int)rc_pub,
+                (int)rcl_node_is_valid(&node),
+                (int)(ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String) != NULL));
+            return;
+        }
+        ESP_LOGI(TAG, "OK diag pub");
 
-        // 2. Battery voltage (Float32)
-        RCCHECK(rclc_publisher_init_default(
-            &voltage_publisher, &node,
+        if (rclc_publisher_init_default(&voltage_publisher, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-            "/robot/voltage"));
+            "/sumo5/voltage") != RCL_RET_OK) {
+            ESP_LOGE(TAG, "FAILED voltage pub");
+            return;
+        }
+        ESP_LOGI(TAG, "OK voltage pub");
 
-        // 3. Sensors (Float32MultiArray)
-        RCCHECK(rclc_publisher_init_default(
-            &sensors_publisher, &node,
-            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray),
-            "/robot/sensors"));
+        // 3. Sensors (String - JSON)
+        if (rclc_publisher_init_default(&sensors_publisher, &node,
+            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
+            "/sumo5/sensors") != RCL_RET_OK) {
+            ESP_LOGE(TAG, "FAILED sensors pub");
+            return;
+        }
+        ESP_LOGI(TAG, "OK sensors pub");
 
-        // 4. Motors (Float32MultiArray)
-        RCCHECK(rclc_publisher_init_default(
-            &motors_publisher, &node,
-            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray),
-            "/robot/motors"));
+        // 4. Motors (String - JSON)
+        if (rclc_publisher_init_default(&motors_publisher, &node,
+            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
+            "/sumo5/motors") != RCL_RET_OK) {
+            ESP_LOGE(TAG, "FAILED motors pub");
+            return;
+        }
+        ESP_LOGI(TAG, "OK motors pub");
 
-        // 5. Status (Float32MultiArray)
-        RCCHECK(rclc_publisher_init_default(
-            &status_publisher, &node,
-            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray),
-            "/robot/status"));
+        // 5. Status (String - JSON)
+        if (rclc_publisher_init_default(&status_publisher, &node,
+            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
+            "/sumo5/status") != RCL_RET_OK) {
+            ESP_LOGE(TAG, "FAILED status pub");
+            return;
+        }
+        ESP_LOGI(TAG, "OK status pub");
 
         // === 5 SUBSCRIPTIONS ===
 
@@ -344,31 +358,40 @@ static void micro_ros_task(void *arg)
         RCCHECK(rclc_subscription_init_default(
             &velocity_subscriber, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
-            "/cmd_vel"));
+            "/sumo5/cmd_vel"));
 
         // 2. mode_cmd (Int8)
         RCCHECK(rclc_subscription_init_default(
             &mode_subscriber, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
-            "/robot/mode_cmd"));
+            "/sumo5/mode_cmd"));
 
         // 3. config (String - JSON)
-        RCCHECK(rclc_subscription_init_default(
-            &config_subscriber, &node,
+        if (rclc_subscription_init_default(&config_subscriber, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
-            "/robot/config"));
+            "/sumo5/config") != RCL_RET_OK) {
+            ESP_LOGE(TAG, "FAILED config sub");
+            return;
+        }
+        ESP_LOGI(TAG, "OK config sub");
 
         // 4. curvature (Float32)
-        RCCHECK(rclc_subscription_init_default(
-            &curvature_subscriber, &node,
+        if (rclc_subscription_init_default(&curvature_subscriber, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-            "/robot/curvature"));
+            "/sumo5/curvature") != RCL_RET_OK) {
+            ESP_LOGE(TAG, "FAILED curvature sub");
+            return;
+        }
+        ESP_LOGI(TAG, "OK curvature sub");
 
-        // 5. pid_motors (Float32MultiArray)
-        RCCHECK(rclc_subscription_init_default(
-            &pid_subscriber, &node,
-            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray),
-            "/robot/pid_motors"));
+        // 5. pid_motors (String - JSON)
+        if (rclc_subscription_init_default(&pid_subscriber, &node,
+            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
+            "/sumo5/pid_motors") != RCL_RET_OK) {
+            ESP_LOGE(TAG, "FAILED pid sub");
+            return;
+        }
+        ESP_LOGI(TAG, "OK pid sub");
 
         // === 2 TIMERS ===
 
@@ -384,7 +407,11 @@ static void micro_ros_task(void *arg)
 
         // === EXECUTOR (7 handles: 2 timers + 5 subscriptions) ===
 
-        RCCHECK(rclc_executor_init(&executor, &support.context, 7, &allocator));
+        if (rclc_executor_init(&executor, &support.context, 7, &allocator) != RCL_RET_OK) {
+            ESP_LOGE(TAG, "FAILED executor init");
+            return;
+        }
+        ESP_LOGI(TAG, "OK executor init (7 handles)");
 
         RCCHECK(rclc_executor_add_timer(&executor, &diag_timer));
         RCCHECK(rclc_executor_add_timer(&executor, &telemetry_timer));
@@ -415,29 +442,33 @@ static void micro_ros_task(void *arg)
         diag_msg.data.capacity = STRING_BUFFER_LEN;
         diag_msg.data.size = 0;
 
+        static char sensors_buffer[STRING_BUFFER_LEN];
+        sensors_msg.data.data = sensors_buffer;
+        sensors_msg.data.capacity = STRING_BUFFER_LEN;
+        sensors_msg.data.size = 0;
+
+        static char motors_buffer[STRING_BUFFER_LEN];
+        motors_msg.data.data = motors_buffer;
+        motors_msg.data.capacity = STRING_BUFFER_LEN;
+        motors_msg.data.size = 0;
+
+        static char status_buffer[STRING_BUFFER_LEN];
+        status_msg.data.data = status_buffer;
+        status_msg.data.capacity = STRING_BUFFER_LEN;
+        status_msg.data.size = 0;
+
         static char config_buffer[STRING_BUFFER_LEN];
         config_msg.data.data = config_buffer;
         config_msg.data.capacity = STRING_BUFFER_LEN;
         config_msg.data.size = 0;
 
+        static char pid_buffer[STRING_BUFFER_LEN];
+        pid_msg.data.data = pid_buffer;
+        pid_msg.data.capacity = STRING_BUFFER_LEN;
+        pid_msg.data.size = 0;
+
         voltage_msg.data = 0.0f;
         curvature_msg.data = 0.0f;
-
-        sensors_msg.data.data = sensors_data;
-        sensors_msg.data.size = 0;
-        sensors_msg.data.capacity = SENSOR_ARRAY_LEN;
-
-        motors_msg.data.data = motors_data;
-        motors_msg.data.size = 0;
-        motors_msg.data.capacity = MOTOR_ARRAY_LEN;
-
-        status_msg.data.data = status_data;
-        status_msg.data.size = 0;
-        status_msg.data.capacity = STATUS_ARRAY_LEN;
-
-        pid_msg.data.data = pid_data;
-        pid_msg.data.size = 0;
-        pid_msg.data.capacity = 4;
 
         int64_t last_sync_time = 0;
 
@@ -473,7 +504,10 @@ static void micro_ros_task(void *arg)
 #endif
             }
 
-            if (rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100)) != RCL_RET_OK) break;
+            rcl_ret_t spin_ret = rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100));
+            if (spin_ret != RCL_RET_OK && spin_ret != RCL_RET_TIMEOUT) {
+                ESP_LOGW(TAG, "spin_some error %d, continuing", (int)spin_ret);
+            }
             vTaskDelay(pdMS_TO_TICKS(10));
         }
 

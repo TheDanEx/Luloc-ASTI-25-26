@@ -834,6 +834,15 @@ CONFIG_MICRO_ROS_ETH_PHY_RST_GPIO=51
 CONFIG_MICRO_ROS_ETH_PHY_ADDR=1
 # end of Ethernet Configuration
 
+#
+# Static IP Configuration
+#
+CONFIG_MICRO_ROS_ETH_STATIC_IP=y
+CONFIG_MICRO_ROS_ETH_STATIC_IP_ADDR="192.168.5.1"
+CONFIG_MICRO_ROS_ETH_STATIC_NETMASK="255.255.255.0"
+CONFIG_MICRO_ROS_ETH_STATIC_GW="192.168.5.1"
+# end of Static IP Configuration
+
 CONFIG_MICRO_ROS_AGENT_IP="192.168.5.2"
 CONFIG_MICRO_ROS_AGENT_PORT="8888"
 # end of micro-ROS Settings
@@ -2518,16 +2527,6 @@ CONFIG_LINE_SENSOR_CALIB_THRESHOLD=1500
 CONFIG_LINE_SENSOR_OVERSAMPLING=16
 CONFIG_LINE_SENSOR_DETECTION_THRESHOLD=50
 # end of Luloc-ASTI: 2. Sensors - ADC Line Array
-
-#
-# micro-ROS Settings
-#
-
-#
-# Ethernet Configuration
-#
-# end of Ethernet Configuration
-# end of micro-ROS Settings
 
 #
 # Luloc-ASTI: 3. Control & Motors - Motor Velocity

@@ -63,4 +63,4 @@ cmake_install.cmake
 
 # --- Docker & Software ---
 **/node_modules/
-.docker-cache/
+.docker-cache/build/
