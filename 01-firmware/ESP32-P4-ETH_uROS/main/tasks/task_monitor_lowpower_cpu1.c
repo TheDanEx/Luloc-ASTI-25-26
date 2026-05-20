@@ -27,11 +27,6 @@ static const char *TAG = "mon_cpu1";
 // Main Task Implementation
 // =============================================================================
 
-static bool is_calibration_mode(robot_mode_t mode)
-{
-    return mode == MODE_CALIBRATE_MOTORS || mode == MODE_CALIBRATE_LINE;
-}
-
 static void task_monitor_lowpower_cpu1(void *arg)
 {
     (void)arg;
@@ -88,11 +83,8 @@ static void task_monitor_lowpower_cpu1(void *arg)
             xSemaphoreGive(shared_mem->mutex);
         }
 
-        robot_state_context_t *state = state_machine_get_context();
-        bool publish_telemetry = state != NULL && is_calibration_mode(state->current_mode);
-
         // =====================================================================
-        // Telemetry Reporting (Power)
+        // Telemetry Reporting (Power) - always published
         // =====================================================================
         if (telemetry_power) {
             telemetry_add_float(telemetry_power, "voltage_mv", power_data.voltage_mv);
@@ -102,7 +94,7 @@ static void task_monitor_lowpower_cpu1(void *arg)
         }
 
         // =====================================================================
-        // Performance & Uptime Status (Periodic)
+        // Performance & Uptime Status (Periodic) - always published
         // =====================================================================
         if (++perf_counter >= (5 * polling_rate_hz)) {
             perf_counter = 0;
@@ -116,8 +108,8 @@ static void task_monitor_lowpower_cpu1(void *arg)
                 // 3. Print table to Console (matching legacy behavior)
                 perf_mon_print_report();
 
-                // 4. Publish Performance ILP to MQTT
-                if (publish_telemetry && mqtt_custom_client_is_connected()) {
+                // 4. Publish Performance ILP to MQTT (always, not just calibration)
+                if (mqtt_custom_client_is_connected()) {
                     char ilp_buffer[1024];
                     struct timespec ts;
                     clock_gettime(CLOCK_REALTIME, &ts);
