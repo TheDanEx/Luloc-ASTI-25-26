@@ -328,7 +328,7 @@ static void micro_ros_task(void *arg)
         // 3. Sensors (String - JSON)
         if (rclc_publisher_init_default(&sensors_publisher, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
-            "/robot/sensors") != RCL_RET_OK) {
+            "/sensors") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED sensors pub");
             return;
         }
@@ -337,7 +337,7 @@ static void micro_ros_task(void *arg)
         // 4. Motors (String - JSON)
         if (rclc_publisher_init_default(&motors_publisher, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
-            "/robot/motors") != RCL_RET_OK) {
+            "/motors") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED motors pub");
             return;
         }
@@ -346,7 +346,7 @@ static void micro_ros_task(void *arg)
         // 5. Status (String - JSON)
         if (rclc_publisher_init_default(&status_publisher, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
-            "/robot/status") != RCL_RET_OK) {
+            "/status") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED status pub");
             return;
         }
@@ -369,7 +369,7 @@ static void micro_ros_task(void *arg)
         // 3. config (String - JSON)
         if (rclc_subscription_init_default(&config_subscriber, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
-            "/robot/config") != RCL_RET_OK) {
+            "/config") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED config sub");
             return;
         }
@@ -378,7 +378,7 @@ static void micro_ros_task(void *arg)
         // 4. curvature (Float32)
         if (rclc_subscription_init_default(&curvature_subscriber, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-            "/robot/curvature") != RCL_RET_OK) {
+            "/curvature") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED curvature sub");
             return;
         }
@@ -387,7 +387,7 @@ static void micro_ros_task(void *arg)
         // 5. pid_motors (String - JSON)
         if (rclc_subscription_init_default(&pid_subscriber, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
-            "/robot/pid_motors") != RCL_RET_OK) {
+            "/pid_motors") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED pid sub");
             return;
         }
