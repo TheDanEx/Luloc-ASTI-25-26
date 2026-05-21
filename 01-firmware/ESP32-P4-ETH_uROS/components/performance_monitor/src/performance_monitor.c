@@ -30,7 +30,7 @@ static int resolve_task_core(const char *name)
     if (strcmp(name, "rtcontrol_cpu0")  == 0) return 0;
     if (strcmp(name, "comms_cpu1")      == 0) return 1;
     if (strcmp(name, "monitor_cpu1")    == 0) return 1;
-    if (strcmp(name, "calib_task")      == 0) return 0;
+    if (strcmp(name, "calib_task")      == 0) return 1;  // pinned to CPU1 at creation
 
     /* ----  ESP-IDF system tasks ---- */
     if (strcmp(name, "main")            == 0) return 0;
