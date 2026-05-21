@@ -132,23 +132,43 @@ static void task_rtcontrol_cpu0(void *arg)
         .detection_threshold = 0.0f
     };
     line_sensor_handle_t line_array = line_sensor_init(&line_cfg);
-    line_sensor_calibration_start(line_array); // Start auto-calibration 
+    // Calibration started by mode_calibrate.enter(), not unconditionally
 
     modes_init();
     
     const float dt = (float)CONFIG_ROBOT_CONTROL_PERIOD_MS / 1000.0f;
     const TickType_t poll_rate = pdMS_TO_TICKS(CONFIG_ROBOT_CONTROL_PERIOD_MS); 
 
+    robot_mode_t prev_mode = MODE_NONE;
+
     while(1) {
+        // Calibration lifecycle: start on enter, stop on exit
+        robot_mode_t current_mode = state_machine_get_context()->current_mode;
+        if (current_mode != prev_mode) {
+            if (current_mode == MODE_CALIBRATE_LINE) {
+                line_sensor_calibration_start(line_array);
+            } else if (prev_mode == MODE_CALIBRATE_LINE) {
+                line_sensor_calibration_stop(line_array);
+            }
+            prev_mode = current_mode;
+        }
+
         // 1. High-Frequency Synchronous Encoder Polling (Eliminates Phase Lag)
         float speed_l_ms = encoder_sensor_get_speed(encoder_left);
         float distance_l_m = encoder_sensor_get_distance(encoder_left);
         float speed_r_ms = encoder_sensor_get_speed(encoder_right);
         float distance_r_m = encoder_sensor_get_distance(encoder_right);
         
-        // 2. Line Sensor Polling
+        // 2. Line Sensor Polling — only when needed (not idle/teleop)
+        bool need_line = (current_mode == MODE_AUTONOMOUS_PATH ||
+                          current_mode == MODE_SUMO ||
+                          current_mode == MODE_CALIBRATE_LINE);
         line_sensor_data_t line_data;
-        line_sensor_read(line_array, &line_data);
+        if (need_line) {
+            line_sensor_read(line_array, &line_data);
+        } else {
+            memset(&line_data, 0, sizeof(line_data));
+        }
 
         shared_memory_t* shm = shared_memory_get();
         if (shm != NULL && xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
@@ -157,16 +177,16 @@ static void task_rtcontrol_cpu0(void *arg)
             shm->sensors.motor_speed_right = speed_r_ms;
             shm->sensors.motor_distance_right = distance_r_m;
             
-            // Update Line Sensor SHM
-            shm->sensors.line_detected = line_data.line_detected;
-            shm->sensors.line_position_m = line_data.line_position_m;
-            for (int i = 0; i < 8; i++) {
-                shm->sensors.line_norm[i] = line_data.normalized_values[i];
-                shm->sensors.line_raw[i]  = line_data.raw_values[i];
+            // Update Line Sensor SHM (only if mode needs it)
+            if (need_line) {
+                shm->sensors.line_detected = line_data.line_detected;
+                shm->sensors.line_position_m = line_data.line_position_m;
+                for (int i = 0; i < 8; i++) {
+                    shm->sensors.line_norm[i] = line_data.normalized_values[i];
+                    shm->sensors.line_raw[i]  = line_data.raw_values[i];
+                }
+                shm->sensors.line_is_calibrated = line_sensor_is_calibrated(line_array);
             }
-            // Get calibration bounds from component internal state
-            // line_sensor_get_calibration_bounds(line_array, shm->sensors.line_min, shm->sensors.line_max);
-            shm->sensors.line_is_calibrated = line_sensor_is_calibrated(line_array);
             
             xSemaphoreGive(shm->mutex);
         }

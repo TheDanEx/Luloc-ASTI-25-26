@@ -81,28 +81,27 @@ static void calibration_task(void *arg)
     
     ESP_LOGI(TAG, "Calibration task started. Move the sensor laterally over the line...");
     
+    uint16_t samples[8];
     while(ctx->is_calibrating) {
-        xSemaphoreTake(ctx->mutex, portMAX_DELAY);
-        
-        bool all_calibrated_so_far = true;
-        
+        // Read ALL ADC outside the mutex — ~2ms, non-blocking for RT control
         for (int i = 0; i < ctx->config.num_sensors; i++) {
             uint16_t val = 0;
-            if (read_sensor_averaged(ctx, i, &val) == ESP_OK) {
-                // Adjust dynamic bounds
-                if (val < ctx->calib_min[i]) ctx->calib_min[i] = val;
-                if (val > ctx->calib_max[i]) ctx->calib_max[i] = val;
-                
-                // Sensor is calibrated if it has seen enough contrast (based on threshold)
-                if ((ctx->calib_max[i] - ctx->calib_min[i]) < ctx->config.calibration_threshold) {
-                    all_calibrated_so_far = false;
-                }
+            read_sensor_averaged(ctx, i, &val);
+            samples[i] = val;
+        }
+
+        // Fast critical section: only update calibration bounds
+        xSemaphoreTake(ctx->mutex, portMAX_DELAY);
+        bool all_calibrated_so_far = true;
+        for (int i = 0; i < ctx->config.num_sensors; i++) {
+            uint16_t val = samples[i];
+            if (val < ctx->calib_min[i]) ctx->calib_min[i] = val;
+            if (val > ctx->calib_max[i]) ctx->calib_max[i] = val;
+            if ((ctx->calib_max[i] - ctx->calib_min[i]) < ctx->config.calibration_threshold) {
+                all_calibrated_so_far = false;
             }
         }
-        
-        // Final flag flips only when EVERY sensor is ready
         ctx->is_fully_calibrated = all_calibrated_so_far;
-        
         xSemaphoreGive(ctx->mutex);
         vTaskDelay(pdMS_TO_TICKS(5));
     }
@@ -333,11 +332,10 @@ esp_err_t line_sensor_read_raw(line_sensor_handle_t handle, uint16_t *out_raw)
     if (handle == NULL || out_raw == NULL) return ESP_ERR_INVALID_ARG;
     struct line_sensor_context *ctx = (struct line_sensor_context *)handle;
 
-    xSemaphoreTake(ctx->mutex, portMAX_DELAY);
+    // ADC reads are thread-safe; no mutex needed
     for (int i = 0; i < ctx->config.num_sensors; i++) {
         read_sensor_averaged(ctx, i, &out_raw[i]);
     }
-    xSemaphoreGive(ctx->mutex);
     return ESP_OK;
 }
 
@@ -350,25 +348,29 @@ esp_err_t line_sensor_read_normalized(line_sensor_handle_t handle, float *out_no
     if (handle == NULL || out_normalized == NULL) return ESP_ERR_INVALID_ARG;
     struct line_sensor_context *ctx = (struct line_sensor_context *)handle;
 
-    xSemaphoreTake(ctx->mutex, portMAX_DELAY);
+    // Read ADC outside mutex (~2ms, non-blocking for calibration task)
+    uint16_t raw_vals[8];
     for (int i = 0; i < ctx->config.num_sensors; i++) {
-        uint16_t raw_val = 0;
-        read_sensor_averaged(ctx, i, &raw_val);
+        read_sensor_averaged(ctx, i, &raw_vals[i]);
+    }
+
+    // Fast critical section: only read calibration bounds + compute normalized
+    xSemaphoreTake(ctx->mutex, pdMS_TO_TICKS(1));
+    for (int i = 0; i < ctx->config.num_sensors; i++) {
+        uint16_t raw_val = raw_vals[i];
         ctx->internal_raw_buffer[i] = raw_val;
-        
+
         float range = (float)(ctx->calib_max[i] - ctx->calib_min[i]);
-        if (range <= 0.0f) range = 1.0f; // Prevent division by zero if uncalibrated
-        
+        if (range <= 0.0f) range = 1.0f;
+
         float norm = (float)(raw_val - ctx->calib_min[i]) / range;
-        
-        // Clamp to 0.0 .. 1.0 (Just in case reading drops below min or above max)
         if (norm < 0.0f) norm = 0.0f;
         if (norm > 1.0f) norm = 1.0f;
-        
+
         out_normalized[i] = norm;
     }
     xSemaphoreGive(ctx->mutex);
-    
+
     return ESP_OK;
 }
 
