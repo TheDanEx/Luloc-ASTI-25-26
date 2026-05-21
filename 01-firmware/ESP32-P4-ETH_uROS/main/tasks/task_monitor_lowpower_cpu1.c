@@ -110,7 +110,7 @@ static void task_monitor_lowpower_cpu1(void *arg)
 
                 // 4. Publish Performance ILP to MQTT (always, not just calibration)
                 if (mqtt_custom_client_is_connected()) {
-                    char ilp_buffer[1024];
+                    char ilp_buffer[4096];
                     struct timespec ts;
                     clock_gettime(CLOCK_REALTIME, &ts);
                     int64_t timestamp_ns = (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
