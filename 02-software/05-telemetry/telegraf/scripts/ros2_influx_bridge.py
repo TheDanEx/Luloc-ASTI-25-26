@@ -1,7 +1,6 @@
 import rclpy, json, socket, time
 from rclpy.node import Node
-from rclpy.executors import SingleThreadedExecutor
-from std_msgs.msg import String, Float32
+from std_msgs.msg import String
 
 class TelemetryBridge(Node):
     def __init__(self):
@@ -13,14 +12,11 @@ class TelemetryBridge(Node):
         self.create_subscription(String, '/sumo5/sensors', self.cb_sensors, 10)
         self.create_subscription(String, '/sumo5/motors', self.cb_motors, 10)
         self.create_subscription(String, '/sumo5/status', self.cb_status, 10)
-        self.create_subscription(Float32, '/sumo5/voltage', self.cb_voltage, 10)
         self.get_logger().info('Bridge sumo_5 ready')
 
     def send(self, line):
-        try:
-            self.sock.sendto(line.encode(), self.udp_addr)
-        except:
-            pass
+        try: self.sock.sendto(line.encode(), self.udp_addr)
+        except: pass
 
     def cb_diag(self, msg):
         d = json.loads(msg.data)
@@ -45,22 +41,14 @@ class TelemetryBridge(Node):
         ts = int(time.time() * 1e9)
         self.send(f'system,robot={self.robot} uptime_sec={d["up"]} {ts}')
 
-    def cb_voltage(self, msg):
-        ts = int(time.time() * 1e9)
-        self.send(f'power_system,robot={self.robot},sensor=battery voltage_mv={msg.data} {ts}')
-
 def main():
     rclpy.init()
     node = TelemetryBridge()
-    executor = SingleThreadedExecutor()
-    executor.add_node(node)
-    time.sleep(2)  # DDS discovery after node+executor set up
-    try:
-        executor.spin()
-    finally:
-        executor.remove_node(node)
-        node.destroy_node()
-        rclpy.shutdown()
+    time.sleep(2)
+    while rclpy.ok():
+        rclpy.spin_once(node, timeout_sec=0.5)
+    node.destroy_node()
+    rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
