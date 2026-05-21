@@ -20,8 +20,6 @@
 #include "telemetry_manager.h"
 #include "mqtt_api_responder.h"
 #include "driver/gpio.h"
-#include "ptp_client.h"
-
 #include "task_comms_cpu1.h"
 
 // =============================================================================
@@ -82,7 +80,7 @@ static void task_comms_cpu1(void *arg)
     // MQTT can start immediately and will reconnect until the broker is reachable.
     vTaskDelay(pdMS_TO_TICKS(500));
 
-    ptp_client_init();
+    // Time sync handled by micro-ROS (rmw_uros_sync_session)
 
     // Initialize MQTT Client
     if (mqtt_custom_client_init() != ESP_OK) {
