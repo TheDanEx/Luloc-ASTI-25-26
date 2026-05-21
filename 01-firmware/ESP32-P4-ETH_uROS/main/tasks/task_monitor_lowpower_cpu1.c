@@ -104,21 +104,20 @@ static void task_monitor_lowpower_cpu1(void *arg)
             ESP_LOGI(TAG, "System uptime: %s", uptime_str);
 
             // 2. Refresh performance snapshots
-            if (perf_mon_update() == ESP_OK) {
-                // 3. Print table to Console (matching legacy behavior)
+            esp_err_t perf_ret = perf_mon_update();
+            if (perf_ret == ESP_OK) {
                 perf_mon_print_report();
-
-                // 4. Publish Performance ILP to MQTT (always, not just calibration)
                 if (mqtt_custom_client_is_connected()) {
                     char ilp_buffer[4096];
                     struct timespec ts;
                     clock_gettime(CLOCK_REALTIME, &ts);
                     int64_t timestamp_ns = (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
-
                     if (perf_mon_get_report_ilp(ilp_buffer, sizeof(ilp_buffer), timestamp_ns) == ESP_OK) {
                         mqtt_custom_client_publish("robot/telemetry/performance", ilp_buffer, 0, 0, 0);
                     }
                 }
+            } else {
+                ESP_LOGI(TAG, "perf: %s", esp_err_to_name(perf_ret));
             }
         }
 
@@ -132,5 +131,5 @@ static void task_monitor_lowpower_cpu1(void *arg)
 
 void task_monitor_lowpower_cpu1_start(void)
 {
-    xTaskCreatePinnedToCore(task_monitor_lowpower_cpu1, "monitor_cpu1", 4096, NULL, 1, NULL, 1);
+    xTaskCreatePinnedToCore(task_monitor_lowpower_cpu1, "monitor_cpu1", 8192, NULL, 1, NULL, 1);
 }

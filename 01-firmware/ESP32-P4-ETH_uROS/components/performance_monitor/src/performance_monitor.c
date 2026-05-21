@@ -40,7 +40,7 @@ esp_err_t perf_mon_get_stats_absolute(perf_data_abs_t *stats)
     // But for GLOBAL CPU stats, we really want the IDLE time vs TOTAL time.
     
     // Total Runtime usually comes from a hardware timer (esp_timer or similar) used for stats.
-    uint32_t total_runtime_ul = 0;
+    uint64_t total_runtime_ul = 0;
     
     // Since we need to get IDLE counts, we must snapshot tasks.
     UBaseType_t task_count = uxTaskGetNumberOfTasks();
@@ -86,7 +86,7 @@ esp_err_t perf_mon_get_stats_absolute(perf_data_abs_t *stats)
 // Static state for relative calculations
 static TaskStatus_t *pxPrevTaskStatusArray = NULL;
 static UBaseType_t prev_task_count = 0;
-static uint32_t prev_total_runtime = 0;
+static uint64_t prev_total_runtime = 0;
 #endif
 
 // Calculated stats storage
@@ -106,7 +106,7 @@ esp_err_t perf_mon_update(void)
 #if (configUSE_TRACE_FACILITY != 1)
     return ESP_ERR_NOT_SUPPORTED;
 #else
-    uint32_t total_runtime;
+    uint64_t total_runtime;
     UBaseType_t task_count = uxTaskGetNumberOfTasks();
     
     // Allocate new snapshot
@@ -132,7 +132,7 @@ esp_err_t perf_mon_update(void)
     }
 
     // Calculate Deltas
-    uint32_t total_delta = total_runtime - prev_total_runtime;
+    uint64_t total_delta = total_runtime - prev_total_runtime;
     if (total_delta == 0) total_delta = 1; 
 
     float c0_idle = 0.0f;
@@ -151,7 +151,7 @@ esp_err_t perf_mon_update(void)
             }
         }
         
-        uint32_t delta = curr->ulRunTimeCounter - prev_time;
+        uint64_t delta = curr->ulRunTimeCounter - prev_time;
         float pct = ((float)delta * 100.0f) / (float)total_delta;
         
         // Accumulate IDLE
