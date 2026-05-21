@@ -90,6 +90,8 @@ static void task_comms_cpu1(void *arg)
     }
     mqtt_initialized = true;
 
+    // Forward all serial logs to MQTT (robot/logs/<level>)
+    mqtt_custom_client_log_forward_enable();
 
     perf_mon_init();
     

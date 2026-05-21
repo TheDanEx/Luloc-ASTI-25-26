@@ -94,6 +94,15 @@ int mqtt_custom_client_debug(const char *fmt, ...);
  */
 esp_err_t mqtt_custom_client_register_topic_callback(const char *topic, mqtt_message_callback_t callback);
 
+/**
+ * @brief Forward all ESP_LOG output to MQTT (robot/logs/<level>)
+ *
+ * Installs a vprintf hook that captures every ESP_LOGx call and
+ * publishes it via MQTT.  The original serial output is preserved.
+ * A recursion guard prevents the MQTT client's own logs from looping.
+ */
+void mqtt_custom_client_log_forward_enable(void);
+
 #ifdef __cplusplus
 }
 #endif

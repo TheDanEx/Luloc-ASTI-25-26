@@ -318,3 +318,56 @@ esp_err_t mqtt_custom_client_register_topic_callback(const char *topic, mqtt_mes
     ESP_LOGW(TAG, "No free callback slots (max: %d)", MQTT_CALLBACK_MAX);
     return ESP_ERR_NO_MEM;
 }
+
+// ===================================================================
+// Console → MQTT log forwarding (vprintf hook)
+// ===================================================================
+
+static vprintf_like_t s_original_vprintf = NULL;
+
+static int mqtt_vprintf_hook(const char *fmt, va_list args)
+{
+    static int in_hook = 0;
+    int ret = 0;
+
+    // Preserve serial output via original vprintf
+    if (s_original_vprintf) {
+        ret = s_original_vprintf(fmt, args);
+    }
+
+    // Guard against recursion (MQTT client also calls ESP_LOG)
+    if (in_hook) return ret;
+    in_hook = 1;
+
+    // Format the message
+    char msg[256];
+    int len = vsnprintf(msg, sizeof(msg), fmt, args);
+    if (len < 0) { in_hook = 0; return ret; }
+
+    // Trim trailing newline added by ESP-IDF log
+    if (len > 0 && msg[len - 1] == '\n') msg[len - 1] = '\0';
+
+    // Determine log level from the ANSI prefix or content
+    const char *level = "info";
+    if (strstr(fmt, "\033[31m") || strstr(msg, " E (")) level = "error";
+    else if (strstr(fmt, "\033[33m") || strstr(msg, " W (")) level = "warn";
+    else if (strstr(msg, " D (")) level = "debug";
+
+    // Skip MQTT client internal logs (would recurse)
+    if (strstr(msg, "MQTT") || strstr(msg, "mqtt") || strstr(msg, "Mqtt")) {
+        in_hook = 0;
+        return ret;
+    }
+
+    mqtt_custom_client_log(level, "%s", msg);
+    in_hook = 0;
+    return ret;
+}
+
+void mqtt_custom_client_log_forward_enable(void)
+{
+    if (s_original_vprintf == NULL) {
+        s_original_vprintf = esp_log_set_vprintf(mqtt_vprintf_hook);
+        ESP_LOGI(TAG, "Log forwarding to MQTT enabled");
+    }
+}
