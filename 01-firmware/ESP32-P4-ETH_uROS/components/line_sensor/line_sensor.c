@@ -320,6 +320,19 @@ bool line_sensor_is_calibrated(line_sensor_handle_t handle)
     return ctx->is_fully_calibrated;
 }
 
+esp_err_t line_sensor_get_calibration_bounds(line_sensor_handle_t handle,
+                                              uint16_t *out_min, uint16_t *out_max)
+{
+    if (handle == NULL || out_min == NULL || out_max == NULL) return ESP_ERR_INVALID_ARG;
+    struct line_sensor_context *ctx = (struct line_sensor_context *)handle;
+
+    xSemaphoreTake(ctx->mutex, pdMS_TO_TICKS(1));
+    memcpy(out_min, ctx->calib_min, ctx->config.num_sensors * sizeof(uint16_t));
+    memcpy(out_max, ctx->calib_max, ctx->config.num_sensors * sizeof(uint16_t));
+    xSemaphoreGive(ctx->mutex);
+    return ESP_OK;
+}
+
 // =============================================================================
 // Public API: Data Acquisition
 // =============================================================================

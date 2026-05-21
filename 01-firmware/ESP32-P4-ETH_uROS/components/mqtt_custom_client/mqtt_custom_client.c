@@ -339,9 +339,12 @@ static int mqtt_vprintf_hook(const char *fmt, va_list args)
     if (in_hook) return ret;
     in_hook = 1;
 
-    // Format the message
+    // Format the message (va_copy because original_vprintf consumed args)
+    va_list args_copy;
+    va_copy(args_copy, args);
     char msg[256];
-    int len = vsnprintf(msg, sizeof(msg), fmt, args);
+    int len = vsnprintf(msg, sizeof(msg), fmt, args_copy);
+    va_end(args_copy);
     if (len < 0) { in_hook = 0; return ret; }
 
     // Trim trailing newline added by ESP-IDF log

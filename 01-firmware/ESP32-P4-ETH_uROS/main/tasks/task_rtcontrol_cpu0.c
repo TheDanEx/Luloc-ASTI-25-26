@@ -161,8 +161,8 @@ static void task_rtcontrol_cpu0(void *arg)
         
         // 2. Line Sensor Polling — only when needed (not idle/teleop)
         bool need_line = (current_mode == MODE_AUTONOMOUS_PATH ||
-                          current_mode == MODE_SUMO ||
-                          current_mode == MODE_CALIBRATE_LINE);
+                          current_mode == MODE_SUMO);
+        // MODE_CALIBRATE_LINE: calib_task handles ADC, RT task skips to avoid contention
         line_sensor_data_t line_data;
         if (need_line) {
             line_sensor_read(line_array, &line_data);
