@@ -1,0 +1,18 @@
+dependencies:
+  espressif/es8311:
+    dependencies: []
+    source:
+      path: 
+        /home/danex/Luloc-ASTI-25-26/01-firmware/ESP32-P4-ETH_uROS/components/espressif__es8311
+      type: local
+    version: 1.0.0~1
+  idf:
+    source:
+      type: idf
+    version: 5.5.2
+direct_dependencies:
+- espressif/es8311
+- idf
+manifest_hash: 8da4ca7ec77cb9b692a01df185c345b6af485af00007e570061284a7ea529cad
+target: esp32p4
+version: 2.0.0

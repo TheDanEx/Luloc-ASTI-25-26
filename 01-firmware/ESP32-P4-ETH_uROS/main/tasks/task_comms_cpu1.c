@@ -1,0 +1,152 @@
+/*
+ * Task Comms CPU1 - Manages Communications, Telemetry, and Sensor Monitoring
+ * Core: 1
+ * SPDX-License-Identifier: MIT
+ */
+
+#include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+
+#include "esp_log.h"
+#include "esp_timer.h"
+
+#include "mqtt_custom_client.h"
+#include "state_machine.h"
+#include "shared_memory.h"
+#include "audio_player.h"
+#include "performance_monitor.h"
+#include "telemetry_manager.h"
+#include "mqtt_api_responder.h"
+#include "driver/gpio.h"
+#include "ptp_client.h"
+
+#include "task_comms_cpu1.h"
+
+// =============================================================================
+// Constants & Config
+// =============================================================================
+static const char *TAG = "comms_c1";
+
+#define CMD_QUEUE_SIZE          32
+#define CMD_QUEUE_ITEM_SIZE     256
+#define POLL_INTERVAL_MS        10
+
+// =============================================================================
+// Static Variables
+// =============================================================================
+static QueueHandle_t command_queue = NULL;
+static volatile bool mqtt_initialized = false;
+
+// (Telemetry moved to uROS - see uros_manager.c telemetry_timer_callback)
+
+// =============================================================================
+// Public API: Lifecycle
+// =============================================================================
+
+void task_comms_cpu1_init_queue(void)
+{
+    if (command_queue == NULL) {
+        command_queue = xQueueCreate(CMD_QUEUE_SIZE, CMD_QUEUE_ITEM_SIZE);
+    }
+}
+
+QueueHandle_t task_comms_cpu1_get_queue(void)
+{
+    return command_queue;
+}
+
+bool task_comms_cpu1_is_ready(void)
+{
+    return mqtt_initialized;
+}
+
+// =============================================================================
+// Main Task Implementation
+// =============================================================================
+
+/**
+ * Communications and Telemetry Hub (CPU 1).
+ * Responsibilities:
+ * 1. Maintain MQTT connectivity and topic subscriptions.
+ * 2. Manage high-level responders (API, PID Tuning).
+ * 3. Sample and batch high-frequency sensor telemetry (Odometry).
+ * 4. Coordinate inter-core command routing.
+ */
+static void task_comms_cpu1(void *arg)
+{
+    task_comms_cpu1_init_queue();
+
+    // The network stack is initialized by micro-ROS before this task starts.
+    // MQTT can start immediately and will reconnect until the broker is reachable.
+    vTaskDelay(pdMS_TO_TICKS(500));
+
+    ptp_client_init();
+
+    // Initialize MQTT Client
+    if (mqtt_custom_client_init() != ESP_OK) {
+        ESP_LOGE(TAG, "MQTT client initialization failed");
+        mqtt_initialized = false;
+        vTaskDelete(NULL);
+    }
+    mqtt_initialized = true;
+
+
+    perf_mon_init();
+    
+    // Telemetry moved to uROS (uros_manager.c)
+
+    vTaskDelay(pdMS_TO_TICKS(1000)); 
+    
+    // Register config responders. MQTT mode changes are explicitly rejected
+    // inside mqtt_api_responder; modes are controlled through micro-ROS.
+    mqtt_api_responder_init();
+    mqtt_api_responder_subscribe();
+
+    TickType_t last_sampling_tick = 0;
+    bool last_mqtt_conn = false;
+
+    while(1) {
+        TickType_t current_tick = xTaskGetTickCount();
+
+        // 1. MQTT Connectivity Sync
+        bool current_mqtt_conn = mqtt_custom_client_is_connected();
+        if (current_mqtt_conn != last_mqtt_conn) {
+            state_machine_notify_mqtt_status(current_mqtt_conn);
+            last_mqtt_conn = current_mqtt_conn;
+        }
+
+        // 2. Inter-core Command Handling
+        uint8_t intercore_msg[CMD_QUEUE_ITEM_SIZE];
+        if (xQueueReceive(command_queue, intercore_msg, 0) == pdTRUE) {
+            ESP_LOGI(TAG, "Inter-core message: %s", (char*)intercore_msg);
+        }
+
+        // 3. Periodic Sampling Loop (1Hz)
+        if ((current_tick - last_sampling_tick) >= pdMS_TO_TICKS(1000)) {
+             if (mqtt_custom_client_is_connected()) {
+                 shared_memory_set_mqtt_connected(true);
+                 // Resubscribe if connection was dropped and restored
+                 mqtt_api_responder_subscribe();
+             } else {
+                 shared_memory_set_mqtt_connected(false);
+             }
+
+             last_sampling_tick = current_tick;
+        }
+
+        // 4. High-frequency telemetry moved to uROS (uros_manager.c)
+        // MQTT only carries power + performance (low freq)
+        vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));
+    }
+}
+
+// =============================================================================
+// Task Start Wrapper
+// =============================================================================
+
+void task_comms_cpu1_start(void)
+{
+    xTaskCreatePinnedToCore(task_comms_cpu1, "comms_cpu1", 8192, NULL, 5, NULL, 1);
+}

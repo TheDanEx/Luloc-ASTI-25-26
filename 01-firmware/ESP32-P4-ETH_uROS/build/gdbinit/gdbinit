@@ -1,0 +1,2 @@
+source /home/danex/Luloc-ASTI-25-26/01-firmware/ESP32-P4-ETH_uROS/build/bootloader/gdbinit/symbols
+source /home/danex/Luloc-ASTI-25-26/01-firmware/ESP32-P4-ETH_uROS/build/bootloader/gdbinit/connect

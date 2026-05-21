@@ -7,11 +7,15 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_sntp.h"
+#include <time.h>
+#include <sys/time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "mqtt_custom_client.h"
-#include <time.h>
 #include <stdlib.h>
+#include <math.h>
+#include "esp_eth_mac_esp.h"
+#include "ethernet.h"
 
 // Networking headers for UDP/Multicast
 #include "lwip/err.h"
@@ -28,7 +32,15 @@ static const char *TAG = "ptp_client";
 // Global internal state
 static volatile int64_t master_slave_offset_us = 0;
 static volatile bool is_synchronized = false;
+static int64_t last_sync_offset_us = 0;
 static TaskHandle_t ptp_task_handle = NULL;
+
+// PI Controller for Hardware Clock steering
+static double s_adj_scale_factor = 1.0;
+static int64_t s_integral_error_us = 0;
+static const double Kp = 0.1;  // Proportional gain
+static const double Ki = 0.01; // Integral gain
+static const double MAX_ADJ = 0.001; // Max 1000ppm adjustment
 
 static void ptp_listener_task(void *arg)
 {
@@ -97,22 +109,83 @@ static void ptp_listener_task(void *arg)
                  }
                  
                  // If valid PTP Timestamp is contained
-                 if (sec > 1000000000ULL) {
+                  if (sec > 1000000000ULL) {
                      uint64_t master_epoch_us = (sec * 1000000ULL) + (nsec / 1000UL);
-                     int64_t local_up_us = esp_timer_get_time();
                      
-                     master_slave_offset_us = master_epoch_us - local_up_us;
-                                          if (!is_synchronized) {
-                             ESP_LOGI(TAG, "PTP Locked: %lld us offset", master_slave_offset_us);
+                     // Get Hardware RX Timestamp for this packet
+                     uint16_t seq_id = (rx_buffer[30] << 8) | rx_buffer[31];
+                     eth_mac_time_t hw_rx_ts;
+                     int64_t local_rx_us;
+                     
+                     if (ethernet_get_ptp_rx_timestamp(seq_id, &hw_rx_ts) == ESP_OK) {
+                         local_rx_us = (int64_t)hw_rx_ts.seconds * 1000000LL + (hw_rx_ts.nanoseconds / 1000LL);
+                         ESP_LOGD(TAG, "Hardware TS Match! Seq: %u", seq_id);
+                     } else {
+                         // Fallback to software if HW TS not found (should be rare)
+                         local_rx_us = get_ptp_timestamp_us();
+                         ESP_LOGW(TAG, "Hardware TS NOT found for Seq: %u, using SW fallback", seq_id);
+                     }
+                     
+                     int64_t current_offset_us = (int64_t)master_epoch_us - local_rx_us;
+                     
+                     // PI Controller logic
+                     if (!is_synchronized || llabs(current_offset_us) > 1000000LL) {
+                         // First sync or very large jump: Hard set the clock
+                         eth_mac_time_t hard_ts = {
+                             .seconds = (uint32_t)(master_epoch_us / 1000000ULL),
+                             .nanoseconds = (uint32_t)((master_epoch_us % 1000000ULL) * 1000ULL)
+                         };
+                         esp_eth_ioctl(ethernet_get_handle(), ETH_MAC_ESP_CMD_S_PTP_TIME, &hard_ts);
+                         s_integral_error_us = 0;
+                         s_adj_scale_factor = 1.0;
+                         ESP_LOGI(TAG, "PTP Initial HW Clock Set: %llu s", (uint64_t)hard_ts.seconds);
+                     } else {
+                         // Fine adjustment (Frequency Steering)
+                         s_integral_error_us += current_offset_us;
+                         
+                         // Limit integral to prevent windup
+                         if (s_integral_error_us > 1000000) s_integral_error_us = 1000000;
+                         if (s_integral_error_us < -1000000) s_integral_error_us = -1000000;
+                         
+                         double adj = (Kp * (double)current_offset_us + Ki * (double)s_integral_error_us) / 1000000.0;
+                         
+                         // Clamp adjustment
+                         if (adj > MAX_ADJ) adj = MAX_ADJ;
+                         if (adj < -MAX_ADJ) adj = -MAX_ADJ;
+                         
+                         s_adj_scale_factor = 1.0 + adj;
+                         esp_eth_ioctl(ethernet_get_handle(), ETH_MAC_ESP_CMD_ADJ_PTP_FREQ, &s_adj_scale_factor);
+                     }
+
+                     int64_t delta_us = (last_sync_offset_us == 0) ? 0 : (current_offset_us - last_sync_offset_us);
+                     last_sync_offset_us = current_offset_us;
+                     
+                     ESP_LOGI(TAG, "PTP HW Update | Error: %lld us | Jitter: %lld us | FreqAdj: %.6f", 
+                              current_offset_us, delta_us, s_adj_scale_factor);
+
+                     if (!is_synchronized) {
+                             master_slave_offset_us = current_offset_us;
+                             
+                            // Calcular la hora local ajustada de Espana (CET/CEST)
+                            setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
+                            tzset();
+                            
+                            time_t locked_time_sec = (time_t)(master_epoch_us / 1000000ULL);
+                            struct tm timeinfo;
+                            localtime_r(&locked_time_sec, &timeinfo);
+                            
+                            char strftime_buf[64];
+                            strftime(strftime_buf, sizeof(strftime_buf), "%Y-%m-%d %H:%M:%S", &timeinfo);
+                            
+                            ESP_LOGI(TAG, "PTP Date/Time (Spain): %s", strftime_buf);
+
+
                              is_synchronized = true;
 
                              // Set Spain timezone implicitly for the C STDLIB
                              setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
                              tzset();
                              
-                             struct tm timeinfo;
-                             time_t now = (time_t)(master_epoch_us / 1000000ULL);
-                             localtime_r(&now, &timeinfo);
                              char time_str[64];
                              strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &timeinfo);
 
@@ -156,10 +229,12 @@ esp_err_t ptp_client_init(void)
 
 uint64_t get_ptp_timestamp_us(void)
 {
-    int64_t local_up_time = esp_timer_get_time();
-    int64_t master_time = local_up_time + master_slave_offset_us;
-    if (master_time < 0) return 0;
-    return (uint64_t)master_time;
+    eth_mac_time_t hw_ts;
+    if (esp_eth_ioctl(ethernet_get_handle(), ETH_MAC_ESP_CMD_G_PTP_TIME, &hw_ts) == ESP_OK) {
+        return (uint64_t)hw_ts.seconds * 1000000ULL + (hw_ts.nanoseconds / 1000ULL);
+    }
+    // Fallback if Ethernet not ready
+    return (uint64_t)esp_timer_get_time() + master_slave_offset_us;
 }
 
 bool ptp_client_is_synced(void)

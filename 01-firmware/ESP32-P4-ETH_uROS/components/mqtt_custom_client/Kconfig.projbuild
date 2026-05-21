@@ -1,0 +1,8 @@
+menu "Luloc-ASTI: 1. Communications - MQTT Client"
+    config BROKER_URL
+        string "Broker URL"
+        default "mqtt://192.168.42.15:51111"
+        help
+            URL of the mqtt broker to which the esp32 will connect.
+            Format: mqtt://host:port or mqtts://host:port for TLS
+endmenu

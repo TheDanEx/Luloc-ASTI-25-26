@@ -11,6 +11,7 @@
 #include "esp_eth.h"
 #include "esp_event.h"
 #include "driver/gpio.h"
+#include "esp_eth_mac_esp.h"
 #include "sdkconfig.h"
 #include <string.h>
 #if CONFIG_EXAMPLE_USE_SPI_ETHERNET
@@ -58,6 +59,58 @@ static uint8_t s_eth_cnt = 0;
 static esp_netif_t **s_eth_netifs = NULL;
 static esp_eth_netif_glue_handle_t *s_eth_netif_glues = NULL;
 static bool s_got_ip = false;
+static esp_eth_handle_t s_primary_eth_handle = NULL;
+
+// PTP Hardware Timestamp Cache
+#define PTP_TS_CACHE_SIZE 8
+typedef struct {
+    uint16_t seq_id;
+    eth_mac_time_t ts;
+    bool valid;
+} ptp_ts_entry_t;
+
+static ptp_ts_entry_t s_ptp_ts_cache[PTP_TS_CACHE_SIZE];
+static uint8_t s_ptp_ts_cache_idx = 0;
+
+static esp_err_t ptp_eth_input_hook(esp_eth_handle_t eth_handle, uint8_t *buffer, uint32_t length, void *priv, void *info)
+{
+    // Minimal PTP parsing in the RX path
+    // Ethernet(14) + IP(20) + UDP(8) = 42 bytes header
+    if (length >= 44 && buffer[12] == 0x08 && buffer[13] == 0x00) { // IPv4
+        uint8_t ip_proto = buffer[23];
+        if (ip_proto == 17) { // UDP
+            uint16_t dst_port = (buffer[36] << 8) | buffer[37];
+            if (dst_port == 319 && info != NULL) { // PTP Event Port
+                // PTP message starts at offset 42
+                // Sequence ID is at offset 42 + 30 = 72
+                uint16_t seq_id = (buffer[72] << 8) | buffer[73];
+                eth_mac_time_t *hw_ts = (eth_mac_time_t *)info;
+                
+                s_ptp_ts_cache[s_ptp_ts_cache_idx].seq_id = seq_id;
+                s_ptp_ts_cache[s_ptp_ts_cache_idx].ts = *hw_ts;
+                s_ptp_ts_cache[s_ptp_ts_cache_idx].valid = true;
+                s_ptp_ts_cache_idx = (s_ptp_ts_cache_idx + 1) % PTP_TS_CACHE_SIZE;
+            }
+        }
+    }
+    
+    // Pass to original stack input (netif)
+    esp_netif_t *netif = (esp_netif_t *)priv;
+    return esp_netif_receive(netif, buffer, length, NULL);
+}
+
+esp_err_t ethernet_get_ptp_rx_timestamp(uint16_t seq_id, eth_mac_time_t *ts_out)
+{
+    for (int i = 0; i < PTP_TS_CACHE_SIZE; i++) {
+        if (s_ptp_ts_cache[i].valid && s_ptp_ts_cache[i].seq_id == seq_id) {
+            *ts_out = s_ptp_ts_cache[i].ts;
+            s_ptp_ts_cache[i].valid = false; // Consume it
+            return ESP_OK;
+        }
+    }
+    return ESP_ERR_NOT_FOUND;
+}
+
 
 
 /**
@@ -470,6 +523,10 @@ esp_err_t ethernet_init(void)
             ESP_LOGE(TAG, "esp_netif_attach failed");
             goto cleanup_glues_mem;
         }
+        
+        // Register PTP RX Hook
+        esp_eth_update_input_path_info(s_eth_handles[0], ptp_eth_input_hook, s_eth_netifs[0]);
+        s_primary_eth_handle = s_eth_handles[0];
     } else {
         // Use ESP_NETIF_INHERENT_DEFAULT_ETH for multiple interfaces
         esp_netif_inherent_config_t esp_netif_config = ESP_NETIF_INHERENT_DEFAULT_ETH();
@@ -559,6 +616,12 @@ esp_err_t ethernet_init(void)
 
     // Start Ethernet driver state machine
     for (int i = 0; i < s_eth_cnt; i++) {
+        // Enable PTP Hardware Timestamping if it's the internal EMAC
+        bool ptp_enable = true;
+        if (esp_eth_ioctl(s_eth_handles[i], ETH_MAC_ESP_CMD_PTP_ENABLE, &ptp_enable) == ESP_OK) {
+            ESP_LOGI(TAG, "PTP Hardware Timestamping enabled on interface %d", i);
+        }
+
         ret = esp_eth_start(s_eth_handles[i]);
         if (ret != ESP_OK) {
             ESP_LOGE(TAG, "esp_eth_start failed at index %d", i);
@@ -648,4 +711,9 @@ esp_err_t ethernet_deinit(void)
 bool ethernet_is_connected(void)
 {
     return s_got_ip;
+}
+
+esp_eth_handle_t ethernet_get_handle(void)
+{
+    return s_primary_eth_handle;
 }

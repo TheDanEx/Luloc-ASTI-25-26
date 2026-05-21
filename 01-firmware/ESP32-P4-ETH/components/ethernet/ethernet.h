@@ -77,6 +77,22 @@ esp_err_t ethernet_deinit(void);
  */
 bool ethernet_is_connected(void);
 
+/**
+ * @brief Get the Ethernet driver handle
+ * 
+ * @return esp_eth_handle_t handle of the primary Ethernet interface
+ */
+esp_eth_handle_t ethernet_get_handle(void);
+
+/**
+ * @brief Retrieve a cached PTP hardware RX timestamp
+ * 
+ * @param seq_id PTP sequence ID to look for
+ * @param ts_out Pointer to store the found timestamp
+ * @return ESP_OK on success, ESP_ERR_NOT_FOUND if not in cache
+ */
+esp_err_t ethernet_get_ptp_rx_timestamp(uint16_t seq_id, eth_mac_time_t *ts_out);
+
 #ifdef __cplusplus
 }
 #endif

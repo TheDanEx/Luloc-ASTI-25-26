@@ -1,0 +1,11 @@
+float32 motor_speed_left
+float32 motor_speed_right
+float32 motor_distance_left
+float32 motor_distance_right
+float32 battery_voltage
+float32 robot_current
+float32 line_position
+bool line_detected
+bool line_is_calibrated
+float32[8] line_normalized
+uint16[8] line_raw
