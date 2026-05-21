@@ -307,7 +307,7 @@ static void micro_ros_task(void *arg)
         // Use unique topic name to avoid DDS conflicts with other robots
         rcl_ret_t rc_pub = rclc_publisher_init_default(&diag_publisher, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
-            "/sumo5/diag");
+            "/microROS/esp_diag_time");
         if (rc_pub != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED diag pub: ret=%d, node_ok=%d, ts_ok=%d",
                 (int)rc_pub,
@@ -319,7 +319,7 @@ static void micro_ros_task(void *arg)
 
         if (rclc_publisher_init_default(&voltage_publisher, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-            "/sumo5/voltage") != RCL_RET_OK) {
+            "/robot/voltage") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED voltage pub");
             return;
         }
@@ -328,7 +328,7 @@ static void micro_ros_task(void *arg)
         // 3. Sensors (String - JSON)
         if (rclc_publisher_init_default(&sensors_publisher, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
-            "/sumo5/sensors") != RCL_RET_OK) {
+            "/robot/sensors") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED sensors pub");
             return;
         }
@@ -337,7 +337,7 @@ static void micro_ros_task(void *arg)
         // 4. Motors (String - JSON)
         if (rclc_publisher_init_default(&motors_publisher, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
-            "/sumo5/motors") != RCL_RET_OK) {
+            "/robot/motors") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED motors pub");
             return;
         }
@@ -346,7 +346,7 @@ static void micro_ros_task(void *arg)
         // 5. Status (String - JSON)
         if (rclc_publisher_init_default(&status_publisher, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
-            "/sumo5/status") != RCL_RET_OK) {
+            "/robot/status") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED status pub");
             return;
         }
@@ -358,18 +358,18 @@ static void micro_ros_task(void *arg)
         RCCHECK(rclc_subscription_init_default(
             &velocity_subscriber, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
-            "/sumo5/cmd_vel"));
+            "/cmd_vel"));
 
         // 2. mode_cmd (Int8)
         RCCHECK(rclc_subscription_init_default(
             &mode_subscriber, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
-            "/sumo5/mode_cmd"));
+            "/robot/mode_cmd"));
 
         // 3. config (String - JSON)
         if (rclc_subscription_init_default(&config_subscriber, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
-            "/sumo5/config") != RCL_RET_OK) {
+            "/robot/config") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED config sub");
             return;
         }
@@ -378,7 +378,7 @@ static void micro_ros_task(void *arg)
         // 4. curvature (Float32)
         if (rclc_subscription_init_default(&curvature_subscriber, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-            "/sumo5/curvature") != RCL_RET_OK) {
+            "/robot/curvature") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED curvature sub");
             return;
         }
@@ -387,7 +387,7 @@ static void micro_ros_task(void *arg)
         // 5. pid_motors (String - JSON)
         if (rclc_subscription_init_default(&pid_subscriber, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
-            "/sumo5/pid_motors") != RCL_RET_OK) {
+            "/robot/pid_motors") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED pid sub");
             return;
         }

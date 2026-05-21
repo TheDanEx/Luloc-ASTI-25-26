@@ -8,10 +8,10 @@ class TelemetryBridge(Node):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udp_addr = ("127.0.0.1", 8094)
         self.robot = "Luloc"
-        self.create_subscription(String, '/sumo5/diag', self.cb_diag, 10)
-        self.create_subscription(String, '/sumo5/sensors', self.cb_sensors, 10)
-        self.create_subscription(String, '/sumo5/motors', self.cb_motors, 10)
-        self.create_subscription(String, '/sumo5/status', self.cb_status, 10)
+        self.create_subscription(String, '/microROS/esp_diag_time', self.cb_diag, 10)
+        self.create_subscription(String, '/robot/sensors', self.cb_sensors, 10)
+        self.create_subscription(String, '/robot/motors', self.cb_motors, 10)
+        self.create_subscription(String, '/robot/status', self.cb_status, 10)
         self.get_logger().info('Bridge sumo_5 ready')
 
     def send(self, line):
