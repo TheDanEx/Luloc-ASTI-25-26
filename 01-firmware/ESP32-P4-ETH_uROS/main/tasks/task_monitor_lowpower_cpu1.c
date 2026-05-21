@@ -105,7 +105,7 @@ static void task_monitor_lowpower_cpu1(void *arg)
             ESP_LOGI(TAG, "System uptime: %s", uptime_str);
 
             // MQTT status log every 60 iterations (~60s)
-            if (++log_counter >= 60 && mqtt_custom_client_is_connected()) {
+            if (++log_counter >= 60) {  // every ~60s
                 log_counter = 0;
                 robot_state_context_t *ctx = state_machine_get_context();
                 mqtt_custom_client_log("info", "uptime=%s mode=%d bat=%.1fV",
