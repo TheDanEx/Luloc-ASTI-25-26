@@ -212,7 +212,7 @@ static void telemetry_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
         "{\"sl\":%.4f,\"sr\":%.4f,\"dl\":%.4f,\"dr\":%.4f,\"bat\":%.2f,\"cur\":%.2f,"
         "\"lp\":%.4f,\"ld\":%d,\"lc\":%d,"
         "\"n0\":%.3f,\"n1\":%.3f,\"n2\":%.3f,\"n3\":%.3f,\"n4\":%.3f,\"n5\":%.3f,\"n6\":%.3f,\"n7\":%.3f}",
-        shm->sensors.motor_speed_left, shm->sensors.motor_speed_right,
+        shm->sensors.motor_speed_left, -shm->sensors.motor_speed_right,
         shm->sensors.motor_distance_left, -shm->sensors.motor_distance_right,
         shm->sensors.battery_voltage, shm->sensors.robot_current,
         shm->sensors.line_position_m, shm->sensors.line_detected ? 1 : 0,
