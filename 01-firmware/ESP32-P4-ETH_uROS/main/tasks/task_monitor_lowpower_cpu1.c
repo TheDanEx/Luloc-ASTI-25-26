@@ -65,6 +65,7 @@ static void task_monitor_lowpower_cpu1(void *arg)
 
     // Counter for slower performance snapshots (e.g. every 5s)
     uint32_t perf_counter = 0;
+    uint32_t log_counter = 0;
     char uptime_str[64];
 
     while (1) {
@@ -102,6 +103,16 @@ static void task_monitor_lowpower_cpu1(void *arg)
             // 1. Print Uptime to Console (matching legacy behavior)
             test_sensor_get_uptime_str(uptime_str, sizeof(uptime_str));
             ESP_LOGI(TAG, "System uptime: %s", uptime_str);
+
+            // MQTT status log every 60 iterations (~60s)
+            if (++log_counter >= 60 && mqtt_custom_client_is_connected()) {
+                log_counter = 0;
+                robot_state_context_t *ctx = state_machine_get_context();
+                mqtt_custom_client_log("info", "uptime=%s mode=%d bat=%.1fV",
+                    uptime_str,
+                    ctx ? ctx->current_mode : -1,
+                    power_data.voltage_mv / 1000.0f);
+            }
 
             // 2. Refresh performance snapshots
             esp_err_t perf_ret = perf_mon_update();
