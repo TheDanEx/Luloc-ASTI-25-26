@@ -3,11 +3,51 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
+#include "esp_timer.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 static const char *TAG = "perf_mon";
+
+/*
+ * Task-to-core mapping.
+ *
+ * ESP-IDP SMP FreeRTOS ships with configUSE_CORE_AFFINITY=0;
+ * the public API vTaskCoreAffinityGet() is unavailable.
+ * We maintain a minimal dispatch table for tasks created by our
+ * firmware (xTaskCreatePinnedToCore). System tasks are identified
+ * by their documented ESP-IDF defaults.
+ */
+static int resolve_task_core(const char *name)
+{
+    if (name == NULL) return -1;
+
+    if (strcmp(name, "IDLE0")           == 0) return 0;
+    if (strcmp(name, "IDLE1")           == 0) return 1;
+
+    /* ----  our firmware tasks (pinned at creation) ---- */
+    if (strcmp(name, "rtcontrol_cpu0")  == 0) return 0;
+    if (strcmp(name, "comms_cpu1")      == 0) return 1;
+    if (strcmp(name, "monitor_cpu1")    == 0) return 1;
+    if (strcmp(name, "calib_task")      == 0) return 0;
+
+    /* ----  ESP-IDF system tasks ---- */
+    if (strcmp(name, "main")            == 0) return 0;
+    if (strcmp(name, "esp_timer")       == 0) return 0;
+    if (strcmp(name, "tiT")             == 0) return 0;  /* IPC timer */
+    if (strcmp(name, "emac_rx")         == 0) return 0;
+    if (strcmp(name, "ipc0")            == 0) return 0;
+    if (strcmp(name, "ipc1")            == 0) return 1;
+
+    /* ---- library tasks (not pinned) ---- */
+    if (strcmp(name, "uros_task")       == 0) return 1;  /* created on CPU1 */
+    if (strcmp(name, "mqtt_task")       == 0) return 1;
+    if (strcmp(name, "tel_power_syste") == 0) return 1;
+    if (strncmp(name, "tel_", 4)        == 0) return 1;
+
+    return -1;
+}
 
 esp_err_t perf_mon_init(void)
 {
@@ -131,29 +171,21 @@ esp_err_t perf_mon_update(void)
         return ESP_ERR_NO_MEM;
     }
 
-    // Calculate Deltas (per-core, SMP-safe)
+    // Per-core delta tracking
     uint64_t total_cpu0 = 0;
     uint64_t total_cpu1 = 0;
 
-    float c0_idle = 0.0f;
-    float c1_idle = 0.0f;
-    size_t valid_records = 0;
+    // Pre-compute deltas for all tasks (single pass lookup)
+    typedef struct { TaskHandle_t handle; uint64_t delta; int core; } delta_entry_t;
+    delta_entry_t *deltas = malloc(task_count * sizeof(delta_entry_t));
+    if (deltas == NULL) { free(pxTaskStatusArray); free(new_records); return ESP_ERR_NO_MEM; }
 
-    // Helper to determine core from task name
-    #define IS_CPU0(name) (strstr(name, "cpu0") || strstr(name, "IDLE0") || \
-        strstr(name, "rtcontrol") || strstr(name, "calib") || \
-        strstr(name, "tiT") || strstr(name, "emac") || \
-        strstr(name, "esp_timer") || strstr(name, "main") || \
-        strstr(name, "ipc0"))
-    #define IS_CPU1(name) (strstr(name, "cpu1") || strstr(name, "IDLE1") || \
-        strstr(name, "comms") || strstr(name, "monitor") || \
-        strstr(name, "uros") || strstr(name, "mqtt") || \
-        strstr(name, "tel_") || strstr(name, "ipc1"))
-
-    // First pass: compute per-core totals from task deltas
     for (UBaseType_t i = 0; i < task_count; i++) {
         TaskStatus_t *curr = &pxTaskStatusArray[i];
-        const char *name = curr->pcTaskName;
+        deltas[i].handle = curr->xHandle;
+        deltas[i].core  = -1;
+
+        // Find previous runtime for this task handle
         uint64_t prev_time = 0;
         for (UBaseType_t j = 0; j < prev_task_count; j++) {
             if (pxPrevTaskStatusArray[j].xHandle == curr->xHandle) {
@@ -161,45 +193,42 @@ esp_err_t perf_mon_update(void)
                 break;
             }
         }
-        uint64_t delta = curr->ulRunTimeCounter - prev_time;
-        if (IS_CPU0(name)) total_cpu0 += delta;
-        else if (IS_CPU1(name)) total_cpu1 += delta;
-        else { total_cpu0 += delta / 2; total_cpu1 += delta / 2; }
+        deltas[i].delta = curr->ulRunTimeCounter - prev_time;
+
+        // Determine core from known pinning (see resolve_task_core above)
+        deltas[i].core = resolve_task_core(curr->pcTaskName);
+
+        // Accumulate totals (unpinned tasks split evenly)
+        if      (deltas[i].core == 0) total_cpu0 += deltas[i].delta;
+        else if (deltas[i].core == 1) total_cpu1 += deltas[i].delta;
+        else { total_cpu0 += deltas[i].delta / 2; total_cpu1 += deltas[i].delta / 2; }
     }
     if (total_cpu0 == 0) total_cpu0 = 1;
     if (total_cpu1 == 0) total_cpu1 = 1;
 
-    // Second pass: compute per-core percentages
+    // Compute percentages and store records
+    float  c0_idle = 0.0f, c1_idle = 0.0f;
+    size_t valid_records = 0;
+
     for (UBaseType_t i = 0; i < task_count; i++) {
-        TaskStatus_t *curr = &pxTaskStatusArray[i];
-        const char *name = curr->pcTaskName;
-        uint64_t prev_time = 0;
-        for (UBaseType_t j = 0; j < prev_task_count; j++) {
-            if (pxPrevTaskStatusArray[j].xHandle == curr->xHandle) {
-                prev_time = pxPrevTaskStatusArray[j].ulRunTimeCounter;
-                break;
-            }
-        }
-        
-        uint64_t delta = curr->ulRunTimeCounter - prev_time;
-        uint64_t core_total = IS_CPU0(name) ? total_cpu0 : (IS_CPU1(name) ? total_cpu1 : total_cpu0);
-        float pct = ((float)delta * 100.0f) / (float)core_total;
-        
-        // Accumulate IDLE
-        if (strcmp(name, "IDLE0") == 0) c0_idle = pct;
+        const char  *name = pxTaskStatusArray[i].pcTaskName;
+        uint64_t     d    = deltas[i].delta;
+        int          core = deltas[i].core;
+        uint64_t     ctot = (core == 0) ? total_cpu0 : ((core == 1) ? total_cpu1 : total_cpu0);
+        float        pct  = ((float)d * 100.0f) / (float)ctot;
+
+        if      (strcmp(name, "IDLE0") == 0) c0_idle = pct;
         else if (strcmp(name, "IDLE1") == 0) c1_idle = pct;
 
-        int core_id = IS_CPU0(name) ? 0 : (IS_CPU1(name) ? 1 : (int)tskNO_AFFINITY);
-
-        // Store in record
         if (pct > 0.0f) {
-            strncpy(new_records[valid_records].name, name, configMAX_TASK_NAME_LEN - 1);
-            new_records[valid_records].name[configMAX_TASK_NAME_LEN - 1] = '\0';
-            new_records[valid_records].core_id = core_id;
-            new_records[valid_records].usage_pct = pct;
-            valid_records++;
+            perf_record_t *rec = &new_records[valid_records++];
+            strncpy(rec->name, name, configMAX_TASK_NAME_LEN - 1);
+            rec->name[configMAX_TASK_NAME_LEN - 1] = '\0';
+            rec->core_id   = (core >= 0) ? core : (int)tskNO_AFFINITY;
+            rec->usage_pct = pct;
         }
     }
+    free(deltas);
 
     // Update global state
     if (s_records) free(s_records);
