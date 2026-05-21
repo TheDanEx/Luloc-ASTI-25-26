@@ -27,7 +27,10 @@ class TelemetryBridge(Node):
         d = json.loads(msg.data)
         ts = int(time.time() * 1e9)
         r = self.robot
-        self.send(f'line_sensor,robot={r} s0={d["n0"]},s1={d["n1"]},s2={d["n2"]},s3={d["n3"]},s4={d["n4"]},s5={d["n5"]},s6={d["n6"]},s7={d["n7"]} {ts}')
+        self.send(f'line_sensor,robot={r} s0={d["n0"]},s1={d["n1"]},s2={d["n2"]},s3={d["n3"]},s4={d["n4"]},s5={d["n5"]},s6={d["n6"]},s7={d["n7"]},'
+                  f'raw0={d.get("r0",0)},raw1={d.get("r1",0)},raw2={d.get("r2",0)},raw3={d.get("r3",0)},raw4={d.get("r4",0)},raw5={d.get("r5",0)},raw6={d.get("r6",0)},raw7={d.get("r7",0)},'
+                  f'min0={d.get("min0",0)},min1={d.get("min1",0)},min2={d.get("min2",0)},min3={d.get("min3",0)},min4={d.get("min4",0)},min5={d.get("min5",0)},min6={d.get("min6",0)},min7={d.get("min7",0)},'
+                  f'max0={d.get("max0",0)},max1={d.get("max1",0)},max2={d.get("max2",0)},max3={d.get("max3",0)},max4={d.get("max4",0)},max5={d.get("max5",0)},max6={d.get("max6",0)},max7={d.get("max7",0)} {ts}')
         self.send(f'odometry,robot={r} velIZ={d["sl"]},posIZ={d["dl"]},velDR={d["sr"]},posDR={d["dr"]} {ts}')
 
     def cb_motors(self, msg):

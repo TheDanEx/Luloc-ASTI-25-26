@@ -187,6 +187,8 @@ static void task_rtcontrol_cpu0(void *arg)
                 }
                 shm->sensors.line_is_calibrated = line_sensor_is_calibrated(line_array);
             }
+            // Always sync calibration bounds (updated by calib_task even when RT skips ADC)
+            line_sensor_get_calibration_bounds(line_array, shm->sensors.line_min, shm->sensors.line_max);
             
             xSemaphoreGive(shm->mutex);
         }

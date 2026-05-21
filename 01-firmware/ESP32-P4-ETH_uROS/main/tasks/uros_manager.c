@@ -32,7 +32,7 @@
 
 static const char *TAG = "UROS_MGR";
 
-#define STRING_BUFFER_LEN 256
+#define STRING_BUFFER_LEN 1024
 #define SYNC_INTERVAL_MS 5000
 #define WHEEL_BASE_M 0.170f
 
@@ -211,7 +211,10 @@ static void telemetry_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
     snprintf(sensors_msg.data.data, sensors_msg.data.capacity,
         "{\"sl\":%.4f,\"sr\":%.4f,\"dl\":%.4f,\"dr\":%.4f,\"bat\":%.2f,\"cur\":%.2f,"
         "\"lp\":%.4f,\"ld\":%d,\"lc\":%d,"
-        "\"n0\":%.3f,\"n1\":%.3f,\"n2\":%.3f,\"n3\":%.3f,\"n4\":%.3f,\"n5\":%.3f,\"n6\":%.3f,\"n7\":%.3f}",
+        "\"n0\":%.3f,\"n1\":%.3f,\"n2\":%.3f,\"n3\":%.3f,\"n4\":%.3f,\"n5\":%.3f,\"n6\":%.3f,\"n7\":%.3f,"
+        "\"r0\":%u,\"r1\":%u,\"r2\":%u,\"r3\":%u,\"r4\":%u,\"r5\":%u,\"r6\":%u,\"r7\":%u,"
+        "\"min0\":%u,\"min1\":%u,\"min2\":%u,\"min3\":%u,\"min4\":%u,\"min5\":%u,\"min6\":%u,\"min7\":%u,"
+        "\"max0\":%u,\"max1\":%u,\"max2\":%u,\"max3\":%u,\"max4\":%u,\"max5\":%u,\"max6\":%u,\"max7\":%u}",
         shm->sensors.motor_speed_left, -shm->sensors.motor_speed_right,
         shm->sensors.motor_distance_left, -shm->sensors.motor_distance_right,
         shm->sensors.battery_voltage, shm->sensors.robot_current,
@@ -220,7 +223,19 @@ static void telemetry_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
         shm->sensors.line_norm[0], shm->sensors.line_norm[1],
         shm->sensors.line_norm[2], shm->sensors.line_norm[3],
         shm->sensors.line_norm[4], shm->sensors.line_norm[5],
-        shm->sensors.line_norm[6], shm->sensors.line_norm[7]);
+        shm->sensors.line_norm[6], shm->sensors.line_norm[7],
+        (unsigned)shm->sensors.line_raw[0], (unsigned)shm->sensors.line_raw[1],
+        (unsigned)shm->sensors.line_raw[2], (unsigned)shm->sensors.line_raw[3],
+        (unsigned)shm->sensors.line_raw[4], (unsigned)shm->sensors.line_raw[5],
+        (unsigned)shm->sensors.line_raw[6], (unsigned)shm->sensors.line_raw[7],
+        (unsigned)shm->sensors.line_min[0], (unsigned)shm->sensors.line_min[1],
+        (unsigned)shm->sensors.line_min[2], (unsigned)shm->sensors.line_min[3],
+        (unsigned)shm->sensors.line_min[4], (unsigned)shm->sensors.line_min[5],
+        (unsigned)shm->sensors.line_min[6], (unsigned)shm->sensors.line_min[7],
+        (unsigned)shm->sensors.line_max[0], (unsigned)shm->sensors.line_max[1],
+        (unsigned)shm->sensors.line_max[2], (unsigned)shm->sensors.line_max[3],
+        (unsigned)shm->sensors.line_max[4], (unsigned)shm->sensors.line_max[5],
+        (unsigned)shm->sensors.line_max[6], (unsigned)shm->sensors.line_max[7]);
     sensors_msg.data.size = strlen(sensors_msg.data.data);
 
     // Pack motors as JSON
