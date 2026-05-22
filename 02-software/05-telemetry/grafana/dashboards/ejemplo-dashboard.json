@@ -30,6 +30,7 @@
           },
           "decimals": 0,
           "displayName": "Uptime",
+          "fieldMinMax": false,
           "mappings": [],
           "min": 0,
           "thresholds": {
@@ -286,7 +287,7 @@
           "refId": "A"
         }
       ],
-      "title": "CPU Pi Temp(C\u00ba)",
+      "title": "CPU Pi Temp(Cº)",
       "type": "gauge"
     },
     {
@@ -604,7 +605,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 5,
+        "h": 6,
         "w": 3,
         "x": 10,
         "y": 4
@@ -659,26 +660,24 @@
             "mode": "thresholds"
           },
           "mappings": [],
-          "max": 17000,
-          "min": 14000,
           "thresholds": {
-            "mode": "percentage",
+            "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "green",
                 "value": 0
               },
               {
-                "color": "orange",
-                "value": 20
+                "color": "#EAB839",
+                "value": 5000
               },
               {
-                "color": "green",
-                "value": 50
+                "color": "red",
+                "value": 10000
               }
             ]
           },
-          "unit": "mvolt"
+          "unit": "mamp"
         },
         "overrides": []
       },
@@ -688,12 +687,12 @@
         "x": 13,
         "y": 4
       },
-      "id": 26,
+      "id": 22,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "auto",
-        "orientation": "vertical",
+        "orientation": "auto",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
@@ -713,11 +712,11 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"power_system\")\n  |> filter(fn: (r) => r[\"_field\"] == \"voltage_mv\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"mean\")\n",
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"power_system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"current_ma\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")",
           "refId": "A"
         }
       ],
-      "title": "Battery Voltaje",
+      "title": "Robot Current",
       "type": "stat"
     },
     {
@@ -756,6 +755,7 @@
             "mode": "palette-classic"
           },
           "decimals": 1,
+          "displayName": "${__field.labels.task}",
           "mappings": [],
           "max": 100,
           "min": 0,
@@ -772,8 +772,7 @@
               }
             ]
           },
-          "unit": "percent",
-          "displayName": "${__field.labels.task}"
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -829,6 +828,7 @@
             "mode": "palette-classic"
           },
           "decimals": 1,
+          "displayName": "${__field.labels.task}",
           "mappings": [],
           "max": 100,
           "min": 0,
@@ -845,8 +845,7 @@
               }
             ]
           },
-          "unit": "percent",
-          "displayName": "${__field.labels.task}"
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -924,9 +923,9 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 3,
+        "h": 5,
         "w": 3,
-        "x": 10,
+        "x": 13,
         "y": 9
       },
       "id": 25,
@@ -971,148 +970,24 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
+          "mappings": [
+            {
+              "options": {
+                "from": 0,
+                "result": {
+                  "text": "OK"
+                },
+                "to": 10
               },
-              {
-                "color": "#EAB839",
-                "value": 5000
-              },
-              {
-                "color": "red",
-                "value": 10000
-              }
-            ]
-          },
-          "unit": "mamp"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 13,
-        "y": 9
-      },
-      "id": 22,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
+              "type": "range"
+            }
           ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"power_system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"current_ma\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")",
-          "refId": "A"
-        }
-      ],
-      "title": "Robot Current",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "P951FEA4DE68E13C5"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 1,
-          "displayName": "${__field.name}",
-          "fieldMinMax": true,
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
                 "value": 0
-              }
-            ]
-          },
-          "unit": "Mbits"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 3,
-        "x": 10,
-        "y": 12
-      },
-      "id": 24,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "horizontal",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"net\")\r\n  |> filter(fn: (r) => r[\"interface\"] == \"eth0\" or r[\"interface\"] == \"wlan0\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"bytes_recv\" or r[\"_field\"] == \"bytes_sent\")\r\n  |> derivative(unit: 1s, nonNegative: true)\r\n  |> map(fn: (r) => ({ r with _value: (r._value * 8.0) / 1000000.0 }))\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> map(fn: (r) => ({ r with _field: r.interface + \"_\" + r._field }))\r\n  |> yield(name: \"velocidad_mbps\")",
-          "refId": "A"
-        }
-      ],
-      "title": "LAN Usage",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "P951FEA4DE68E13C5"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "yellow",
-                "value": 5
               },
               {
                 "color": "red",
@@ -1127,12 +1002,12 @@
       "gridPos": {
         "h": 4,
         "w": 3,
-        "x": 13,
-        "y": 12
+        "x": 10,
+        "y": 10
       },
-      "id": 43,
+      "id": 44,
       "options": {
-        "colorMode": "value",
+        "colorMode": "background",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
@@ -1155,7 +1030,7 @@
           "refId": "A"
         }
       ],
-      "title": "MQTT Data Age (s)",
+      "title": "MQTT Health",
       "type": "stat"
     },
     {
@@ -1195,6 +1070,67 @@
       ],
       "title": "Logs",
       "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "displayName": "${__field.name}",
+          "fieldMinMax": true,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "Mbits"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 10,
+        "y": 14
+      },
+      "id": 24,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "vertical",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"net\")\r\n  |> filter(fn: (r) => r[\"interface\"] == \"eth0\" or r[\"interface\"] == \"wlan0\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"bytes_recv\" or r[\"_field\"] == \"bytes_sent\")\r\n  |> derivative(unit: 1s, nonNegative: true)\r\n  |> map(fn: (r) => ({ r with _value: (r._value * 8.0) / 1000000.0 }))\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> map(fn: (r) => ({ r with _field: r.interface + \"_\" + r._field }))\r\n  |> yield(name: \"velocidad_mbps\")",
+          "refId": "A"
+        }
+      ],
+      "title": "LAN Usage",
+      "type": "stat"
     },
     {
       "datasource": {
@@ -1394,79 +1330,6 @@
       ],
       "title": "Right Motor Speed",
       "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "P951FEA4DE68E13C5"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [
-            {
-              "options": {
-                "from": 0,
-                "result": {
-                  "text": "OK"
-                },
-                "to": 10
-              },
-              "type": "range"
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 10
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 13,
-        "y": 16
-      },
-      "id": 44,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"power_system\")\n  |> filter(fn: (r) => r._field == \"voltage_mv\")\n  |> last()\n  |> map(fn: (r) => ({r with _value: float(v: uint(v: now()) - uint(v: r._time)) / 1000000000.0}))\n",
-          "refId": "A"
-        }
-      ],
-      "title": "MQTT Health",
-      "type": "stat"
     },
     {
       "datasource": {
@@ -2464,7 +2327,7 @@
           "refId": "A"
         }
       ],
-      "title": "Sensor L\u00ednea M\u00e1ximo Calibrado",
+      "title": "Sensor Línea Máximo Calibrado",
       "type": "gauge"
     },
     {
@@ -2590,117 +2453,78 @@
           "refId": "A"
         }
       ],
-      "title": "Sensor L\u00ednea M\u00ednimo Calibrado",
+      "title": "Sensor Línea Mínimo Calibrado",
       "type": "gauge"
     },
     {
-      "id": 45,
-      "type": "timeseries",
-      "title": "RT Loop Cycle Time",
+      "id": 47,
+      "type": "stat",
+      "title": "RT Loop Freq (Hz)",
       "gridPos": {
-        "h": 8,
-        "w": 24,
+        "h": 4,
+        "w": 4,
         "x": 0,
         "y": 48
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_mean_us\" or r[\"_field\"] == \"cycle_max_us\" or r[\"_field\"] == \"cycle_min_us\" or r[\"_field\"] == \"cycle_p95_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")"
+          "datasource": "InfluxDB",
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_hz\")\r\n  |> last()"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 5,
-            "spanNulls": true
+          "color": {
+            "mode": "thresholds"
           },
-          "unit": "\u00b5s"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "cycle_mean_us"
-            },
-            "properties": [
+          "decimals": 0,
+          "displayName": "Hz",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
               {
-                "id": "displayName",
-                "value": "mean"
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "green",
+                "value": 200
               }
             ]
           },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "cycle_max_us"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "max"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "cycle_min_us"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "min"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "cycle_p95_us"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "P95"
-              }
-            ]
-          }
-        ]
+          "unit": "Hz"
+        }
       },
       "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
         },
-        "legend": {
-          "showLegend": true,
-          "placement": "bottom"
-        }
-      }
+        "textMode": "auto"
+      },
+      "datasource": "InfluxDB"
     },
     {
-      "id": 46,
+      "id": 48,
       "type": "timeseries",
-      "title": "RT Loop Busy Time (us)",
+      "title": "RT Busy Time (ms)",
       "gridPos": {
         "h": 8,
-        "w": 24,
+        "w": 12,
         "x": 0,
-        "y": 56
+        "y": 52
       },
       "targets": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"busy_mean_us\" or r[\"_field\"] == \"busy_max_us\" or r[\"_field\"] == \"busy_min_us\" or r[\"_field\"] == \"busy_p95_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")"
+          "datasource": "InfluxDB",
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"busy_mean_us\" or r[\"_field\"] == \"busy_max_us\" or r[\"_field\"] == \"busy_min_us\" or r[\"_field\"] == \"busy_p95_us\")\r\n  |> map(fn: (r) => ({ r with _value: r._value / 1000.0 }))\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")"
         }
       ],
       "fieldConfig": {
@@ -2711,7 +2535,7 @@
             "fillOpacity": 5,
             "spanNulls": true
           },
-          "unit": "\u00b5s"
+          "unit": "ms"
         },
         "overrides": [
           {
@@ -2774,6 +2598,94 @@
           "placement": "bottom"
         }
       }
+    },
+    {
+      "id": 49,
+      "type": "timeseries",
+      "title": "RT Cycle Time (ms)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 52
+      },
+      "targets": [
+        {
+          "datasource": "InfluxDB",
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_mean_us\" or r[\"_field\"] == \"cycle_max_us\" or r[\"_field\"] == \"cycle_min_us\" or r[\"_field\"] == \"cycle_p95_us\")\r\n  |> map(fn: (r) => ({ r with _value: r._value / 1000.0 }))\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 5,
+            "spanNulls": true
+          },
+          "unit": "ms"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cycle_mean_us"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "mean"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cycle_max_us"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "max"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cycle_min_us"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "min"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cycle_p95_us"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "P95"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "placement": "bottom"
+        }
+      }
     }
   ],
   "preload": false,
@@ -2793,6 +2705,6 @@
   "timezone": "browser",
   "title": "Dashboard de prueba",
   "uid": "cff0b2e3-3436-4676-a374-90ef04188742",
-  "version": 13,
+  "version": 18,
   "weekStart": "monday"
 }

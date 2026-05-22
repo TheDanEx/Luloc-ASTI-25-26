@@ -298,6 +298,11 @@ static void task_rtcontrol_cpu0(void *arg)
             s_busy_count = 0;
         }
 
+        // Mode-dependent pacing: relax CPU in idle, full speed in active modes
+        if (current_mode == MODE_NONE) {
+            vTaskDelay(pdMS_TO_TICKS(10));  // 100Hz encoder polling in idle
+        }
+
     }
 }
 
