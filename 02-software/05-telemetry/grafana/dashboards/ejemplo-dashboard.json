@@ -2837,7 +2837,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"RAM\")"
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"RAM%\")"
         }
       ],
       "fieldConfig": {
@@ -2852,32 +2852,12 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "usage_percent"
+              "options": "container_name"
             },
             "properties": [
               {
                 "id": "displayName",
-                "value": "CPU%"
-              },
-              {
-                "id": "unit",
-                "value": "percent"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "usage"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "RAM"
-              },
-              {
-                "id": "unit",
-                "value": "bytes"
+                "value": "Container"
               }
             ]
           }
