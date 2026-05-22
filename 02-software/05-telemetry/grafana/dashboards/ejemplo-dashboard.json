@@ -41,7 +41,7 @@
               }
             ]
           },
-          "unit": "s"
+          "unit": "dthms"
         },
         "overrides": []
       },
@@ -95,7 +95,6 @@
         }
       ],
       "title": "ESP Uptime",
-      "transformations": [],
       "type": "stat"
     },
     {
@@ -773,7 +772,8 @@
               }
             ]
           },
-          "unit": "percent"
+          "unit": "percent",
+          "displayName": "${__field.labels.task}"
         },
         "overrides": []
       },
@@ -845,7 +845,8 @@
               }
             ]
           },
-          "unit": "percent"
+          "unit": "percent",
+          "displayName": "${__field.labels.task}"
         },
         "overrides": []
       },
@@ -1059,7 +1060,7 @@
       },
       "gridPos": {
         "h": 7,
-        "w": 6,
+        "w": 3,
         "x": 10,
         "y": 12
       },
@@ -1097,6 +1098,72 @@
         "uid": "P951FEA4DE68E13C5"
       },
       "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 13,
+        "y": 12
+      },
+      "id": 43,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"power_system\")\n  |> filter(fn: (r) => r._field == \"voltage_mv\")\n  |> last()\n  |> map(fn: (r) => ({r with _value: float(v: uint(v: now()) - uint(v: r._time)) / 1000000000.0}))\n",
+          "refId": "A"
+        }
+      ],
+      "title": "MQTT Data Age (s)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
         "defaults": {},
         "overrides": []
       },
@@ -1109,11 +1176,13 @@
       "id": 5,
       "options": {
         "dedupStrategy": "none",
-        "enableInfiniteScrolling": false,
-        "enableLogDetails": true,
+        "detailsMode": "inline",
+        "enableInfiniteScrolling": true,
+        "enableLogDetails": false,
+        "fontSize": "small",
         "showControls": false,
         "showTime": false,
-        "sortOrder": "Descending",
+        "sortOrder": "Ascending",
         "unwrappedColumns": false,
         "wrapLogMessage": false
       },
@@ -1325,6 +1394,79 @@
       ],
       "title": "Right Motor Speed",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "from": 0,
+                "result": {
+                  "text": "OK"
+                },
+                "to": 10
+              },
+              "type": "range"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 13,
+        "y": 16
+      },
+      "id": 44,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"power_system\")\n  |> filter(fn: (r) => r._field == \"voltage_mv\")\n  |> last()\n  |> map(fn: (r) => ({r with _value: float(v: uint(v: now()) - uint(v: r._time)) / 1000000000.0}))\n",
+          "refId": "A"
+        }
+      ],
+      "title": "MQTT Health",
+      "type": "stat"
     },
     {
       "datasource": {
@@ -1870,6 +2012,8 @@
             }
           },
           "mappings": [],
+          "max": -1.6,
+          "min": 1.6,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1883,13 +2027,13 @@
               }
             ]
           },
-          "unit": "mps"
+          "unit": "velocityms"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 14,
+        "w": 7,
         "x": 10,
         "y": 24
       },
@@ -1925,10 +2069,98 @@
       "fieldConfig": {
         "defaults": {
           "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "lengthm"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 7,
+        "x": 17,
+        "y": 24
+      },
+      "id": 37,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"odometry\")\n  |> filter(fn: (r) => r[\"_field\"] == \"posIZ\" or r[\"_field\"] == \"posDR\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"mean\")\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Encoder Distances (L/R)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
             "mode": "thresholds"
           },
           "mappings": [],
-          "max": 4096,
+          "max": 1,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -1936,6 +2168,10 @@
               {
                 "color": "green",
                 "value": 0
+              },
+              {
+                "color": "#EAB839",
+                "value": 0.5
               }
             ]
           }
@@ -1948,7 +2184,7 @@
         "x": 0,
         "y": 32
       },
-      "id": 29,
+      "id": 33,
       "options": {
         "minVizHeight": 75,
         "minVizWidth": 75,
@@ -1971,7 +2207,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"line_sensor\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"max0\" or r[\"_field\"] == \"max1\" or r[\"_field\"] == \"max2\" or r[\"_field\"] == \"max3\" or r[\"_field\"] == \"max4\" or r[\"_field\"] == \"max5\" or r[\"_field\"] == \"max6\" or r[\"_field\"] == \"max7\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")",
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"line_sensor\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"s0\" or r[\"_field\"] == \"s1\" or r[\"_field\"] == \"s2\" or r[\"_field\"] == \"s3\" or r[\"_field\"] == \"s4\" or r[\"_field\"] == \"s5\" or r[\"_field\"] == \"s6\" or r[\"_field\"] == \"s7\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")",
           "refId": "A"
         }
       ],
@@ -2184,6 +2420,67 @@
           "max": 4096,
           "min": 0,
           "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 10,
+        "x": 0,
+        "y": 36
+      },
+      "id": 29,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"line_sensor\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"max0\" or r[\"_field\"] == \"max1\" or r[\"_field\"] == \"max2\" or r[\"_field\"] == \"max3\" or r[\"_field\"] == \"max4\" or r[\"_field\"] == \"max5\" or r[\"_field\"] == \"max6\" or r[\"_field\"] == \"max7\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Sensor L\u00ednea M\u00e1ximo Calibrado",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": 4096,
+          "min": 0,
+          "thresholds": {
             "mode": "percentage",
             "steps": [
               {
@@ -2203,7 +2500,7 @@
         "h": 4,
         "w": 10,
         "x": 0,
-        "y": 36
+        "y": 40
       },
       "id": 30,
       "options": {
@@ -2234,159 +2531,6 @@
       ],
       "title": "Lectura Raw",
       "type": "gauge"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "P951FEA4DE68E13C5"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "max": 1,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "#EAB839",
-                "value": 0.5
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 10,
-        "x": 0,
-        "y": 40
-      },
-      "id": 33,
-      "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "sizing": "auto"
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"line_sensor\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"s0\" or r[\"_field\"] == \"s1\" or r[\"_field\"] == \"s2\" or r[\"_field\"] == \"s3\" or r[\"_field\"] == \"s4\" or r[\"_field\"] == \"s5\" or r[\"_field\"] == \"s6\" or r[\"_field\"] == \"s7\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")",
-          "refId": "A"
-        }
-      ],
-      "title": "Posicion Linea",
-      "type": "gauge"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "P951FEA4DE68E13C5"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "lengthm"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 14,
-        "x": 10,
-        "y": 40
-      },
-      "id": 37,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"odometry\")\n  |> filter(fn: (r) => r[\"_field\"] == \"posIZ\" or r[\"_field\"] == \"posDR\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"mean\")\n",
-          "refId": "A"
-        }
-      ],
-      "title": "Encoder Distances (L/R)",
-      "type": "timeseries"
     },
     {
       "datasource": {
@@ -2446,128 +2590,8 @@
           "refId": "A"
         }
       ],
-      "title": "Posicion Linea",
+      "title": "Sensor L\u00ednea M\u00ednimo Calibrado",
       "type": "gauge"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "P951FEA4DE68E13C5"
-      },
-      "type": "stat",
-      "title": "MQTT Data Age (s)",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 16,
-        "y": 9
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "yellow",
-                "value": 5
-              },
-              {
-                "color": "red",
-                "value": 10
-              }
-            ]
-          },
-          "unit": "s"
-        }
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "targets": [
-        {
-          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"power_system\")\n  |> filter(fn: (r) => r._field == \"voltage_mv\")\n  |> last()\n  |> map(fn: (r) => ({r with _value: float(v: uint(v: now()) - uint(v: r._time)) / 1000000000.0}))\n",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "P951FEA4DE68E13C5"
-      },
-      "type": "stat",
-      "title": "MQTT Health",
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 19,
-        "y": 9
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [
-            {
-              "type": "range",
-              "options": {
-                "from": 0,
-                "to": 10,
-                "result": {
-                  "text": "OK"
-                }
-              }
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 10
-              }
-            ]
-          },
-          "unit": "s"
-        }
-      },
-      "options": {
-        "colorMode": "background",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "targets": [
-        {
-          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"power_system\")\n  |> filter(fn: (r) => r._field == \"voltage_mv\")\n  |> last()\n  |> map(fn: (r) => ({r with _value: float(v: uint(v: now()) - uint(v: r._time)) / 1000000000.0}))\n",
-          "refId": "A"
-        }
-      ]
     }
   ],
   "preload": false,
@@ -2587,6 +2611,6 @@
   "timezone": "browser",
   "title": "Dashboard de prueba",
   "uid": "cff0b2e3-3436-4676-a374-90ef04188742",
-  "version": 8,
+  "version": 13,
   "weekStart": "monday"
 }
