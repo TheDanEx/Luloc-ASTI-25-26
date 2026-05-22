@@ -52,10 +52,21 @@ typedef struct {
  */
 static void update_distance_accumulator(encoder_sensor_context_t *ctx)
 {
-    int current_hardware_value = ctx->last_hardware_pcnt_value; // Fallback to avoid -100m/s spikes if ESP_FAIL
+    int current_hardware_value = ctx->last_hardware_pcnt_value;
     pcnt_unit_get_count(ctx->pcnt_unit, &current_hardware_value);
     
-    int16_t delta = (int16_t)(current_hardware_value - ctx->last_hardware_pcnt_value);
+    int32_t raw_delta = (int32_t)current_hardware_value - (int32_t)ctx->last_hardware_pcnt_value;
+    
+    // PCNT 16-bit signed counter wraps. At ~4400 counts/m, one full
+    // counter range (0→32767→0) covers ~7.5m. The raw delta on wrap
+    // can be ±32767 which must be corrected to ±1.
+    if (raw_delta > 16384) {
+        raw_delta -= 65536;      // wrapped down (32767 → 0)
+    } else if (raw_delta < -16384) {
+        raw_delta += 65536;      // wrapped up (0 → 32767)
+    }
+    
+    int16_t delta = (int16_t)raw_delta;
     
     if (ctx->config.reverse_direction) {
         delta = -delta;
