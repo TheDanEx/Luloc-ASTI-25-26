@@ -55,16 +55,28 @@ static void update_distance_accumulator(encoder_sensor_context_t *ctx)
     int current;
     pcnt_unit_get_count(ctx->pcnt_unit, &current);
 
-    // Use 16-bit arithmetic for wrap-safe delta.
-    // The PCNT counter is 16-bit signed (-32768..32767). Casting to int16_t
-    // and subtracting gives the correct delta even across wrap boundaries.
-    int16_t cur16 = (int16_t)current;
-    int16_t last16 = (int16_t)ctx->last_hardware_pcnt_value;
-    int16_t delta = cur16 - last16;
+    int raw_delta = current - ctx->last_hardware_pcnt_value;
 
-    if (ctx->config.reverse_direction) delta = -delta;
+    /*
+     * PCNT counter wraps to ZERO at both boundaries:
+     *   forward:  32767 -> 0   (raw_delta = -32767, physical = +1)
+     *   reverse: -32768 -> 0   (raw_delta =  32768, physical = -1)
+     *
+     * This differs from int16_t modulo arithmetic (-32768..32767 wrap).
+     * The asymmetry (32767->0 vs -32768->0) requires different correction
+     * constants: +32768 for forward, -32769 for reverse.
+     *
+     * Threshold 10000 is safe: at 100Hz with 1m/s, normal delta < 44 counts.
+     */
+    if (raw_delta < -10000) {
+        raw_delta += 32768;
+    } else if (raw_delta > 10000) {
+        raw_delta -= 32769;
+    }
 
-    ctx->accumulated_distance_counts += delta;
+    if (ctx->config.reverse_direction) raw_delta = -raw_delta;
+
+    ctx->accumulated_distance_counts += raw_delta;
     ctx->last_hardware_pcnt_value = current;
 }
 
