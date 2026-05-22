@@ -2826,14 +2826,14 @@
       }
     },
     {
-      "id": 52,
-      "type": "table",
-      "title": "Docker Containers",
+      "id": 55,
+      "type": "bargauge",
+      "title": "Docker CPU %",
       "gridPos": {
         "h": 8,
-        "w": 16,
-        "x": 8,
-        "y": 47
+        "w": 8,
+        "x": 0,
+        "y": 53
       },
       "targets": [
         {
@@ -2841,72 +2841,92 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "cpu = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_cpu\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> group(columns: [\"container_name\"])\r\n  |> last()\r\n  |> set(key: \"_field\", value: \"CPU %\")\r\n  |> keep(columns: [\"_value\", \"_field\", \"container_name\"])\r\n  |> rename(columns: {container_name: \"name\"})\r\n\r\nram = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> keep(columns: [\"_value\", \"pattern\"])\r\n  |> group(columns: [\"pattern\"])\r\n  |> mean()\r\n  |> map(fn: (r) => ({ r with _value: r._value / 1048576.0 }))\r\n  |> rename(columns: {pattern: \"name\"})\r\n  |> map(fn: (r) => ({ r with name: if r.name == \"influxd\" then \"influxdb\" else if r.name == \"micro_ros_agent\" then \"uros_agent\" else r.name }))\r\n  |> set(key: \"_field\", value: \"RAM MB\")\r\n  |> keep(columns: [\"_value\", \"_field\", \"name\"])\r\n\r\nunion(tables: [cpu, ram])\r\n  |> pivot(rowKey: [\"name\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> group()\r\n  |> sort(columns: [\"CPU %\"], desc: true)"
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_cpu\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> group(columns: [\"container_name\"])\r\n  |> last()\r\n  |> keep(columns: [\"_value\", \"container_name\"])\r\n  |> group()"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "align": "auto"
+          "decimals": 1,
+          "unit": "percent",
+          "color": {
+            "mode": "palette-classic"
           },
-          "decimals": 1
+          "displayName": "${__field.labels.container_name}"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "name"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Container"
-              },
-              {
-                "id": "custom.width",
-                "value": 200
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "CPU %"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percent"
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "RAM MB"
-            },
-            "properties": [
-              {
-                "id": "decimals",
-                "value": 0
-              },
-              {
-                "id": "unit",
-                "value": "none"
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "options": {
-        "showHeader": true,
-        "sortBy": []
+        "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 56,
+      "type": "piechart",
+      "title": "Docker RAM (MB)",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 53
       },
-      "transformations": []
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> keep(columns: [\"_value\", \"pattern\"])\r\n  |> group(columns: [\"pattern\"])\r\n  |> mean()\r\n  |> map(fn: (r) => ({ r with _value: r._value / 1048576.0, pattern: if r.pattern == \"influxd\" then \"influxdb\" else if r.pattern == \"micro_ros_agent\" then \"uros_agent\" else r.pattern }))\r\n  |> rename(columns: {pattern: \"container\"})\r\n  |> group()"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "none",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "displayName": "${__field.labels.container}"
+        },
+        "overrides": []
+      },
+      "options": {
+        "pieType": "donut",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "displayLabels": [
+          "name",
+          "value"
+        ],
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "placement": "right",
+          "values": [
+            "value"
+          ]
+        }
+      }
     }
   ],
   "preload": false,
