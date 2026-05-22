@@ -264,15 +264,20 @@ static void telemetry_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 
     xSemaphoreGive(shm->mutex);
 
+    float cyc_hz = (cyc_mean > 0.0f) ? 1000000.0f / cyc_mean : 0.0f;
+    float busy_hz = (busy_mean > 0.0f) ? 1000000.0f / busy_mean : 0.0f;
+
     // Pack status as JSON
     snprintf(status_msg.data.data, status_msg.data.capacity,
         "{\"up\":%lu,\"mode\":%d,\"cyc_m\":%.0f,\"cyc_x\":%.0f,\"cyc_n\":%.0f,\"cyc_p\":%.0f,\"cyc_o\":%lu,"
-        "\"busy_m\":%.0f,\"busy_x\":%.0f,\"busy_n\":%.0f,\"busy_p\":%.0f}",
+        "\"busy_m\":%.0f,\"busy_x\":%.0f,\"busy_n\":%.0f,\"busy_p\":%.0f,"
+        "\"cyc_h\":%.0f,\"busy_h\":%.0f}",
         (unsigned long)(esp_timer_get_time() / 1000000),
         (int)state_machine_get_context()->current_mode,
         cyc_mean, cyc_max, cyc_min, cyc_p95,
         (unsigned long)cyc_over,
-        busy_mean, busy_max, busy_min, busy_p95);
+        busy_mean, busy_max, busy_min, busy_p95,
+        cyc_hz, busy_hz);
     status_msg.data.size = strlen(status_msg.data.data);
 
     // Publish all three
