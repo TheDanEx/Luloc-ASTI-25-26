@@ -2801,9 +2801,7 @@
         "pieType": "donut",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ]
+          "calcs": []
         },
         "displayLabels": [
           "name",
@@ -2828,7 +2826,56 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "import \"array\"\r\n\r\ntotal = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"total\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nfreeval = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"available\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nraw = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0,\r\n     _field: r.pattern + \"/\" + r.process_name }))\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n\r\nraw_sum = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> keep(columns: [\"_value\"])\r\n  |> last()\r\n  |> group()\r\n  |> sum()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nothers_val = (float(v: total[0]) - float(v: freeval[0]) - float(v: raw_sum[0])) / 1048576.0\r\nextra = array.from(rows: [\r\n  {_field: \"Free\", _value: float(v: freeval[0]) / 1048576.0},\r\n  {_field: \"Others\", _value: others_val}\r\n])\r\n\r\nunion(tables: [raw, extra])\r\n  |> group()\r\n  |> sort(columns: [\"_value\"], desc: true)"
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"available\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0 }))\r\n  |> set(key: \"_field\", value: \"Free\")\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"Free\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"grafana\")\r\n  |> filter(fn: (r) => r[\"process_name\"] == \"grafana\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0 }))\r\n  |> set(key: \"_field\", value: \"grafana\")\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"grafana\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"influxd\")\r\n  |> filter(fn: (r) => r[\"process_name\"] == \"influxd\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0 }))\r\n  |> set(key: \"_field\", value: \"influxdb\")\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"influxdb\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"telegraf\")\r\n  |> filter(fn: (r) => r[\"process_name\"] == \"telegraf\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0 }))\r\n  |> set(key: \"_field\", value: \"telegraf\")\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"telegraf\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"micro_ros_agent\")\r\n  |> filter(fn: (r) => r[\"process_name\"] == \"micro_ros_agent\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0 }))\r\n  |> set(key: \"_field\", value: \"uros_agent\")\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"uros_agent\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"ros2_influx_bridge\")\r\n  |> filter(fn: (r) => r[\"process_name\"] == \"python3\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0 }))\r\n  |> set(key: \"_field\", value: \"ros2_bridge\")\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"ros2_bridge\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"mosquitto\")\r\n  |> filter(fn: (r) => r[\"process_name\"] == \"mosquitto\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0 }))\r\n  |> set(key: \"_field\", value: \"mosquitto\")\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"mosquitto\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "import \"array\"\r\n\r\ntotal = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"total\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nfreeval = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"available\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nraw_sum = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"process_name\"] == \"grafana\" or r[\"process_name\"] == \"influxd\" or r[\"process_name\"] == \"telegraf\" or r[\"process_name\"] == \"micro_ros_agent\" or r[\"process_name\"] == \"python3\" or r[\"process_name\"] == \"mosquitto\")\r\n  |> keep(columns: [\"_value\"])\r\n  |> last()\r\n  |> group()\r\n  |> sum()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nothers_val = (float(v: total[0]) - float(v: freeval[0]) - float(v: raw_sum[0])) / 1048576.0\r\narray.from(rows: [{_field: \"Others\", _value: others_val}])\r\n  |> yield(name: \"Others\")"
         }
       ],
       "title": "Pi5 RAM (MB)",
@@ -2899,9 +2946,7 @@
         "pieType": "donut",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ]
+          "calcs": []
         },
         "displayLabels": [
           "name",
@@ -2926,7 +2971,56 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "import \"array\"\r\n\r\ntotal = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"total\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nfreeval = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"available\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nraw = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0,\r\n     _field: r.pattern + \"/\" + r.process_name }))\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n\r\nraw_sum = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> keep(columns: [\"_value\"])\r\n  |> last()\r\n  |> group()\r\n  |> sum()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nothers_val = (float(v: total[0]) - float(v: freeval[0]) - float(v: raw_sum[0])) / 1048576.0\r\nextra = array.from(rows: [\r\n  {_field: \"Free\", _value: float(v: freeval[0]) / 1048576.0},\r\n  {_field: \"Others\", _value: others_val}\r\n])\r\n\r\nunion(tables: [raw, extra])\r\n  |> group()\r\n  |> sort(columns: [\"_value\"], desc: true)"
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"available\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0 }))\r\n  |> set(key: \"_field\", value: \"Free\")\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"Free\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"grafana\")\r\n  |> filter(fn: (r) => r[\"process_name\"] == \"grafana\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0 }))\r\n  |> set(key: \"_field\", value: \"grafana\")\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"grafana\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"influxd\")\r\n  |> filter(fn: (r) => r[\"process_name\"] == \"influxd\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0 }))\r\n  |> set(key: \"_field\", value: \"influxdb\")\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"influxdb\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"telegraf\")\r\n  |> filter(fn: (r) => r[\"process_name\"] == \"telegraf\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0 }))\r\n  |> set(key: \"_field\", value: \"telegraf\")\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"telegraf\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"micro_ros_agent\")\r\n  |> filter(fn: (r) => r[\"process_name\"] == \"micro_ros_agent\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0 }))\r\n  |> set(key: \"_field\", value: \"uros_agent\")\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"uros_agent\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"ros2_influx_bridge\")\r\n  |> filter(fn: (r) => r[\"process_name\"] == \"python3\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0 }))\r\n  |> set(key: \"_field\", value: \"ros2_bridge\")\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"ros2_bridge\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"mosquitto\")\r\n  |> filter(fn: (r) => r[\"process_name\"] == \"mosquitto\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0 }))\r\n  |> set(key: \"_field\", value: \"mosquitto\")\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"mosquitto\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "import \"array\"\r\n\r\ntotal = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"total\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nfreeval = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"available\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nraw_sum = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"process_name\"] == \"grafana\" or r[\"process_name\"] == \"influxd\" or r[\"process_name\"] == \"telegraf\" or r[\"process_name\"] == \"micro_ros_agent\" or r[\"process_name\"] == \"python3\" or r[\"process_name\"] == \"mosquitto\")\r\n  |> keep(columns: [\"_value\"])\r\n  |> last()\r\n  |> group()\r\n  |> sum()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nothers_val = (float(v: total[0]) - float(v: freeval[0]) - float(v: raw_sum[0])) / 1048576.0\r\narray.from(rows: [{_field: \"Others\", _value: others_val}])\r\n  |> yield(name: \"Others\")"
         }
       ],
       "title": "Docker RAM (MB)",
