@@ -31,7 +31,6 @@ typedef struct {
     
     // Distance State
     int64_t accumulated_distance_counts;
-    float   accumulated_distance_m;   // meters — only reset by explicit reset call
     int     last_hardware_pcnt_value;
     
     // Speed State
@@ -53,34 +52,20 @@ typedef struct {
  */
 static void update_distance_accumulator(encoder_sensor_context_t *ctx)
 {
-    int current_raw = ctx->last_hardware_pcnt_value;
-    pcnt_unit_get_count(ctx->pcnt_unit, &current_raw);
+    int current;
+    pcnt_unit_get_count(ctx->pcnt_unit, &current);
 
-    int32_t raw_delta = (int32_t)current_raw - (int32_t)ctx->last_hardware_pcnt_value;
+    // Use 16-bit arithmetic for wrap-safe delta.
+    // The PCNT counter is 16-bit signed (-32768..32767). Casting to int16_t
+    // and subtracting gives the correct delta even across wrap boundaries.
+    int16_t cur16 = (int16_t)current;
+    int16_t last16 = (int16_t)ctx->last_hardware_pcnt_value;
+    int16_t delta = cur16 - last16;
 
-    // PCNT 16-bit counter wrap detection.
-    // The ESP PCNT wraps from 32767→0 (up) and -32768→0 (down depending on config).
-    // Real delta at 100 Hz, 1 m/s is ~44 counts. Any delta beyond half the
-    // counter range (±32768) is a wrap artifact and must be corrected.
-    if (raw_delta > 20000) {
-        raw_delta -= 65536;
-    } else if (raw_delta < -20000) {
-        raw_delta += 65536;
-    }
-
-    int16_t delta = (int16_t)raw_delta;
     if (ctx->config.reverse_direction) delta = -delta;
 
     ctx->accumulated_distance_counts += delta;
-
-    // Convert delta (raw counts) → meters and accumulate
-    double counts_per_motor_rev = (double)(ctx->config.ppr * 4);
-    double motor_revs = (double)delta / counts_per_motor_rev;
-    double wheel_revs = motor_revs;
-    if (ctx->config.gear_ratio > 0.0f) wheel_revs /= ctx->config.gear_ratio;
-    ctx->accumulated_distance_m += (float)(wheel_revs * M_PI * ctx->config.wheel_diameter_m);
-
-    ctx->last_hardware_pcnt_value = current_raw;
+    ctx->last_hardware_pcnt_value = current;
 }
 
 // =============================================================================
@@ -181,7 +166,15 @@ float encoder_sensor_get_distance(encoder_sensor_handle_t handle)
     if (handle == NULL) return 0.0f;
     encoder_sensor_context_t *ctx = (encoder_sensor_context_t *)handle;
     update_distance_accumulator(ctx);
-    return ctx->accumulated_distance_m;
+    
+    double counts_per_motor_revolution = (double)(ctx->config.ppr * 4);
+    double motor_revolutions = (double)ctx->accumulated_distance_counts / counts_per_motor_revolution;
+    
+    double wheel_revolutions = motor_revolutions;
+    if (ctx->config.gear_ratio > 0.0f) {
+        wheel_revolutions /= ctx->config.gear_ratio;
+    }
+    return (float)(wheel_revolutions * M_PI * ctx->config.wheel_diameter_m);
 }
 
 /**
@@ -194,7 +187,6 @@ esp_err_t encoder_sensor_reset_distance(encoder_sensor_handle_t handle)
     
     update_distance_accumulator(ctx);
     ctx->accumulated_distance_counts = 0;
-    ctx->accumulated_distance_m = 0.0f;
     
     // Prevent speed spike on next calculation
     ctx->last_speed_distance_counts = 0;

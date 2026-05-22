@@ -215,7 +215,7 @@ static void telemetry_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
         "\"r0\":%u,\"r1\":%u,\"r2\":%u,\"r3\":%u,\"r4\":%u,\"r5\":%u,\"r6\":%u,\"r7\":%u,"
         "\"min0\":%u,\"min1\":%u,\"min2\":%u,\"min3\":%u,\"min4\":%u,\"min5\":%u,\"min6\":%u,\"min7\":%u,"
         "\"max0\":%u,\"max1\":%u,\"max2\":%u,\"max3\":%u,\"max4\":%u,\"max5\":%u,\"max6\":%u,\"max7\":%u}",
-        shm->sensors.motor_speed_left, -shm->sensors.motor_speed_right,
+        shm->sensors.motor_speed_left, shm->sensors.motor_speed_right,
         shm->sensors.motor_distance_left, -shm->sensors.motor_distance_right,
         shm->sensors.battery_voltage, shm->sensors.robot_current,
         shm->sensors.line_position_m, shm->sensors.line_detected ? 1 : 0,
@@ -241,7 +241,7 @@ static void telemetry_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
     // Pack motors as JSON
     snprintf(motors_msg.data.data, motors_msg.data.capacity,
         "{\"tl\":%.4f,\"tr\":%.4f,\"al\":%.4f,\"ar\":%.4f}",
-        shm->sensors.target_speed_left, shm->sensors.target_speed_right,
+        shm->teleop.target_speed_left, shm->teleop.target_speed_right,
         shm->sensors.motor_speed_left, shm->sensors.motor_speed_right);
     motors_msg.data.size = strlen(motors_msg.data.data);
 
