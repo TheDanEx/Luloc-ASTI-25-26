@@ -68,7 +68,7 @@ static motor_driver_mcpwm_t motors = {
  * 1. Maintain velocity control (PID) for both wheels.
  * 2. Execute mode-specific logic (Calibration, Line Following, etc).
  * 3. Update shared memory state for other tasks.
- * Frequency: 500 Hz (2ms)
+ * Frequency: adaptive (runs at full speed — no artificial delay)
  */
 static void task_rtcontrol_cpu0(void *arg)
 {
@@ -136,13 +136,11 @@ static void task_rtcontrol_cpu0(void *arg)
     // Calibration started by mode_calibrate.enter(), not unconditionally
 
     modes_init();
-    
-    const float dt = (float)CONFIG_ROBOT_CONTROL_PERIOD_MS / 1000.0f;
-    const TickType_t period_ticks = pdMS_TO_TICKS(CONFIG_ROBOT_CONTROL_PERIOD_MS);
-    if (period_ticks < 1) { ESP_LOGE(TAG, "Tick too slow for %dms period!", CONFIG_ROBOT_CONTROL_PERIOD_MS); vTaskDelete(NULL); return; }
 
+    const float dt_cfg = (float)CONFIG_ROBOT_CONTROL_PERIOD_MS / 1000.0f;
+    float dt = dt_cfg;
+    const int64_t target_period_us = CONFIG_ROBOT_CONTROL_PERIOD_MS * 1000LL;
     robot_mode_t prev_mode = MODE_NONE;
-    TickType_t xLastWakeTime = xTaskGetTickCount();
 
     int64_t s_prev_cycle_us = 0;
     int64_t s_cycle_min_us = INT64_MAX;
@@ -158,8 +156,6 @@ static void task_rtcontrol_cpu0(void *arg)
     int64_t s_busy_sum_sq = 0;
     int     s_busy_count = 0;
 
-    const int64_t target_period_us = CONFIG_ROBOT_CONTROL_PERIOD_MS * 1000LL;
-
     while(1) {
         int64_t cycle_start_us = esp_timer_get_time();
 
@@ -171,6 +167,8 @@ static void task_rtcontrol_cpu0(void *arg)
             s_cycle_sum_us += delta_us;
             s_cycle_sum_sq += delta_us * delta_us;
             s_cycle_count++;
+            dt = (float)delta_us / 1000000.0f;
+            if (dt > 0.1f) dt = 0.1f;
         }
         s_prev_cycle_us = cycle_start_us;
         // Calibration lifecycle: start on enter, stop on exit
@@ -300,8 +298,6 @@ static void task_rtcontrol_cpu0(void *arg)
             s_busy_count = 0;
         }
 
-        vTaskDelayUntil(&xLastWakeTime, period_ticks);
-        
     }
 }
 
