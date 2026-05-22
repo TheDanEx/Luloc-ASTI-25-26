@@ -2366,13 +2366,14 @@
             "mode": "palette-classic"
           },
           "decimals": 1,
-          "unit": "percent"
+          "unit": "percent",
+          "displayName": "${__field.labels.task}"
         }
       },
       "targets": [
         {
           "refId": "A",
-          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cpu_usage\")\n  |> filter(fn: (r) => r._field == \"usage\")\n  |> filter(fn: (r) => r.task != \"TOTAL_CPU0\")\n  |> filter(fn: (r) => r.task != \"TOTAL_CPU1\")\n  |> filter(fn: (r) =>\n    r.task =~ /cpu0/ or r.task == \"IDLE0\" or r.task == \"main\"\n    or r.task =~ /rtcontrol/ or r.task == \"tiT\"\n    or r.task =~ /emac/ or r.task =~ /esp_timer/\n    or r.task =~ /calib/ or r.task =~ /ipc0/)\n  |> group(columns: [\"task\"])\n  |> last()\n"
+          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cpu_usage\")\n  |> filter(fn: (r) => r._field == \"usage\")\n  |> filter(fn: (r) => r.task != \"TOTAL_CPU0\")\n  |> filter(fn: (r) => r.task != \"TOTAL_CPU1\")\n  |> filter(fn: (r) =>\n    r.task =~ /cpu0/ or r.task == \"IDLE0\" or r.task == \"main\"\n    or r.task =~ /rtcontrol/ or r.task == \"tiT\"\n    or r.task =~ /emac/ or r.task =~ /esp_timer/\n    or r.task =~ /calib/ or r.task =~ /ipc0/)\n  |> group(columns: [\"task\"])\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\", \"task\"])"
         }
       ]
     },
@@ -2406,13 +2407,14 @@
             "mode": "palette-classic"
           },
           "decimals": 1,
-          "unit": "percent"
+          "unit": "percent",
+          "displayName": "${__field.labels.task}"
         }
       },
       "targets": [
         {
           "refId": "A",
-          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cpu_usage\")\n  |> filter(fn: (r) => r._field == \"usage\")\n  |> filter(fn: (r) => r.task != \"TOTAL_CPU0\")\n  |> filter(fn: (r) => r.task != \"TOTAL_CPU1\")\n  |> filter(fn: (r) =>\n    r.task =~ /cpu1/ or r.task == \"IDLE1\"\n    or r.task =~ /comms/ or r.task =~ /monitor/\n    or r.task =~ /uros/ or r.task =~ /mqtt/\n    or r.task =~ /ptp/ or r.task =~ /tel_/\n    or r.task =~ /ipc1/)\n  |> group(columns: [\"task\"])\n  |> last()\n"
+          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cpu_usage\")\n  |> filter(fn: (r) => r._field == \"usage\")\n  |> filter(fn: (r) => r.task != \"TOTAL_CPU0\")\n  |> filter(fn: (r) => r.task != \"TOTAL_CPU1\")\n  |> filter(fn: (r) =>\n    r.task =~ /cpu1/ or r.task == \"IDLE1\"\n    or r.task =~ /comms/ or r.task =~ /monitor/\n    or r.task =~ /uros/ or r.task =~ /mqtt/\n    or r.task =~ /ptp/ or r.task =~ /tel_/\n    or r.task =~ /ipc1/)\n  |> group(columns: [\"task\"])\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\", \"task\"])"
         }
       ]
     }
