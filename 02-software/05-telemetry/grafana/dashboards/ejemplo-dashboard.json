@@ -2841,7 +2841,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "cpu = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_cpu\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> set(key: \"_field\", value: \"CPU %\")\r\n  |> keep(columns: [\"_value\", \"_field\", \"_time\", \"container_name\", \"container_status\"])\r\n\r\nmem = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0 }))\r\n  |> set(key: \"_field\", value: \"RAM MB\")\r\n  |> keep(columns: [\"_value\", \"_field\", \"_time\", \"container_name\"])\r\n\r\nunion(tables: [cpu, mem])\r\n  |> pivot(rowKey: [\"_time\", \"container_name\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> group()\r\n  |> sort(columns: [\"CPU %\"], desc: true)"
+          "query": "cpu = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_cpu\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> group(columns: [\"container_name\"])\r\n  |> mean()\r\n  |> set(key: \"_field\", value: \"CPU %\")\r\n  |> keep(columns: [\"_value\", \"_field\", \"container_name\"])\r\n\r\nmem = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage\")\r\n  |> group(columns: [\"container_name\"])\r\n  |> mean()\r\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1048576.0 }))\r\n  |> set(key: \"_field\", value: \"RAM MB\")\r\n  |> keep(columns: [\"_value\", \"_field\", \"container_name\"])\r\n\r\nunion(tables: [cpu, mem])\r\n  |> pivot(rowKey: [\"container_name\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> group()\r\n  |> sort(columns: [\"CPU %\"], desc: true)"
         }
       ],
       "fieldConfig": {
@@ -2897,18 +2897,6 @@
               {
                 "id": "decimals",
                 "value": 1
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "container_status"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Status"
               }
             ]
           },
