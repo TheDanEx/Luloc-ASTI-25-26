@@ -2468,7 +2468,10 @@
       },
       "targets": [
         {
-          "datasource": "InfluxDB",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
           "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_hz\")\r\n  |> last()"
         }
       ],
@@ -2514,7 +2517,7 @@
     {
       "id": 48,
       "type": "timeseries",
-      "title": "RT Busy Time (ms)",
+      "title": "RT Busy Time (us)",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -2523,8 +2526,32 @@
       },
       "targets": [
         {
-          "datasource": "InfluxDB",
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"busy_mean_us\" or r[\"_field\"] == \"busy_max_us\" or r[\"_field\"] == \"busy_min_us\" or r[\"_field\"] == \"busy_p95_us\")\r\n  |> map(fn: (r) => ({ r with _value: r._value / 1000.0 }))\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")"
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"busy_mean_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"busy_max_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"max\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"busy_min_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"min\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"busy_p95_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"P95\")"
         }
       ],
       "fieldConfig": {
@@ -2535,58 +2562,9 @@
             "fillOpacity": 5,
             "spanNulls": true
           },
-          "unit": "ms"
+          "unit": "µs"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "busy_mean_us"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "mean"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "busy_max_us"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "max"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "busy_min_us"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "min"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "busy_p95_us"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "P95"
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "options": {
         "tooltip": {
@@ -2602,7 +2580,7 @@
     {
       "id": 49,
       "type": "timeseries",
-      "title": "RT Cycle Time (ms)",
+      "title": "RT Cycle Time (us)",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -2611,8 +2589,32 @@
       },
       "targets": [
         {
-          "datasource": "InfluxDB",
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_mean_us\" or r[\"_field\"] == \"cycle_max_us\" or r[\"_field\"] == \"cycle_min_us\" or r[\"_field\"] == \"cycle_p95_us\")\r\n  |> map(fn: (r) => ({ r with _value: r._value / 1000.0 }))\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")"
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_mean_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_max_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"max\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_min_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"min\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_p95_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"P95\")"
         }
       ],
       "fieldConfig": {
@@ -2623,58 +2625,9 @@
             "fillOpacity": 5,
             "spanNulls": true
           },
-          "unit": "ms"
+          "unit": "µs"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "cycle_mean_us"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "mean"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "cycle_max_us"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "max"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "cycle_min_us"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "min"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "cycle_p95_us"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "P95"
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "options": {
         "tooltip": {
