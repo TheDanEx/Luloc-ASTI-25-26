@@ -2747,49 +2747,9 @@
           "decimals": 0,
           "color": {
             "mode": "palette-classic"
-          },
-          "displayName": "LABEL"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/Free/"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Free"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/Others/"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Others"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
           }
-        ]
+        },
+        "overrides": []
       },
       "gridPos": {
         "h": 8,
@@ -2847,49 +2807,9 @@
           "decimals": 0,
           "color": {
             "mode": "palette-classic"
-          },
-          "displayName": "LABEL"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/Free/"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Free"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/Others/"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Others"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
           }
-        ]
+        },
+        "overrides": []
       },
       "gridPos": {
         "h": 8,
