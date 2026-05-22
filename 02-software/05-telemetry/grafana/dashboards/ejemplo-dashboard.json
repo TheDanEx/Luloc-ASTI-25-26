@@ -2737,31 +2737,17 @@
       "type": "gauge"
     },
     {
-      "id": 51,
-      "type": "piechart",
-      "title": "Pi5 RAM",
-      "gridPos": {
-        "h": 6,
-        "w": 5,
-        "x": 0,
-        "y": 47
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
       },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"used_percent\" or r[\"_field\"] == \"available_percent\")\r\n  |> last()"
-        }
-      ],
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
+          "decimals": 1,
           "color": {
             "mode": "palette-classic"
-          },
-          "decimals": 1
+          }
         },
         "overrides": [
           {
@@ -2804,105 +2790,73 @@
           }
         ]
       },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 0,
+        "y": 47
+      },
+      "id": 51,
       "options": {
-        "pieType": "donut",
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
         "displayLabels": [
           "name",
           "value"
         ],
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        },
         "legend": {
-          "showLegend": false
-        }
-      }
-    },
-    {
-      "id": 55,
-      "type": "bargauge",
-      "title": "Docker CPU %",
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 53
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_cpu\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> group(columns: [\"container_name\"])\r\n  |> last()\r\n  |> keep(columns: [\"_value\", \"container_name\"])\r\n  |> group()"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 1,
-          "unit": "percent",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "displayName": "${__field.labels.container_name}"
-        },
-        "overrides": []
-      },
-      "options": {
-        "displayMode": "gradient",
-        "legend": {
-          "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": false
         },
-        "namePlacement": "auto",
-        "orientation": "horizontal",
+        "pieType": "donut",
         "reduceOptions": {
-          "values": false,
           "calcs": [
             "lastNotNull"
-          ]
+          ],
+          "fields": "",
+          "values": false
+        },
+        "sort": "desc",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
         }
-      }
-    },
-    {
-      "id": 56,
-      "type": "piechart",
-      "title": "Docker RAM (MB)",
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 53
       },
+      "pluginVersion": "12.4.2",
       "targets": [
         {
           "datasource": {
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> keep(columns: [\"_value\", \"pattern\"])\r\n  |> group(columns: [\"pattern\"])\r\n  |> mean()\r\n  |> map(fn: (r) => ({ r with _value: r._value / 1048576.0, pattern: if r.pattern == \"influxd\" then \"influxdb\" else if r.pattern == \"micro_ros_agent\" then \"uros_agent\" else r.pattern }))\r\n  |> rename(columns: {pattern: \"container\"})\r\n  |> group()"
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"used_percent\" or r[\"_field\"] == \"available_percent\")\r\n  |> last()"
         }
       ],
+      "title": "Pi5 RAM",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
       "fieldConfig": {
         "defaults": {
           "decimals": 0,
           "unit": "none",
           "color": {
             "mode": "palette-classic"
-          },
-          "displayName": "${__field.labels.container}"
+          }
         },
         "overrides": []
       },
+      "gridPos": {
+        "h": 8,
+        "w": 7,
+        "x": 10,
+        "y": 53
+      },
+      "id": 56,
       "options": {
         "pieType": "donut",
         "reduceOptions": {
@@ -2926,6 +2880,277 @@
             "value"
           ]
         }
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> keep(columns: [\"_value\", \"pattern\"])\r\n  |> group(columns: [\"pattern\"])\r\n  |> mean()\r\n  |> map(fn: (r) => ({ r with _value: r._value / 1048576.0,\r\n     pattern: if r.pattern == \"influxd\" then \"influxdb\"\r\n              else if r.pattern == \"micro_ros_agent\" then \"uros_agent\"\r\n              else r.pattern }))\r\n  |> rename(columns: {pattern: \"container\"})\r\n  |> group()"
+        }
+      ],
+      "title": "Docker RAM (MB)",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 1,
+          "displayName": "${__field.labels.container_name}",
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 10,
+        "x": 0,
+        "y": 53
+      },
+      "id": 55,
+      "options": {
+        "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_cpu\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> group(columns: [\"container_name\"])\r\n  |> last()\r\n  |> keep(columns: [\"_value\", \"container_name\"])",
+          "refId": "A"
+        }
+      ],
+      "title": "Docker CPU (%)",
+      "type": "bargauge"
+    },
+    {
+      "id": 57,
+      "type": "piechart",
+      "title": "SD Card",
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 5,
+        "y": 47
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "disk = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"disk\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"used\" or r[\"_field\"] == \"free\")\r\n  |> filter(fn: (r) => r[\"path\"] == \"/\")\r\n  |> last()\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> map(fn: (r) => ({ r with _value: r._value / 1073741824.0 }))\r\n  |> group()\r\n  |> yield()"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "unit": "none",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "used"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Used"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "free"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Free"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "pieType": "donut",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "displayLabels": [
+          "name",
+          "value"
+        ],
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "placement": "bottom",
+          "values": [
+            "value"
+          ]
+        }
+      }
+    },
+    {
+      "id": 57,
+      "type": "piechart",
+      "title": "SD Card (GB)",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 47
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"disk\" and r.path == \"/\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"used\" or r[\"_field\"] == \"free\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _value: r._value / 1073741824.0 }))\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> group()"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "unit": "none",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "used"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Used"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "free"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Free"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "pieType": "donut",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "displayLabels": [
+          "name",
+          "value"
+        ],
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": false
+        }
       }
     }
   ],
@@ -2946,6 +3171,6 @@
   "timezone": "browser",
   "title": "Dashboard de prueba",
   "uid": "cff0b2e3-3436-4676-a374-90ef04188742",
-  "version": 22,
+  "version": 14,
   "weekStart": "monday"
 }
