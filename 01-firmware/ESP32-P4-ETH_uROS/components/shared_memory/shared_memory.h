@@ -52,12 +52,14 @@ typedef struct {
     float cycle_mean_us;        // mean iteration time (μs) in last window
     float cycle_min_us;         // min iteration time (μs) in last window
     float cycle_max_us;         // max iteration time (μs) in last window
+    float cycle_p95_us;         // P95 approx (mean + 2*stdev)
     uint32_t cycle_overruns;    // overrun count in last window
 
     // Busy (computation) time — excludes vTaskDelay
     float busy_mean_us;
     float busy_min_us;
     float busy_max_us;
+    float busy_p95_us;          // P95 approx (mean + 2*stdev)
 } robot_sensor_data_t;
 
 

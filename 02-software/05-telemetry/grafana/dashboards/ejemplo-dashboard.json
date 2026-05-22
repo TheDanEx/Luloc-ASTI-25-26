@@ -2596,10 +2596,10 @@
     {
       "id": 45,
       "type": "timeseries",
-      "title": "RT Control Cycle Time (us)",
+      "title": "RT Loop Cycle Time",
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 24,
         "x": 0,
         "y": 48
       },
@@ -2609,7 +2609,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_mean_us\" or r[\"_field\"] == \"cycle_max_us\" or r[\"_field\"] == \"cycle_min_us\" or r[\"_field\"] == \"busy_mean_us\" or r[\"_field\"] == \"busy_max_us\" or r[\"_field\"] == \"busy_min_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")"
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_mean_us\" or r[\"_field\"] == \"cycle_max_us\" or r[\"_field\"] == \"cycle_min_us\" or r[\"_field\"] == \"cycle_p95_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")"
         }
       ],
       "fieldConfig": {
@@ -2662,12 +2662,67 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "cycle_p95_us"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "P95"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 46,
+      "type": "timeseries",
+      "title": "RT Loop Busy Time (us)",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 56
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"busy_mean_us\" or r[\"_field\"] == \"busy_max_us\" or r[\"_field\"] == \"busy_min_us\" or r[\"_field\"] == \"busy_p95_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 5,
+            "spanNulls": true
+          },
+          "unit": "\u00b5s"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
               "options": "busy_mean_us"
             },
             "properties": [
               {
                 "id": "displayName",
-                "value": "busy mean"
+                "value": "mean"
               }
             ]
           },
@@ -2679,7 +2734,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "busy max"
+                "value": "max"
               }
             ]
           },
@@ -2691,7 +2746,19 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "busy min"
+                "value": "min"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "busy_p95_us"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "P95"
               }
             ]
           }

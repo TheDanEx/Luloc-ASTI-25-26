@@ -9,6 +9,7 @@
 #include "shared_memory.h"
 #include "modes.h"
 #include <stdlib.h>
+#include <math.h>
 #include "encoder_sensor.h"
 #include "line_sensor.h"
 
@@ -147,12 +148,14 @@ static void task_rtcontrol_cpu0(void *arg)
     int64_t s_cycle_min_us = INT64_MAX;
     int64_t s_cycle_max_us = 0;
     int64_t s_cycle_sum_us = 0;
+    int64_t s_cycle_sum_sq = 0;
     int     s_cycle_count = 0;
     uint32_t s_overruns = 0;
 
     int64_t s_busy_min_us = INT64_MAX;
     int64_t s_busy_max_us = 0;
     int64_t s_busy_sum_us = 0;
+    int64_t s_busy_sum_sq = 0;
     int     s_busy_count = 0;
 
     const int64_t target_period_us = CONFIG_ROBOT_CONTROL_PERIOD_MS * 1000LL;
@@ -166,6 +169,7 @@ static void task_rtcontrol_cpu0(void *arg)
             if (delta_us > s_cycle_max_us) s_cycle_max_us = delta_us;
             if (delta_us > target_period_us + 2000) s_overruns++;
             s_cycle_sum_us += delta_us;
+            s_cycle_sum_sq += delta_us * delta_us;
             s_cycle_count++;
         }
         s_prev_cycle_us = cycle_start_us;
@@ -259,28 +263,40 @@ static void task_rtcontrol_cpu0(void *arg)
         if (busy_us < s_busy_min_us) s_busy_min_us = busy_us;
         if (busy_us > s_busy_max_us) s_busy_max_us = busy_us;
         s_busy_sum_us += busy_us;
+        s_busy_sum_sq += busy_us * busy_us;
         s_busy_count++;
 
         // Cycle + busy time stats: publish every ~1s (skip first bogus window)
         if (s_cycle_sum_us >= 1000000LL && s_cycle_count >= 10) {
             if (shm != NULL && xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(2)) == pdTRUE) {
-                shm->sensors.cycle_mean_us = (float)s_cycle_sum_us / (float)s_cycle_count;
+                float cyc_mean = (float)s_cycle_sum_us / (float)s_cycle_count;
+                float cyc_var  = (float)s_cycle_sum_sq / (float)s_cycle_count - cyc_mean * cyc_mean;
+                if (cyc_var < 0.0f) cyc_var = 0.0f;
+                shm->sensors.cycle_mean_us = cyc_mean;
                 shm->sensors.cycle_min_us  = (float)s_cycle_min_us;
                 shm->sensors.cycle_max_us  = (float)s_cycle_max_us;
+                shm->sensors.cycle_p95_us  = cyc_mean + 2.0f * sqrtf(cyc_var);
                 shm->sensors.cycle_overruns = s_overruns;
-                shm->sensors.busy_mean_us = (float)s_busy_sum_us / (float)s_busy_count;
+
+                float busy_mean = (float)s_busy_sum_us / (float)s_busy_count;
+                float busy_var  = (float)s_busy_sum_sq / (float)s_busy_count - busy_mean * busy_mean;
+                if (busy_var < 0.0f) busy_var = 0.0f;
+                shm->sensors.busy_mean_us = busy_mean;
                 shm->sensors.busy_min_us  = (float)s_busy_min_us;
                 shm->sensors.busy_max_us  = (float)s_busy_max_us;
+                shm->sensors.busy_p95_us  = busy_mean + 2.0f * sqrtf(busy_var);
                 xSemaphoreGive(shm->mutex);
             }
             s_cycle_min_us = INT64_MAX;
             s_cycle_max_us = 0;
             s_cycle_sum_us = 0;
+            s_cycle_sum_sq = 0;
             s_cycle_count = 0;
             s_overruns = 0;
             s_busy_min_us = INT64_MAX;
             s_busy_max_us = 0;
             s_busy_sum_us = 0;
+            s_busy_sum_sq = 0;
             s_busy_count = 0;
         }
 
