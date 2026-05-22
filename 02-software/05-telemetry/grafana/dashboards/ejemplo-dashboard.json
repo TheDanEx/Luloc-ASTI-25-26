@@ -1861,7 +1861,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"motor_cal\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"v_final_l\" or r[\"_field\"] == \"v_ff_l\" or r[\"_field\"] == \"v_d_l\" or r[\"_field\"] == \"v_i_l\" or r[\"_field\"] == \"v_p_l\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")",
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"motor_cal\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"ff_l\" or r[\"_field\"] == \"p_l\" or r[\"_field\"] == \"i_l\" or r[\"_field\"] == \"d_l\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")",
           "refId": "A"
         }
       ],
@@ -1960,7 +1960,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"motor_cal\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"v_final_r\" or r[\"_field\"] == \"v_ff_r\" or r[\"_field\"] == \"v_d_r\" or r[\"_field\"] == \"v_i_r\" or r[\"_field\"] == \"v_p_r\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")",
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"motor_cal\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"ff_r\" or r[\"_field\"] == \"p_r\" or r[\"_field\"] == \"i_r\" or r[\"_field\"] == \"d_r\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")",
           "refId": "A"
         }
       ],
