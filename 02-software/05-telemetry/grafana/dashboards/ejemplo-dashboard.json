@@ -29,7 +29,7 @@
             "mode": "thresholds"
           },
           "decimals": 0,
-          "displayName": "${__field.labels[\"task\"]}",
+          "displayName": "Uptime",
           "mappings": [],
           "min": 0,
           "thresholds": {
@@ -41,7 +41,7 @@
               }
             ]
           },
-          "unit": "dthms"
+          "unit": "s"
         },
         "overrides": []
       },
@@ -73,7 +73,7 @@
           "calcs": [
             "last"
           ],
-          "fields": "/^uptime_sec \\{host=\"telegraf_host\", robot=\"Luloc\"\\}$/",
+          "fields": "",
           "values": false
         },
         "showPercentChange": false,
@@ -89,25 +89,13 @@
           "dataset": "iox",
           "editorMode": "code",
           "format": "table",
-          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"system\")\n  |> filter(fn: (r) => r._field == \"uptime_sec\")\n",
+          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"system\")\n  |> filter(fn: (r) => r._field == \"uptime_sec\")\n  |> last()\n",
           "rawQuery": true,
           "refId": "A"
         }
       ],
       "title": "ESP Uptime",
-      "transformations": [
-        {
-          "id": "sortBy",
-          "options": {
-            "sort": [
-              {
-                "desc": true,
-                "field": "last_usage"
-              }
-            ]
-          }
-        }
-      ],
+      "transformations": [],
       "type": "stat"
     },
     {
