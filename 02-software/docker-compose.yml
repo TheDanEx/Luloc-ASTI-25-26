@@ -117,6 +117,7 @@ services:
     container_name: telegraf
     hostname: telegraf
     network_mode: "host"
+    pid: "host"
     restart: unless-stopped
     depends_on:
       influx-db:

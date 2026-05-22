@@ -2831,8 +2831,8 @@
       "title": "Docker Containers",
       "gridPos": {
         "h": 8,
-        "w": 19,
-        "x": 5,
+        "w": 16,
+        "x": 8,
         "y": 47
       },
       "targets": [
@@ -2841,7 +2841,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_cpu\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> group(columns: [\"container_name\"])\r\n  |> mean()\r\n  |> group()\r\n  |> sort(columns: [\"_value\"], desc: true)"
+          "query": "cpu = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_cpu\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> group(columns: [\"container_name\"])\r\n  |> mean()\r\n  |> map(fn: (r) => ({ r with _value: r._value / 4.0 }))\r\n  |> set(key: \"_field\", value: \"CPU %\")\r\n  |> keep(columns: [\"_value\", \"_field\", \"container_name\"])\r\n\r\nram = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_usage\")\r\n  |> group(columns: [\"pattern\"])\r\n  |> mean()\r\n  |> set(key: \"_field\", value: \"RAM %\")\r\n  |> keep(columns: [\"_value\", \"_field\", \"pattern\"])\r\n  |> rename(columns: {pattern: \"container_name\"})\r\n\r\nunion(tables: [cpu, ram])\r\n  |> pivot(rowKey: [\"container_name\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> group()\r\n  |> sort(columns: [\"CPU %\"], desc: true)"
         }
       ],
       "fieldConfig": {
@@ -2864,20 +2864,16 @@
               },
               {
                 "id": "custom.width",
-                "value": 220
+                "value": 200
               }
             ]
           },
           {
             "matcher": {
               "id": "byName",
-              "options": "_value"
+              "options": "CPU %"
             },
             "properties": [
-              {
-                "id": "displayName",
-                "value": "CPU %"
-              },
               {
                 "id": "unit",
                 "value": "percent"
@@ -2891,36 +2887,16 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "_time"
+              "options": "RAM %"
             },
             "properties": [
               {
-                "id": "hidden",
-                "value": true
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "_field"
-            },
-            "properties": [
+                "id": "unit",
+                "value": "percent"
+              },
               {
-                "id": "hidden",
-                "value": true
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "_measurement"
-            },
-            "properties": [
-              {
-                "id": "hidden",
-                "value": true
+                "id": "decimals",
+                "value": 1
               }
             ]
           }
