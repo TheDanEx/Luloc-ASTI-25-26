@@ -100,9 +100,8 @@ static void task_monitor_lowpower_cpu1(void *arg)
         if (++perf_counter >= (5 * polling_rate_hz)) {
             perf_counter = 0;
             
-            // 1. Print Uptime to Console (matching legacy behavior)
+            // 1. Get uptime for MQTT
             test_sensor_get_uptime_str(uptime_str, sizeof(uptime_str));
-            ESP_LOGI(TAG, "System uptime: %s", uptime_str);
 
             // MQTT status log every 60 iterations (~60s)
             if (++log_counter >= 60) {  // every ~60s
