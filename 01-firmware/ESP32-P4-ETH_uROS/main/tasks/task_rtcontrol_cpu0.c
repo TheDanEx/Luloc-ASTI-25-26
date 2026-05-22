@@ -141,7 +141,26 @@ static void task_rtcontrol_cpu0(void *arg)
 
     robot_mode_t prev_mode = MODE_NONE;
 
+    int64_t s_prev_cycle_us = 0;
+    int64_t s_cycle_min_us = INT64_MAX;
+    int64_t s_cycle_max_us = 0;
+    int64_t s_cycle_sum_us = 0;
+    int     s_cycle_count = 0;
+    uint32_t s_overruns = 0;
+    const int64_t target_period_us = CONFIG_ROBOT_CONTROL_PERIOD_MS * 1000LL;
+
     while(1) {
+        int64_t cycle_start_us = esp_timer_get_time();
+
+        if (s_prev_cycle_us != 0) {
+            int64_t delta_us = cycle_start_us - s_prev_cycle_us;
+            if (delta_us < s_cycle_min_us) s_cycle_min_us = delta_us;
+            if (delta_us > s_cycle_max_us) s_cycle_max_us = delta_us;
+            if (delta_us > target_period_us + 2000) s_overruns++;
+            s_cycle_sum_us += delta_us;
+            s_cycle_count++;
+        }
+        s_prev_cycle_us = cycle_start_us;
         // Calibration lifecycle: start on enter, stop on exit
         robot_mode_t current_mode = state_machine_get_context()->current_mode;
         if (current_mode != prev_mode) {
@@ -213,6 +232,33 @@ static void task_rtcontrol_cpu0(void *arg)
                 shm->sensors.motor_pid_i_r = 0; shm->sensors.motor_pid_d_r = 0;
                 xSemaphoreGive(shm->mutex);
             }
+        }
+
+        // Zero out PID voltages in idle mode (prevent frozen stale values)
+        if (current_mode == MODE_NONE) {
+            if (shm != NULL && xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+                shm->sensors.motor_pid_ff_l = 0; shm->sensors.motor_pid_p_l = 0;
+                shm->sensors.motor_pid_i_l = 0; shm->sensors.motor_pid_d_l = 0;
+                shm->sensors.motor_pid_ff_r = 0; shm->sensors.motor_pid_p_r = 0;
+                shm->sensors.motor_pid_i_r = 0; shm->sensors.motor_pid_d_r = 0;
+                xSemaphoreGive(shm->mutex);
+            }
+        }
+
+        // Cycle time stats: publish every ~1s
+        if (s_cycle_sum_us >= 1000000LL) {
+            if (shm != NULL && xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+                shm->sensors.cycle_mean_us = (float)s_cycle_sum_us / (float)s_cycle_count;
+                shm->sensors.cycle_min_us  = (float)s_cycle_min_us;
+                shm->sensors.cycle_max_us  = (float)s_cycle_max_us;
+                shm->sensors.cycle_overruns = s_overruns;
+                xSemaphoreGive(shm->mutex);
+            }
+            s_cycle_min_us = INT64_MAX;
+            s_cycle_max_us = 0;
+            s_cycle_sum_us = 0;
+            s_cycle_count = 0;
+            s_overruns = 0;
         }
 
         vTaskDelay(poll_rate);

@@ -44,7 +44,9 @@ class TelemetryBridge(Node):
     def cb_status(self, msg):
         d = json.loads(msg.data)
         ts = int(time.time() * 1e9)
-        self.send(f'system,robot={self.robot} uptime_sec={d["up"]} {ts}')
+        self.send(f'system,robot={self.robot} uptime_sec={d["up"]},'
+                  f'cycle_mean_us={d.get("cyc_m",0)},cycle_max_us={d.get("cyc_x",0)},'
+                  f'cycle_min_us={d.get("cyc_n",0)},cycle_overruns={d.get("cyc_o",0)} {ts}')
 
 def main():
     rclpy.init()

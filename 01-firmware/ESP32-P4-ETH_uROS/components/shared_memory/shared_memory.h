@@ -47,6 +47,12 @@ typedef struct {
     float motor_pid_p_r;
     float motor_pid_i_r;
     float motor_pid_d_r;
+
+    // Control loop cycle timing (updated by rtcontrol, read by uROS)
+    float cycle_mean_us;        // mean iteration time (μs) in last window
+    float cycle_min_us;         // min iteration time (μs) in last window
+    float cycle_max_us;         // max iteration time (μs) in last window
+    uint32_t cycle_overruns;    // overrun count in last window
 } robot_sensor_data_t;
 
 
