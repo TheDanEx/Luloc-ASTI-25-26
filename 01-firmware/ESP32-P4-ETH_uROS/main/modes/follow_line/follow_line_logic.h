@@ -9,6 +9,7 @@ typedef struct {
     float ki;
     float kd;
     float max_speed;
+    float nominal_speed;  // speed at which kp/ki/kd were tuned (>0)
 } follow_line_logic_config_t;
 
 typedef struct {

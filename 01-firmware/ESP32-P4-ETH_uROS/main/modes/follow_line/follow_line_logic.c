@@ -83,12 +83,16 @@ esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
     float p_term = ctx->config.kp * error;
     float i_term = ctx->config.ki * ctx->integral;
     float d_term = ctx->config.kd * derivative;
-    float total_steering = p_term + i_term + d_term;
+
+    float speed_scale = input->base_speed / (ctx->config.nominal_speed > 0.1f ? ctx->config.nominal_speed : 0.6f);
+    if (speed_scale < 0.0f) speed_scale = 0.0f;
+
+    float total_steering = (p_term + i_term + d_term) * speed_scale;
 
     out_output->left_motor_speed = clamp(input->base_speed + total_steering, -ctx->config.max_speed, ctx->config.max_speed);
     out_output->right_motor_speed = clamp(input->base_speed - total_steering, -ctx->config.max_speed, ctx->config.max_speed);
 
-    // Diagnostics
+    // Diagnostics (raw terms, before speed scaling — scaled steering is raw_steering)
     out_output->p_term = p_term;
     out_output->i_term = i_term;
     out_output->d_term = d_term;

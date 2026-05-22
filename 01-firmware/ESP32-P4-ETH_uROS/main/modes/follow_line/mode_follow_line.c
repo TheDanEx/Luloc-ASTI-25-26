@@ -39,6 +39,7 @@ static void mqtt_config_callback(const char *topic, int topic_len, const char *d
     cJSON *ki = cJSON_GetObjectItem(root, "ki");
     cJSON *kd = cJSON_GetObjectItem(root, "kd");
     cJSON *max = cJSON_GetObjectItem(root, "max_speed");
+    cJSON *nom = cJSON_GetObjectItem(root, "nominal_speed");
     cJSON *ffw = cJSON_GetObjectItem(root, "ff_weight");
     cJSON *base = cJSON_GetObjectItem(root, "base_speed");
 
@@ -46,14 +47,15 @@ static void mqtt_config_callback(const char *topic, int topic_len, const char *d
     if (ki) s_current_config.ki = ki->valuedouble;
     if (kd) s_current_config.kd = kd->valuedouble;
     if (max) s_current_config.max_speed = max->valuedouble;
+    if (nom) s_current_config.nominal_speed = nom->valuedouble;
     if (ffw) s_ff_weight = ffw->valuedouble;
-    if (base) s_base_speed_nominal = base->valuedouble;
+    if (base) { s_current_config.nominal_speed = base->valuedouble; s_base_speed_nominal = base->valuedouble; }
 
     if (s_logic) {
         follow_line_logic_set_config(s_logic, &s_current_config);
-        ESP_LOGI(TAG, "Dynamic Config Updated: P=%.2f I=%.2f D=%.2f Base=%.2f Max=%.2f FFw=%.2f", 
+        ESP_LOGI(TAG, "Dynamic Config Updated: P=%.2f I=%.2f D=%.2f Nom=%.2f Max=%.2f FFw=%.2f", 
                  s_current_config.kp, s_current_config.ki, s_current_config.kd, 
-                 s_base_speed_nominal, s_current_config.max_speed, s_ff_weight);
+                 s_current_config.nominal_speed, s_current_config.max_speed, s_ff_weight);
     }
 
     cJSON_Delete(root);
@@ -90,13 +92,14 @@ static void enter(void) {
         s_current_config.ki = atof(CONFIG_FOLLOW_LINE_KI);
         s_current_config.kd = atof(CONFIG_FOLLOW_LINE_KD);
         s_current_config.max_speed = atof(CONFIG_FOLLOW_LINE_MAX_SPEED);
-        s_base_speed_nominal = atof(CONFIG_FOLLOW_LINE_BASE_SPEED);
+        s_current_config.nominal_speed = atof(CONFIG_FOLLOW_LINE_BASE_SPEED);
+        s_base_speed_nominal = s_current_config.nominal_speed;
         s_ff_weight = atof(CONFIG_FOLLOW_LINE_FF_WEIGHT);
         s_defaults_loaded = true;
 
         ESP_LOGI(TAG, "Loaded default follow_line config: P=%.2f I=%.2f D=%.2f Base=%.2f Max=%.2f FFw=%.2f",
                  s_current_config.kp, s_current_config.ki, s_current_config.kd,
-                 s_base_speed_nominal, s_current_config.max_speed, s_ff_weight);
+                 s_current_config.nominal_speed, s_current_config.max_speed, s_ff_weight);
     }
 
     // 1. Initialize logic with static or last known config
@@ -193,13 +196,13 @@ static void execute(motor_driver_mcpwm_t* motors,
                 telemetry_add_float(s_telemetry, "d_term",        output.d_term);
                 telemetry_add_float(s_telemetry, "steering",      output.raw_steering);
 
-                // Explicit per-motor PID effects (as requested)
-                telemetry_add_float(s_telemetry, "p_eff_l",      output.p_term);
-                telemetry_add_float(s_telemetry, "p_eff_r",     -output.p_term);
-                telemetry_add_float(s_telemetry, "i_eff_l",      output.i_term);
-                telemetry_add_float(s_telemetry, "i_eff_r",     -output.i_term);
-                telemetry_add_float(s_telemetry, "d_eff_l",      output.d_term);
-                telemetry_add_float(s_telemetry, "d_eff_r",     -output.d_term);
+                // Per-motor PID steering contribution (after speed scaling)
+                telemetry_add_float(s_telemetry, "p_eff_l",       output.raw_steering * 0.5f);
+                telemetry_add_float(s_telemetry, "p_eff_r",      -output.raw_steering * 0.5f);
+                telemetry_add_float(s_telemetry, "i_eff_l",       0.0f);
+                telemetry_add_float(s_telemetry, "i_eff_r",       0.0f);
+                telemetry_add_float(s_telemetry, "d_eff_l",       0.0f);
+                telemetry_add_float(s_telemetry, "d_eff_r",       0.0f);
 
                 telemetry_commit_point(s_telemetry);
             }
