@@ -2841,7 +2841,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "cpu = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_cpu\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> set(key: \"_field\", value: \"CPU %\")\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\", \"container_name\"])\r\n\r\nmem = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> set(key: \"_field\", value: \"RAM %\")\r\n  |> keep(columns: [\"_time\", \"_value\", \"_field\", \"container_name\"])\r\n\r\nunion(tables: [cpu, mem])\r\n  |> pivot(rowKey: [\"_time\", \"container_name\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> group()\r\n  |> sort(columns: [\"_time\"], desc: true)"
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_cpu\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> group(columns: [\"container_name\"])\r\n  |> sort(columns: [\"_value\"], desc: true)"
         }
       ],
       "fieldConfig": {
@@ -2871,32 +2871,20 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "CPU %"
+              "options": "_value"
             },
             "properties": [
+              {
+                "id": "displayName",
+                "value": "CPU %"
+              },
               {
                 "id": "unit",
                 "value": "percent"
               },
               {
-                "id": "custom.width",
-                "value": 100
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "RAM %"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percent"
-              },
-              {
-                "id": "custom.width",
-                "value": 100
+                "id": "decimals",
+                "value": 1
               }
             ]
           },
@@ -2904,6 +2892,30 @@
             "matcher": {
               "id": "byName",
               "options": "_time"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Updated"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "_measurement"
+            },
+            "properties": [
+              {
+                "id": "hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "_field"
             },
             "properties": [
               {
