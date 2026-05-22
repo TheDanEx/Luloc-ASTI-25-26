@@ -256,16 +256,21 @@ static void telemetry_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
     float cyc_min  = shm->sensors.cycle_min_us;
     float cyc_max  = shm->sensors.cycle_max_us;
     uint32_t cyc_over = shm->sensors.cycle_overruns;
+    float busy_mean = shm->sensors.busy_mean_us;
+    float busy_min  = shm->sensors.busy_min_us;
+    float busy_max  = shm->sensors.busy_max_us;
 
     xSemaphoreGive(shm->mutex);
 
     // Pack status as JSON
     snprintf(status_msg.data.data, status_msg.data.capacity,
-        "{\"up\":%lu,\"mode\":%d,\"cyc_m\":%.0f,\"cyc_x\":%.0f,\"cyc_n\":%.0f,\"cyc_o\":%lu}",
+        "{\"up\":%lu,\"mode\":%d,\"cyc_m\":%.0f,\"cyc_x\":%.0f,\"cyc_n\":%.0f,\"cyc_o\":%lu,"
+        "\"busy_m\":%.0f,\"busy_x\":%.0f,\"busy_n\":%.0f}",
         (unsigned long)(esp_timer_get_time() / 1000000),
         (int)state_machine_get_context()->current_mode,
         cyc_mean, cyc_max, cyc_min,
-        (unsigned long)cyc_over);
+        (unsigned long)cyc_over,
+        busy_mean, busy_max, busy_min);
     status_msg.data.size = strlen(status_msg.data.data);
 
     // Publish all three

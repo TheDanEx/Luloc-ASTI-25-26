@@ -46,7 +46,9 @@ class TelemetryBridge(Node):
         ts = int(time.time() * 1e9)
         self.send(f'system,robot={self.robot} uptime_sec={d["up"]},'
                   f'cycle_mean_us={d.get("cyc_m",0)},cycle_max_us={d.get("cyc_x",0)},'
-                  f'cycle_min_us={d.get("cyc_n",0)},cycle_overruns={d.get("cyc_o",0)} {ts}')
+                  f'cycle_min_us={d.get("cyc_n",0)},cycle_overruns={d.get("cyc_o",0)},'
+                  f'busy_mean_us={d.get("busy_m",0)},busy_max_us={d.get("busy_x",0)},'
+                  f'busy_min_us={d.get("busy_n",0)} {ts}')
 
 def main():
     rclpy.init()

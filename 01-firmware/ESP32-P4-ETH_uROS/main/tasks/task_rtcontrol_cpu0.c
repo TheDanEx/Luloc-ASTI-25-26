@@ -147,6 +147,12 @@ static void task_rtcontrol_cpu0(void *arg)
     int64_t s_cycle_sum_us = 0;
     int     s_cycle_count = 0;
     uint32_t s_overruns = 0;
+
+    int64_t s_busy_min_us = INT64_MAX;
+    int64_t s_busy_max_us = 0;
+    int64_t s_busy_sum_us = 0;
+    int     s_busy_count = 0;
+
     const int64_t target_period_us = CONFIG_ROBOT_CONTROL_PERIOD_MS * 1000LL;
 
     while(1) {
@@ -245,13 +251,24 @@ static void task_rtcontrol_cpu0(void *arg)
             }
         }
 
-        // Cycle time stats: publish every ~1s
-        if (s_cycle_sum_us >= 1000000LL) {
-            if (shm != NULL && xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+        // Measure busy time BEFORE publishing (this iteration's work is done)
+        int64_t body_end_us = esp_timer_get_time();
+        int64_t busy_us = body_end_us - cycle_start_us;
+        if (busy_us < s_busy_min_us) s_busy_min_us = busy_us;
+        if (busy_us > s_busy_max_us) s_busy_max_us = busy_us;
+        s_busy_sum_us += busy_us;
+        s_busy_count++;
+
+        // Cycle + busy time stats: publish every ~1s (skip first bogus window)
+        if (s_cycle_sum_us >= 1000000LL && s_cycle_count >= 10) {
+            if (shm != NULL && xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(2)) == pdTRUE) {
                 shm->sensors.cycle_mean_us = (float)s_cycle_sum_us / (float)s_cycle_count;
                 shm->sensors.cycle_min_us  = (float)s_cycle_min_us;
                 shm->sensors.cycle_max_us  = (float)s_cycle_max_us;
                 shm->sensors.cycle_overruns = s_overruns;
+                shm->sensors.busy_mean_us = (float)s_busy_sum_us / (float)s_busy_count;
+                shm->sensors.busy_min_us  = (float)s_busy_min_us;
+                shm->sensors.busy_max_us  = (float)s_busy_max_us;
                 xSemaphoreGive(shm->mutex);
             }
             s_cycle_min_us = INT64_MAX;
@@ -259,6 +276,10 @@ static void task_rtcontrol_cpu0(void *arg)
             s_cycle_sum_us = 0;
             s_cycle_count = 0;
             s_overruns = 0;
+            s_busy_min_us = INT64_MAX;
+            s_busy_max_us = 0;
+            s_busy_sum_us = 0;
+            s_busy_count = 0;
         }
 
         vTaskDelay(poll_rate);
