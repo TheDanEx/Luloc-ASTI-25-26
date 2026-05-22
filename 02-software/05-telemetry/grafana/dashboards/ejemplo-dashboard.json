@@ -2609,7 +2609,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_mean_us\" or r[\"_field\"] == \"cycle_max_us\" or r[\"_field\"] == \"cycle_min_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")"
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_mean_us\" or r[\"_field\"] == \"cycle_max_us\" or r[\"_field\"] == \"cycle_min_us\" or r[\"_field\"] == \"busy_mean_us\" or r[\"_field\"] == \"busy_max_us\" or r[\"_field\"] == \"busy_min_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")"
         }
       ],
       "fieldConfig": {
@@ -2656,6 +2656,42 @@
               {
                 "id": "displayName",
                 "value": "min"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "busy_mean_us"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "busy mean"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "busy_max_us"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "busy max"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "busy_min_us"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "busy min"
               }
             ]
           }

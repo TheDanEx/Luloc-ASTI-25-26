@@ -159,7 +159,7 @@ line_sensor_handle_t line_sensor_init(const line_sensor_config_t *config)
         #ifdef CONFIG_LINE_SENSOR_OVERSAMPLING
         ctx->config.oversample_count = CONFIG_LINE_SENSOR_OVERSAMPLING;
         #else
-        ctx->config.oversample_count = 4;
+        ctx->config.oversample_count = 1;
         #endif
     }
     if (ctx->config.calibration_threshold == 0) {

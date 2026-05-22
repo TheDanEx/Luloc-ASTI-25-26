@@ -137,9 +137,11 @@ static void task_rtcontrol_cpu0(void *arg)
     modes_init();
     
     const float dt = (float)CONFIG_ROBOT_CONTROL_PERIOD_MS / 1000.0f;
-    const TickType_t poll_rate = pdMS_TO_TICKS(CONFIG_ROBOT_CONTROL_PERIOD_MS); 
+    const TickType_t period_ticks = pdMS_TO_TICKS(CONFIG_ROBOT_CONTROL_PERIOD_MS);
+    if (period_ticks < 1) { ESP_LOGE(TAG, "Tick too slow for %dms period!", CONFIG_ROBOT_CONTROL_PERIOD_MS); vTaskDelete(NULL); return; }
 
     robot_mode_t prev_mode = MODE_NONE;
+    TickType_t xLastWakeTime = xTaskGetTickCount();
 
     int64_t s_prev_cycle_us = 0;
     int64_t s_cycle_min_us = INT64_MAX;
@@ -282,7 +284,7 @@ static void task_rtcontrol_cpu0(void *arg)
             s_busy_count = 0;
         }
 
-        vTaskDelay(poll_rate);
+        vTaskDelayUntil(&xLastWakeTime, period_ticks);
         
     }
 }
