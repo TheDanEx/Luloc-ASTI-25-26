@@ -12,6 +12,7 @@
 #include <math.h>
 #include "encoder_sensor.h"
 #include "line_sensor.h"
+#include "driver/temp_sensor.h"
 
 static const char *TAG = "rt_cntrl";
 
@@ -133,6 +134,14 @@ static void task_rtcontrol_cpu0(void *arg)
         .detection_threshold = 0.0f
     };
     line_sensor_handle_t line_array = line_sensor_init(&line_cfg);
+
+    // Initialize ESP32 internal temperature sensor
+    temp_sensor_config_t temp_cfg = TSENS_CONFIG_DEFAULT();
+    temp_sensor_get_config(&temp_cfg);
+    temp_cfg.dac_offset = TSENS_DAC_DEFAULT;
+    temp_sensor_set_config(temp_cfg);
+    temp_sensor_start();
+    ESP_LOGI(TAG, "Internal temperature sensor ready");
     // Calibration started by mode_calibrate.enter(), not unconditionally
 
     modes_init();
@@ -205,6 +214,11 @@ static void task_rtcontrol_cpu0(void *arg)
             shm->sensors.motor_distance_left = distance_l_m;
             shm->sensors.motor_speed_right = speed_r_ms;
             shm->sensors.motor_distance_right = distance_r_m;
+
+            float chip_temp_c;
+            if (temp_sensor_read_celsius(&chip_temp_c) == ESP_OK) {
+                shm->sensors.temperature = chip_temp_c;
+            }
             
             // Update Line Sensor SHM (only if mode needs it)
             if (need_line) {
@@ -232,17 +246,6 @@ static void task_rtcontrol_cpu0(void *arg)
 
         // 2. Execute Mode (Router Pattern / Dispatcher)
         modes_execute(&motors, ctrl_left, ctrl_right, dt);
-
-        // Zero out PID voltages in idle mode (prevent frozen stale values)
-        if (current_mode == MODE_NONE) {
-            if (shm != NULL && xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
-                shm->sensors.motor_pid_ff_l = 0; shm->sensors.motor_pid_p_l = 0;
-                shm->sensors.motor_pid_i_l = 0; shm->sensors.motor_pid_d_l = 0;
-                shm->sensors.motor_pid_ff_r = 0; shm->sensors.motor_pid_p_r = 0;
-                shm->sensors.motor_pid_i_r = 0; shm->sensors.motor_pid_d_r = 0;
-                xSemaphoreGive(shm->mutex);
-            }
-        }
 
         // Zero out PID voltages in idle mode (prevent frozen stale values)
         if (current_mode == MODE_NONE) {

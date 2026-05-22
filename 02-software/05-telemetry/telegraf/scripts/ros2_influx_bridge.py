@@ -32,6 +32,7 @@ class TelemetryBridge(Node):
                   f'min0={d.get("min0",0)},min1={d.get("min1",0)},min2={d.get("min2",0)},min3={d.get("min3",0)},min4={d.get("min4",0)},min5={d.get("min5",0)},min6={d.get("min6",0)},min7={d.get("min7",0)},'
                   f'max0={d.get("max0",0)},max1={d.get("max1",0)},max2={d.get("max2",0)},max3={d.get("max3",0)},max4={d.get("max4",0)},max5={d.get("max5",0)},max6={d.get("max6",0)},max7={d.get("max7",0)} {ts}')
         self.send(f'odometry,robot={r} velIZ={d["sl"]},posIZ={d["dl"]},velDR={d["sr"]},posDR={d["dr"]} {ts}')
+        self.send(f'chip_temp,robot={r} celsius={d.get("tmp",0)} {ts}')
 
     def cb_motors(self, msg):
         d = json.loads(msg.data)

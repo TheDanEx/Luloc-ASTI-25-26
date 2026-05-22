@@ -2562,7 +2562,8 @@
             "fillOpacity": 5,
             "spanNulls": true
           },
-          "unit": "µs"
+          "unit": "µs",
+          "displayName": "${__field.labels.name}"
         },
         "overrides": []
       },
@@ -2625,7 +2626,8 @@
             "fillOpacity": 5,
             "spanNulls": true
           },
-          "unit": "µs"
+          "unit": "µs",
+          "displayName": "${__field.labels.name}"
         },
         "overrides": []
       },
@@ -2639,6 +2641,63 @@
           "placement": "bottom"
         }
       }
+    },
+    {
+      "id": 50,
+      "type": "stat",
+      "title": "ESP32 Chip Temp (C)",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 60
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"chip_temp\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"celsius\")\r\n  |> last()"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "celsius"
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "datasource": "InfluxDB"
     }
   ],
   "preload": false,

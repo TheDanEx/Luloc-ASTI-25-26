@@ -214,7 +214,8 @@ static void telemetry_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
         "\"n0\":%.3f,\"n1\":%.3f,\"n2\":%.3f,\"n3\":%.3f,\"n4\":%.3f,\"n5\":%.3f,\"n6\":%.3f,\"n7\":%.3f,"
         "\"r0\":%u,\"r1\":%u,\"r2\":%u,\"r3\":%u,\"r4\":%u,\"r5\":%u,\"r6\":%u,\"r7\":%u,"
         "\"min0\":%u,\"min1\":%u,\"min2\":%u,\"min3\":%u,\"min4\":%u,\"min5\":%u,\"min6\":%u,\"min7\":%u,"
-        "\"max0\":%u,\"max1\":%u,\"max2\":%u,\"max3\":%u,\"max4\":%u,\"max5\":%u,\"max6\":%u,\"max7\":%u}",
+        "\"max0\":%u,\"max1\":%u,\"max2\":%u,\"max3\":%u,\"max4\":%u,\"max5\":%u,\"max6\":%u,\"max7\":%u,"
+        "\"tmp\":%.1f}",
         shm->sensors.motor_speed_left, -shm->sensors.motor_speed_right,
         shm->sensors.motor_distance_left, -shm->sensors.motor_distance_right,
         shm->sensors.battery_voltage, shm->sensors.robot_current,
@@ -235,7 +236,8 @@ static void telemetry_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
         (unsigned)shm->sensors.line_max[0], (unsigned)shm->sensors.line_max[1],
         (unsigned)shm->sensors.line_max[2], (unsigned)shm->sensors.line_max[3],
         (unsigned)shm->sensors.line_max[4], (unsigned)shm->sensors.line_max[5],
-        (unsigned)shm->sensors.line_max[6], (unsigned)shm->sensors.line_max[7]);
+        (unsigned)shm->sensors.line_max[6], (unsigned)shm->sensors.line_max[7],
+        shm->sensors.temperature);
     sensors_msg.data.size = strlen(sensors_msg.data.data);
 
     // Pack motors as JSON (target/actual speeds + per-motor PID voltage breakdown)
