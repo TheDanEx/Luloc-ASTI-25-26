@@ -24,5 +24,5 @@ El cimiento neutral para comunicaciones intra-robot inter-proceso.
 - **`mosquitto/mosquitto.conf`**: Bloquea las directivas de seguridad (Access Control Lists Listners) del contenedor general de Eclipse. Configura de forma rígida el modo anónimo local del Puerto 1883 para ingestas de hiper-alta capacidad emitidas desde el ESP32, asumiendo una Intranet cerrada (Cable Ethernet Directo ESP32 <-> RPi5).
 
 ### Globales
-- **`docker-compose.yml`**: Mapa maestro topológico. Inicializa el Grandmaster Clock `linuxptp`, los brokers, las bases de datos `influxdb` y las consolas de Grafana inyectando los secretos mediante `.env`.
+- **`docker-compose.yml`**: Mapa maestro topologico. Inicializa los brokers, las bases de datos `influxdb` y las consolas de Grafana inyectando los secretos mediante `.env`.
 - **`.env`**: Archivo de entorno nativo del Host donde descansan los Token/Passwords Maestros de InfluxDB y Administradores Grafana (`INFLUXDB_TOKEN`, `GRAFANA_ADMIN_PASSWORD`), asegurando que dichas claves nunca queden commit-eadas al código fuente global de ROS2/Firmware.

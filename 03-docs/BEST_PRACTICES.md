@@ -13,7 +13,7 @@ El código se escribe una vez, pero se lee mil veces.
 ## 2. Nomenclatura (Naming Conventions)
 
 - **Idioma del Proyecto:** TODO archivo, carpeta secundaria, módulo, variable, y función DEBE estar nombrado enteramente en **Inglés**. A la vez, el contenido de la documentación (los Párrafos) puede redactarse en el idioma del equipo para mayor fluidez, pero la topología del árbol de archivos es intocable y universal (Ej. `components/`, `folder_structure`, no `componentes/` ni `estructura`).
-- **Commits en Git:** Los mensajes de los commits DEBEN estar escritos obligatoriamente en **Inglés**, siguiendo el formato convencional (ej. `feat: add PTP client`, `fix: memory leak in odometry`).
+- **Commits en Git:** Los mensajes de los commits DEBEN estar escritos obligatoriamente en **Inglés**, siguiendo el formato convencional (ej. `feat: add line sensor`, `fix: memory leak in odometry`).
 - **Funciones C/C++:** `snake_case`. Módulos explícitos (ej. `motor_mcpwm_set` en vez de `setMotor`).
 - **Variables de Estado:** Deben insinuar su uso (ej. `is_mqtt_connected`, `last_odometry_update_ms`).
 - **Macros y Constantes:** `UPPER_SNAKE_CASE` (ej. `CMD_QUEUE_SIZE_MAX`).

@@ -2,5 +2,5 @@ cmake_minimum_required(VERSION 3.5)
 
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(esp_p4_ptp_telemetry)
+project(esp_p4_uros_telemetry)
 

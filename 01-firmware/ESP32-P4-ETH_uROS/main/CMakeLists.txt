@@ -35,7 +35,7 @@ idf_component_register(
         log
         esp_timer
         esp_driver_gpio
-        ptp_client
+
         line_sensor
         performance_monitor
         mqtt_custom_client

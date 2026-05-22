@@ -17,7 +17,5 @@ Librerías estáticas aisladas (Independientes por diseño). Permite desarrollar
 - **`encoder_sensor/`**: Controlador hardware (pulse_cnt) de los motores.
 - **`telemetry_manager/`**: Módulo Backend que procesa la agrupación asíncrona de datos para la generación del Influx Line Protocol (ILP Batching).
 - **`mqtt_custom_client/`**: Envoltorio de LwIP dedicado puramente al hilo de las comunicaciones IoT y subscripciones.
-- **`ptp_client/`**: Gestión explícita de alto nivel para IEEE 1588 sincronizado con el Master (Docker RPi5), expone el timestamp unificado y corregido en microsegundos.
-
 ### Otros Archivos de Relevancia
-- **`sdkconfig` / `sdkconfig.defaults`**: El ADN del firmware. Contiene los _toggles_ generados por el comando `menuconfig` para preprocesadores de C. Controla stacks TCP/IP, IGMP, Multicast PTP nativo del ESP32, e información binaria de Flash (Ej: Ocurrencia de SW/HW Timestamping o configuración general FreeRTOS).
+- **`sdkconfig` / `sdkconfig.defaults`**: El ADN del firmware. Contiene los _toggles_ generados por el comando `menuconfig` para preprocesadores de C. Controla stacks TCP/IP e información binaria de Flash (configuracion general FreeRTOS).
