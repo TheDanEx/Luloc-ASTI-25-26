@@ -216,8 +216,8 @@ static void telemetry_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
         "\"min0\":%u,\"min1\":%u,\"min2\":%u,\"min3\":%u,\"min4\":%u,\"min5\":%u,\"min6\":%u,\"min7\":%u,"
         "\"max0\":%u,\"max1\":%u,\"max2\":%u,\"max3\":%u,\"max4\":%u,\"max5\":%u,\"max6\":%u,\"max7\":%u,"
         "\"tmp\":%.1f}",
-        shm->sensors.motor_speed_left, -shm->sensors.motor_speed_right,
-        shm->sensors.motor_distance_left, -shm->sensors.motor_distance_right,
+        shm->sensors.motor_speed_left, shm->sensors.motor_speed_right,
+        shm->sensors.motor_distance_left, shm->sensors.motor_distance_right,
         shm->sensors.battery_voltage, shm->sensors.robot_current,
         shm->sensors.line_position_m, shm->sensors.line_detected ? 1 : 0,
         shm->sensors.line_is_calibrated ? 1 : 0,
@@ -246,7 +246,7 @@ static void telemetry_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
         "\"ffl\":%.3f,\"pl\":%.3f,\"il\":%.3f,\"dl\":%.3f,"
         "\"ffr\":%.3f,\"pr\":%.3f,\"ir\":%.3f,\"dr\":%.3f}",
         shm->teleop.target_speed_left, shm->teleop.target_speed_right,
-        shm->sensors.motor_speed_left, -shm->sensors.motor_speed_right,
+        shm->sensors.motor_speed_left, shm->sensors.motor_speed_right,
         shm->sensors.motor_pid_ff_l, shm->sensors.motor_pid_p_l,
         shm->sensors.motor_pid_i_l, shm->sensors.motor_pid_d_l,
         shm->sensors.motor_pid_ff_r, shm->sensors.motor_pid_p_r,

@@ -8,10 +8,11 @@ typedef struct {
     float kp;
     float ki;
     float kd;
-    float kff;         // heading feed-forward gain
+    float kff;              // heading feed-forward gain
     float max_speed;
-    float nominal_speed;  // speed at which kp/ki/kd were tuned (>0)
-    float wheelbase_m;    // for heading estimation from encoder differential
+    float nominal_speed;     // speed at which kp/ki/kd were tuned (>0)
+    float wheelbase_m;       // for heading estimation from encoder differential
+    float lost_line_offset_m; // phantom sensor error used when line is not visible
 } follow_line_logic_config_t;
 
 typedef struct {

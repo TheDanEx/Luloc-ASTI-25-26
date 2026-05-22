@@ -17,7 +17,9 @@ static volatile float s_curvature_multiplier = 1.0f; // Default: No change
 static SemaphoreHandle_t s_mode_mutex = NULL;
 // Default configuration from Kconfig
 static follow_line_logic_config_t s_current_config = {
-    .kp = 0.0f, .ki = 0.0f, .kd = 0.0f, .kff = 0.0f, .max_speed = 0.0f, .nominal_speed = 0.0f, .wheelbase_m = 0.17f
+    .kp = 0.0f, .ki = 0.0f, .kd = 0.0f, .kff = 0.0f,
+    .max_speed = 0.0f, .nominal_speed = 0.0f,
+    .wheelbase_m = 0.17f, .lost_line_offset_m = 0.036f
 };
 static float s_base_speed_nominal = 0.0f;
 static float s_ff_weight = 0.0f;
@@ -51,7 +53,7 @@ static void mqtt_config_callback(const char *topic, int topic_len, const char *d
     if (kff) s_current_config.kff = kff->valuedouble;
     if (max) s_current_config.max_speed = max->valuedouble;
     if (nom) s_current_config.nominal_speed = nom->valuedouble;
-    if (ffw) s_ff_weight = ffw->valuedouble;
+    if (ffw) { s_current_config.kff = ffw->valuedouble; s_ff_weight = ffw->valuedouble; }
     if (wb) s_current_config.wheelbase_m = wb->valuedouble;
     if (base) { s_current_config.nominal_speed = base->valuedouble; s_base_speed_nominal = base->valuedouble; }
 
@@ -144,7 +146,7 @@ static void execute(motor_driver_mcpwm_t* motors,
             bool detected = shm->sensors.line_detected;
             float bat_mv = shm->sensors.battery_voltage;
             float cur_l = shm->sensors.motor_speed_left;
-            float cur_r = -shm->sensors.motor_speed_right;
+            float cur_r = shm->sensors.motor_speed_right;
             xSemaphoreGive(shm->mutex);
 
             if (bat_mv < 5000) bat_mv = 16800;
@@ -204,14 +206,13 @@ static void execute(motor_driver_mcpwm_t* motors,
                 telemetry_add_float(s_telemetry, "steering",      output.raw_steering);
                 telemetry_add_float(s_telemetry, "heading_rad",   output.heading_rad);
 
-                // Per-motor PID steering contribution
-                float half_steer = output.raw_steering * 0.5f;
-                telemetry_add_float(s_telemetry, "p_eff_l",       half_steer);
-                telemetry_add_float(s_telemetry, "p_eff_r",      -half_steer);
-                telemetry_add_float(s_telemetry, "i_eff_l",       0.0f);
-                telemetry_add_float(s_telemetry, "i_eff_r",       0.0f);
-                telemetry_add_float(s_telemetry, "d_eff_l",       0.0f);
-                telemetry_add_float(s_telemetry, "d_eff_r",       0.0f);
+                // Per-motor PID steering contribution (half per wheel, inverted on right)
+                telemetry_add_float(s_telemetry, "p_eff_l",  output.p_term * 0.5f);
+                telemetry_add_float(s_telemetry, "p_eff_r", -output.p_term * 0.5f);
+                telemetry_add_float(s_telemetry, "i_eff_l",  output.i_term * 0.5f);
+                telemetry_add_float(s_telemetry, "i_eff_r", -output.i_term * 0.5f);
+                telemetry_add_float(s_telemetry, "d_eff_l",  output.d_term * 0.5f);
+                telemetry_add_float(s_telemetry, "d_eff_r", -output.d_term * 0.5f);
 
                 telemetry_commit_point(s_telemetry);
             }

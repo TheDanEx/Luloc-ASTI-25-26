@@ -9,10 +9,11 @@ static const char *TAG = "FOLLOW_LINE_LOGIC";
 struct follow_line_logic_context_t {
     follow_line_logic_config_t config;
     float integral;
-    float previous_error;
     float last_known_position;
     bool has_seen_line;
-    float heading_rad;          // estimated heading from encoder differential
+    bool was_lost;               // flag: we just lost the line and are searching
+    bool was_line_detected;      // prev-frame detection for edge detection
+    float heading_rad;           // estimated heading from encoder differential
     float prev_speed_l;
     float prev_speed_r;
 };
@@ -56,6 +57,21 @@ esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
     float safe_dt = (dt_s > 0.0001f) ? dt_s : 0.0001f;
     float error = 0.0f;
 
+    // --- Edge detection: line loss / re-acquisition ---
+    if (input->line_detected && !ctx->was_line_detected) {
+        // Re-acquired after loss: drain accumulated search error
+        if (ctx->was_lost) {
+            ctx->integral *= 0.2f;
+            ctx->heading_rad *= 0.3f;
+            ctx->was_lost = false;
+            ESP_LOGD(TAG, "Line re-acquired, integral=%f heading=%f", ctx->integral, ctx->heading_rad);
+        }
+    }
+    if (!input->line_detected && ctx->was_line_detected && ctx->has_seen_line) {
+        ctx->was_lost = true;
+    }
+    ctx->was_line_detected = input->line_detected;
+
     if (input->line_detected) {
         ctx->has_seen_line = true;
         error = input->line_position_m;
@@ -72,10 +88,12 @@ esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
             out_output->heading_rad = 0.0f;
             return ESP_OK;
         }
+        // Phantom sensor: extrapolate error beyond physical array bounds
+        float lost_offset = ctx->config.lost_line_offset_m > 0.001f ? ctx->config.lost_line_offset_m : 0.036f;
         if (ctx->last_known_position < 0.0f) {
-            error = -0.036f;
+            error = -lost_offset;
         } else {
-            error = 0.036f;
+            error =  lost_offset;
         }
     }
 
@@ -86,6 +104,12 @@ esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
     float avg_speed_r = (input->speed_r + ctx->prev_speed_r) * 0.5f;
     float omega = (avg_speed_r - avg_speed_l) / wb;
     ctx->heading_rad += omega * safe_dt;
+
+    // Gentle heading decay when centered and not turning (prevents drift)
+    if (fabsf(error) < 0.003f && fabsf(omega) < 0.05f) {
+        ctx->heading_rad *= 0.95f;
+    }
+
     ctx->prev_speed_l = input->speed_l;
     ctx->prev_speed_r = input->speed_r;
 
@@ -96,7 +120,6 @@ esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
     // --- PID with speed-invariant gains ---
     //
     // Model:  de/dt = v·θ + L·ω  (L = sensor forward offset)
-    // Control: ω = (kp·e + ki·∫e·v·dt + kd·θ + kff·v·θ) / L
     //
     // P: constant (acts on position error)
     // I: accumulates e·v·dt (spatial, not temporal)
@@ -109,6 +132,7 @@ esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
     float v_factor = (fabsf(v_actual) > 0.05f) ? (v_actual / v_nom) : 0.05f / v_nom;
     ctx->integral += error * safe_dt * v_factor;
     float i_term = ctx->config.ki * ctx->integral;
+    i_term = clamp(i_term, -ctx->config.max_speed, ctx->config.max_speed);
 
     float d_term = ctx->config.kd * ctx->heading_rad;
 
@@ -127,7 +151,6 @@ esp_err_t follow_line_logic_update(follow_line_logic_handle_t handle,
     out_output->raw_steering = total_steering;
     out_output->heading_rad = ctx->heading_rad;
 
-    ctx->previous_error = error;
     return ESP_OK;
 }
 

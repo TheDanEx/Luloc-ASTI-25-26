@@ -119,7 +119,7 @@ static void task_rtcontrol_cpu0(void *arg)
         .ppr = ENCODER_PPR,
         .wheel_diameter_m = WHEEL_DIAMETER_M,
         .gear_ratio = GEAR_RATIO,
-        .reverse_direction = false
+        .reverse_direction = true
     };
     encoder_sensor_handle_t encoder_right = encoder_sensor_init(&enc_r_cfg);
 

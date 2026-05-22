@@ -2743,8 +2743,8 @@
       },
       "fieldConfig": {
         "defaults": {
+          "unit": "decbytes",
           "decimals": 0,
-          "unit": "bytes",
           "color": {
             "mode": "palette-classic"
           }
@@ -2787,6 +2787,78 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "grafana"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "grafana"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "influxdb"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "influxdb"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "telegraf"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "telegraf"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "uros_agent"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "uros_agent"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ros2_influx_bridge"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "ros2_influx_bridge"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mosquitto"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "mosquitto"
+              }
+            ]
           }
         ]
       },
@@ -2807,7 +2879,7 @@
         },
         "displayLabels": [
           "name",
-          "value"
+          "percent"
         ],
         "tooltip": {
           "mode": "single",
@@ -2842,8 +2914,8 @@
       },
       "fieldConfig": {
         "defaults": {
+          "unit": "decbytes",
           "decimals": 0,
-          "unit": "bytes",
           "color": {
             "mode": "palette-classic"
           }
@@ -2886,6 +2958,78 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "grafana"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "grafana"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "influxdb"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "influxdb"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "telegraf"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "telegraf"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "uros_agent"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "uros_agent"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ros2_influx_bridge"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "ros2_influx_bridge"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mosquitto"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "mosquitto"
+              }
+            ]
           }
         ]
       },
@@ -2906,7 +3050,7 @@
         },
         "displayLabels": [
           "name",
-          "value"
+          "percent"
         ],
         "tooltip": {
           "mode": "single",
@@ -3033,8 +3177,8 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "decimals": 1,
-          "unit": "bytes",
+          "unit": "decbytes",
+          "decimals": 0,
           "color": {
             "mode": "palette-classic"
           }
