@@ -29,6 +29,75 @@
             "mode": "thresholds"
           },
           "decimals": 0,
+          "displayName": "Hz",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "green",
+                "value": 200
+              }
+            ]
+          },
+          "unit": "Hz"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 0,
+        "y": 0
+      },
+      "id": 47,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_hz\")\r\n  |> last()",
+          "refId": "A"
+        }
+      ],
+      "title": "RT Loop Freq (Hz)",
+      "type": "stat"
+    },
+    {
+      "datasource": "InfluxDB",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
           "displayName": "Uptime",
           "fieldMinMax": false,
           "mappings": [],
@@ -49,7 +118,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 0,
+        "x": 3,
         "y": 0
       },
       "id": 14,
@@ -99,10 +168,7 @@
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "P951FEA4DE68E13C5"
-      },
+      "datasource": "InfluxDB",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -120,67 +186,8 @@
                 "value": 0
               },
               {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 4,
-        "y": 0
-      },
-      "id": 7,
-      "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "sizing": "auto"
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cpu_usage\")\n  |> filter(fn: (r) => r.task == \"TOTAL_CPU0\")\n",
-          "refId": "A"
-        }
-      ],
-      "title": "CPU0",
-      "type": "gauge"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "P951FEA4DE68E13C5"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 1,
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
+                "color": "yellow",
+                "value": 60
               },
               {
                 "color": "red",
@@ -188,7 +195,7 @@
               }
             ]
           },
-          "unit": "percent"
+          "unit": "celsius"
         },
         "overrides": []
       },
@@ -198,7 +205,7 @@
         "x": 7,
         "y": 0
       },
-      "id": 8,
+      "id": 50,
       "options": {
         "minVizHeight": 75,
         "minVizWidth": 75,
@@ -217,11 +224,15 @@
       "pluginVersion": "12.4.2",
       "targets": [
         {
-          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cpu_usage\")\n  |> filter(fn: (r) => r.task == \"TOTAL_CPU1\")\n",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"chip_temp\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"celsius\")\r\n  |> last()",
           "refId": "A"
         }
       ],
-      "title": "CPU1",
+      "title": "ESP32 Chip Temp (C)",
       "type": "gauge"
     },
     {
@@ -246,8 +257,12 @@
                 "value": 0
               },
               {
-                "color": "red",
+                "color": "yellow",
                 "value": 75
+              },
+              {
+                "color": "red",
+                "value": 85
               }
             ]
           },
@@ -363,6 +378,132 @@
       "fieldConfig": {
         "defaults": {
           "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 0,
+        "y": 4
+      },
+      "id": 7,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cpu_usage\")\n  |> filter(fn: (r) => r.task == \"TOTAL_CPU0\")\n",
+          "refId": "A"
+        }
+      ],
+      "title": "CPU0",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 3,
+        "y": 4
+      },
+      "id": 8,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cpu_usage\")\n  |> filter(fn: (r) => r.task == \"TOTAL_CPU1\")\n",
+          "refId": "A"
+        }
+      ],
+      "title": "CPU1",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
             "mode": "palette-classic"
           },
           "custom": {
@@ -388,7 +529,7 @@
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "always",
+            "showPoints": "never",
             "showValues": false,
             "spanNulls": false,
             "stacking": {
@@ -426,9 +567,9 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 5,
-        "w": 5,
-        "x": 0,
+        "h": 4,
+        "w": 4,
+        "x": 6,
         "y": 4
       },
       "hideTimeOverride": true,
@@ -453,121 +594,12 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cpu_usage\")\n  |> filter(fn: (r) => r.task == \"TOTAL_CPU0\")\n",
+          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cpu_usage\")\n  |> filter(fn: (r) => r.task == \"TOTAL_CPU0\" or r.task == \"TOTAL_CPU1\")\n",
           "refId": "A"
         }
       ],
       "timeFrom": "5m",
       "title": "Uso CPU0",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "P951FEA4DE68E13C5"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineStyle": {
-              "fill": "solid"
-            },
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "always",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "decimals": 1,
-          "displayName": "Uso CPU1",
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": 0
-              },
-              {
-                "color": "green",
-                "value": 50
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 5,
-        "x": 5,
-        "y": 4
-      },
-      "hideTimeOverride": true,
-      "id": 4,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.4.2",
-      "targets": [
-        {
-          "dataset": "iox",
-          "editorMode": "code",
-          "format": "time_series",
-          "query": "from(bucket: \"local_system\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cpu_usage\")\n  |> filter(fn: (r) => r.task == \"TOTAL_CPU1\")\n",
-          "rawQuery": true,
-          "refId": "A"
-        }
-      ],
-      "timeFrom": "5m",
-      "title": "Uso CPU1",
       "type": "timeseries"
     },
     {
@@ -780,7 +812,7 @@
         "h": 7,
         "w": 5,
         "x": 0,
-        "y": 9
+        "y": 8
       },
       "id": 41,
       "options": {
@@ -853,7 +885,7 @@
         "h": 7,
         "w": 5,
         "x": 5,
-        "y": 9
+        "y": 8
       },
       "id": 42,
       "options": {
@@ -1202,7 +1234,7 @@
         "h": 8,
         "w": 5,
         "x": 0,
-        "y": 16
+        "y": 15
       },
       "id": 18,
       "options": {
@@ -1301,7 +1333,7 @@
         "h": 8,
         "w": 5,
         "x": 5,
-        "y": 16
+        "y": 15
       },
       "id": 19,
       "options": {
@@ -1701,7 +1733,7 @@
         "h": 8,
         "w": 5,
         "x": 0,
-        "y": 24
+        "y": 23
       },
       "id": 20,
       "options": {
@@ -1800,7 +1832,7 @@
         "h": 8,
         "w": 5,
         "x": 5,
-        "y": 24
+        "y": 23
       },
       "id": 23,
       "options": {
@@ -1874,6 +1906,7 @@
               "mode": "off"
             }
           },
+          "displayName": "${__field.name}",
           "mappings": [],
           "max": -1.6,
           "min": 1.6,
@@ -1895,8 +1928,8 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 7,
+        "h": 7,
+        "w": 5,
         "x": 10,
         "y": 24
       },
@@ -1968,6 +2001,7 @@
               "mode": "off"
             }
           },
+          "displayName": "${__field.name}",
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -1983,9 +2017,9 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 7,
-        "x": 17,
+        "h": 7,
+        "w": 5,
+        "x": 15,
         "y": 24
       },
       "id": 37,
@@ -2022,6 +2056,7 @@
           "color": {
             "mode": "thresholds"
           },
+          "displayName": "${__field.name}",
           "mappings": [],
           "max": 1,
           "min": 0,
@@ -2045,7 +2080,7 @@
         "h": 4,
         "w": 10,
         "x": 0,
-        "y": 32
+        "y": 31
       },
       "id": 33,
       "options": {
@@ -2143,7 +2178,7 @@
         "h": 8,
         "w": 7,
         "x": 10,
-        "y": 32
+        "y": 31
       },
       "id": 27,
       "options": {
@@ -2239,7 +2274,7 @@
         "h": 8,
         "w": 7,
         "x": 17,
-        "y": 32
+        "y": 31
       },
       "id": 28,
       "options": {
@@ -2279,6 +2314,7 @@
           "color": {
             "mode": "thresholds"
           },
+          "displayName": "${__field.name}",
           "mappings": [],
           "max": 4096,
           "min": 0,
@@ -2298,7 +2334,7 @@
         "h": 4,
         "w": 10,
         "x": 0,
-        "y": 36
+        "y": 35
       },
       "id": 29,
       "options": {
@@ -2340,6 +2376,7 @@
           "color": {
             "mode": "thresholds"
           },
+          "displayName": "${__field.name}",
           "mappings": [],
           "max": 4096,
           "min": 0,
@@ -2363,7 +2400,7 @@
         "h": 4,
         "w": 10,
         "x": 0,
-        "y": 40
+        "y": 39
       },
       "id": 30,
       "options": {
@@ -2403,8 +2440,251 @@
       "fieldConfig": {
         "defaults": {
           "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 5,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "displayName": "${__field.name}",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "µs"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 7,
+        "x": 10,
+        "y": 39
+      },
+      "id": 48,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"busy_mean_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"busy_max_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"max\")",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"busy_min_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"min\")",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"busy_p95_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"P95\")",
+          "refId": "D"
+        }
+      ],
+      "title": "RT Busy Time (us)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 5,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "displayName": "${__field.name}",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "µs"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 7,
+        "x": 17,
+        "y": 39
+      },
+      "id": 49,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_mean_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_max_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"max\")",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_min_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"min\")",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_p95_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"P95\")",
+          "refId": "D"
+        }
+      ],
+      "title": "RT Cycle Time (us)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "P951FEA4DE68E13C5"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
             "mode": "thresholds"
           },
+          "displayName": "${__field.name}",
           "mappings": [],
           "max": 4096,
           "min": 0,
@@ -2424,7 +2704,7 @@
         "h": 4,
         "w": 10,
         "x": 0,
-        "y": 44
+        "y": 43
       },
       "id": 32,
       "options": {
@@ -2457,14 +2737,14 @@
       "type": "gauge"
     },
     {
-      "id": 47,
-      "type": "stat",
-      "title": "RT Loop Freq (Hz)",
+      "id": 51,
+      "type": "timeseries",
+      "title": "Pi5 Memory",
       "gridPos": {
-        "h": 4,
-        "w": 4,
+        "h": 7,
+        "w": 12,
         "x": 0,
-        "y": 48
+        "y": 47
       },
       "targets": [
         {
@@ -2472,7 +2752,237 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_hz\")\r\n  |> last()"
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"used_percent\" or r[\"_field\"] == \"available_percent\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mem\")"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10,
+            "spanNulls": true,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "bytes"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "used_percent"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Used %"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "available_percent"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Free %"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 52,
+      "type": "table",
+      "title": "Docker Containers",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 47
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_cpu\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"CPU%\")"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"RAM\")"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "usage_percent"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "CPU%"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "usage"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "RAM"
+              },
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": []
+      }
+    },
+    {
+      "id": 53,
+      "type": "timeseries",
+      "title": "Pi5 Load",
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 0,
+        "y": 54
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"load1\" or r[\"_field\"] == \"load5\" or r[\"_field\"] == \"load15\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"load\")"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 5,
+            "spanNulls": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "load1"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "1m"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "load5"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "5m"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "load15"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "15m"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 54,
+      "type": "stat",
+      "title": "Docker Containers Running",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 54
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_status\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"container_status\")\r\n  |> filter(fn: (r) => r[\"_value\"] == \"running\")\r\n  |> last()\r\n  |> group()\r\n  |> count()"
         }
       ],
       "fieldConfig": {
@@ -2481,7 +2991,7 @@
             "mode": "thresholds"
           },
           "decimals": 0,
-          "displayName": "Hz",
+          "displayName": "Running",
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -2492,15 +3002,14 @@
               },
               {
                 "color": "yellow",
-                "value": 100
+                "value": 5
               },
               {
                 "color": "green",
-                "value": 200
+                "value": 7
               }
             ]
-          },
-          "unit": "Hz"
+          }
         }
       },
       "options": {
@@ -2511,193 +3020,7 @@
           ]
         },
         "textMode": "auto"
-      },
-      "datasource": "InfluxDB"
-    },
-    {
-      "id": 48,
-      "type": "timeseries",
-      "title": "RT Busy Time (us)",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 52
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"busy_mean_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"busy_max_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"max\")"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"busy_min_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"min\")"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"busy_p95_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"P95\")"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 5,
-            "spanNulls": true
-          },
-          "unit": "µs",
-          "displayName": "${__field.labels.name}"
-        },
-        "overrides": []
-      },
-      "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        },
-        "legend": {
-          "showLegend": true,
-          "placement": "bottom"
-        }
       }
-    },
-    {
-      "id": 49,
-      "type": "timeseries",
-      "title": "RT Cycle Time (us)",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 52
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_mean_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_max_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"max\")"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_min_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"min\")"
-        },
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"cycle_p95_us\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"P95\")"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 5,
-            "spanNulls": true
-          },
-          "unit": "µs",
-          "displayName": "${__field.labels.name}"
-        },
-        "overrides": []
-      },
-      "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        },
-        "legend": {
-          "showLegend": true,
-          "placement": "bottom"
-        }
-      }
-    },
-    {
-      "id": 50,
-      "type": "stat",
-      "title": "ESP32 Chip Temp (C)",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 4,
-        "y": 60
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"chip_temp\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"celsius\")\r\n  |> last()"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 1,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "yellow",
-                "value": 60
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "celsius"
-        }
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "textMode": "auto"
-      },
-      "datasource": "InfluxDB"
     }
   ],
   "preload": false,
@@ -2717,6 +3040,6 @@
   "timezone": "browser",
   "title": "Dashboard de prueba",
   "uid": "cff0b2e3-3436-4676-a374-90ef04188742",
-  "version": 18,
+  "version": 22,
   "weekStart": "monday"
 }

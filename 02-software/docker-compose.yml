@@ -133,6 +133,9 @@ services:
       - ./05-telemetry/telegraf:/etc/telegraf
       - ./05-telemetry/telegraf/scripts:/etc/telegraf/scripts:ro
       - /sys/class/thermal:/sys/class/thermal:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    group_add:
+      - "111"
 
   # ===============================
   # GRAFANA
