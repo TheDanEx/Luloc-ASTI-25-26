@@ -2738,11 +2738,11 @@
     },
     {
       "id": 51,
-      "type": "timeseries",
-      "title": "Pi5 Memory",
+      "type": "piechart",
+      "title": "Pi5 RAM",
       "gridPos": {
-        "h": 7,
-        "w": 12,
+        "h": 6,
+        "w": 5,
         "x": 0,
         "y": 47
       },
@@ -2752,21 +2752,16 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"used_percent\" or r[\"_field\"] == \"available_percent\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mem\")"
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"used_percent\" or r[\"_field\"] == \"available_percent\")\r\n  |> last()"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 10,
-            "spanNulls": true,
-            "stacking": {
-              "mode": "normal"
-            }
+          "unit": "percent",
+          "color": {
+            "mode": "palette-classic"
           },
-          "unit": "bytes"
+          "decimals": 1
         },
         "overrides": [
           {
@@ -2777,11 +2772,14 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Used %"
+                "value": "Used"
               },
               {
-                "id": "unit",
-                "value": "percent"
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
               }
             ]
           },
@@ -2793,24 +2791,37 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Free %"
+                "value": "Free"
               },
               {
-                "id": "unit",
-                "value": "percent"
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
               }
             ]
           }
         ]
       },
       "options": {
+        "pieType": "donut",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "displayLabels": [
+          "name",
+          "value"
+        ],
         "tooltip": {
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         },
         "legend": {
-          "showLegend": true,
-          "placement": "bottom"
+          "showLegend": false
         }
       }
     },
@@ -2819,9 +2830,9 @@
       "type": "table",
       "title": "Docker Containers",
       "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 12,
+        "h": 6,
+        "w": 19,
+        "x": 5,
         "y": 47
       },
       "targets": [
@@ -2830,14 +2841,14 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_cpu\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"CPU%\")"
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_cpu\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"CPU\")"
         },
         {
           "datasource": {
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"RAM%\")"
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"RAM\")"
         }
       ],
       "fieldConfig": {
@@ -2858,6 +2869,30 @@
               {
                 "id": "displayName",
                 "value": "Container"
+              },
+              {
+                "id": "custom.width",
+                "value": 200
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "usage_percent"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Value"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
               }
             ]
           }
@@ -2866,141 +2901,50 @@
       "options": {
         "showHeader": true,
         "sortBy": []
-      }
-    },
-    {
-      "id": 53,
-      "type": "timeseries",
-      "title": "Pi5 Load",
-      "gridPos": {
-        "h": 4,
-        "w": 12,
-        "x": 0,
-        "y": 54
       },
-      "targets": [
+      "transformations": [
         {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"system\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"load1\" or r[\"_field\"] == \"load5\" or r[\"_field\"] == \"load15\")\r\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\r\n  |> yield(name: \"load\")"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "fillOpacity": 5,
-            "spanNulls": true
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "load1"
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "_start": true,
+              "_stop": true,
+              "host": true,
+              "_measurement": true,
+              "_field": true,
+              "container_image": true,
+              "container_status": true,
+              "container_version": true,
+              "engine_host": true,
+              "server_version": true,
+              "com.docker.compose.project": true,
+              "com.docker.compose.service": true,
+              "com.docker.compose.config-hash": true,
+              "com.docker.compose.oneoff": true,
+              "com.docker.compose.version": true,
+              "com.docker.compose.container-number": true,
+              "com.docker.compose.project.working_dir": true,
+              "com.docker.compose.project.config_files": true,
+              "com.docker.compose.image": true,
+              "com.docker.compose.image.builder": true,
+              "com.docker.compose.replace": true,
+              "com.docker.compose.depends_on": true,
+              "org.opencontainers.image.version": true,
+              "org.opencontainers.image.ref.name": true,
+              "org.opencontainers.image.source": true,
+              "maintainer": true,
+              "cpu": true,
+              "result": true,
+              "table": true
             },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "1m"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "load5"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "5m"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "load15"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "15m"
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        },
-        "legend": {
-          "showLegend": true,
-          "placement": "bottom"
-        }
-      }
-    },
-    {
-      "id": 54,
-      "type": "stat",
-      "title": "Docker Containers Running",
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 12,
-        "y": 54
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_status\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"container_status\")\r\n  |> filter(fn: (r) => r[\"_value\"] == \"running\")\r\n  |> last()\r\n  |> group()\r\n  |> count()"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0,
-          "displayName": "Running",
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": 0
-              },
-              {
-                "color": "yellow",
-                "value": 5
-              },
-              {
-                "color": "green",
-                "value": 7
-              }
-            ]
+            "indexByName": {
+              "container_name": 0,
+              "_time": 1,
+              "_value": 2
+            }
           }
         }
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "textMode": "auto"
-      }
+      ]
     }
   ],
   "preload": false,
