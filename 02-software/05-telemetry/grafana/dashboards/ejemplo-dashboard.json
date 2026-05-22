@@ -2749,7 +2749,118 @@
             "mode": "palette-classic"
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/Free/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Free"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/Others/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Others"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/grafana/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "grafana"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/influxdb/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "influxdb"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/telegraf/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "telegraf"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/uros_agent/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "uros_agent"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/ros2_influx_bridge/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "ros2_bridge"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/mosquitto/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "mosquitto"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
@@ -2809,7 +2920,118 @@
             "mode": "palette-classic"
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/Free/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Free"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/Others/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Others"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/grafana/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "grafana"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/influxdb/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "influxdb"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/telegraf/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "telegraf"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/uros_agent/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "uros_agent"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/ros2_influx_bridge/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "ros2_bridge"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/mosquitto/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "mosquitto"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
