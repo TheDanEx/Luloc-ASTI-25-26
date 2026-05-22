@@ -17,7 +17,7 @@ static volatile float s_curvature_multiplier = 1.0f; // Default: No change
 static SemaphoreHandle_t s_mode_mutex = NULL;
 // Default configuration from Kconfig
 static follow_line_logic_config_t s_current_config = {
-    .kp = 0.0f, .ki = 0.0f, .kd = 0.0f, .max_speed = 0.0f
+    .kp = 0.0f, .ki = 0.0f, .kd = 0.0f, .kff = 0.0f, .max_speed = 0.0f, .nominal_speed = 0.0f, .wheelbase_m = 0.17f
 };
 static float s_base_speed_nominal = 0.0f;
 static float s_ff_weight = 0.0f;
@@ -38,24 +38,28 @@ static void mqtt_config_callback(const char *topic, int topic_len, const char *d
     cJSON *kp = cJSON_GetObjectItem(root, "kp");
     cJSON *ki = cJSON_GetObjectItem(root, "ki");
     cJSON *kd = cJSON_GetObjectItem(root, "kd");
+    cJSON *kff = cJSON_GetObjectItem(root, "kff");
     cJSON *max = cJSON_GetObjectItem(root, "max_speed");
     cJSON *nom = cJSON_GetObjectItem(root, "nominal_speed");
     cJSON *ffw = cJSON_GetObjectItem(root, "ff_weight");
     cJSON *base = cJSON_GetObjectItem(root, "base_speed");
+    cJSON *wb  = cJSON_GetObjectItem(root, "wheelbase");
 
     if (kp) s_current_config.kp = kp->valuedouble;
     if (ki) s_current_config.ki = ki->valuedouble;
     if (kd) s_current_config.kd = kd->valuedouble;
+    if (kff) s_current_config.kff = kff->valuedouble;
     if (max) s_current_config.max_speed = max->valuedouble;
     if (nom) s_current_config.nominal_speed = nom->valuedouble;
     if (ffw) s_ff_weight = ffw->valuedouble;
+    if (wb) s_current_config.wheelbase_m = wb->valuedouble;
     if (base) { s_current_config.nominal_speed = base->valuedouble; s_base_speed_nominal = base->valuedouble; }
 
     if (s_logic) {
         follow_line_logic_set_config(s_logic, &s_current_config);
-        ESP_LOGI(TAG, "Dynamic Config Updated: P=%.2f I=%.2f D=%.2f Nom=%.2f Max=%.2f FFw=%.2f", 
+        ESP_LOGI(TAG, "Dynamic Config Updated: P=%.2f I=%.2f D=%.2f FF=%.2f Nom=%.2f Max=%.2f FFw=%.2f", 
                  s_current_config.kp, s_current_config.ki, s_current_config.kd, 
-                 s_current_config.nominal_speed, s_current_config.max_speed, s_ff_weight);
+                 s_current_config.kff, s_current_config.nominal_speed, s_current_config.max_speed, s_ff_weight);
     }
 
     cJSON_Delete(root);
@@ -152,7 +156,9 @@ static void execute(motor_driver_mcpwm_t* motors,
             follow_line_logic_input_t input = {
                 .line_position_m = line_pos,
                 .line_detected = detected,
-                .base_speed = dynamic_base_speed
+                .base_speed = dynamic_base_speed,
+                .speed_l = cur_l,
+                .speed_r = cur_r
             };
 
             // 3. Compute Strategy
@@ -194,11 +200,14 @@ static void execute(motor_driver_mcpwm_t* motors,
                 telemetry_add_float(s_telemetry, "p_term",        output.p_term);
                 telemetry_add_float(s_telemetry, "i_term",        output.i_term);
                 telemetry_add_float(s_telemetry, "d_term",        output.d_term);
+                telemetry_add_float(s_telemetry, "ff_term",       output.ff_term);
                 telemetry_add_float(s_telemetry, "steering",      output.raw_steering);
+                telemetry_add_float(s_telemetry, "heading_rad",   output.heading_rad);
 
-                // Per-motor PID steering contribution (after speed scaling)
-                telemetry_add_float(s_telemetry, "p_eff_l",       output.raw_steering * 0.5f);
-                telemetry_add_float(s_telemetry, "p_eff_r",      -output.raw_steering * 0.5f);
+                // Per-motor PID steering contribution
+                float half_steer = output.raw_steering * 0.5f;
+                telemetry_add_float(s_telemetry, "p_eff_l",       half_steer);
+                telemetry_add_float(s_telemetry, "p_eff_r",      -half_steer);
                 telemetry_add_float(s_telemetry, "i_eff_l",       0.0f);
                 telemetry_add_float(s_telemetry, "i_eff_r",       0.0f);
                 telemetry_add_float(s_telemetry, "d_eff_l",       0.0f);
