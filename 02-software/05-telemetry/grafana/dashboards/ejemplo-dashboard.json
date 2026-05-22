@@ -2787,78 +2787,6 @@
                 }
               }
             ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "grafana"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "grafana"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "influxdb"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "influxdb"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "telegraf"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "telegraf"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "uros_agent"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "uros_agent"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "ros2_influx_bridge"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "ros2_influx_bridge"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "mosquitto"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "mosquitto"
-              }
-            ]
           }
         ]
       },
@@ -2873,13 +2801,11 @@
         "pieType": "donut",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ]
+          "calcs": []
         },
         "displayLabels": [
           "name",
-          "percent"
+          "value"
         ],
         "tooltip": {
           "mode": "single",
@@ -2901,7 +2827,7 @@
             "uid": "P951FEA4DE68E13C5"
           },
           "refId": "A",
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"grafana\" or r[\"pattern\"] == \"influxd\" or r[\"pattern\"] == \"telegraf\" or r[\"pattern\"] == \"micro_ros_agent\" or r[\"pattern\"] == \"ros2_influx_bridge\" or r[\"pattern\"] == \"mosquitto\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _field: if r.pattern == \"influxd\" then \"influxdb\" else if r.pattern == \"micro_ros_agent\" then \"uros_agent\" else r.pattern }))\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"containers\")\r\n\r\nfrom(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"available\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _field: \"Free\" }))\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"free\")\r\n\r\ntotal = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"total\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nfreeval = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"available\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nraw_sum = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"grafana\" or r[\"pattern\"] == \"influxd\" or r[\"pattern\"] == \"telegraf\" or r[\"pattern\"] == \"micro_ros_agent\" or r[\"pattern\"] == \"ros2_influx_bridge\" or r[\"pattern\"] == \"mosquitto\")\r\n  |> keep(columns: [\"_value\"])\r\n  |> last()\r\n  |> group()\r\n  |> sum()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nfrom(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"total\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _field: \"Others\", _value: float(v: total[0]) - float(v: freeval[0]) - float(v: raw_sum[0]) }))\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"others\")"
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"grafana\" or r[\"pattern\"] == \"influxd\" or r[\"pattern\"] == \"telegraf\" or r[\"pattern\"] == \"micro_ros_agent\" or r[\"pattern\"] == \"ros2_influx_bridge\" or r[\"pattern\"] == \"mosquitto\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _field: r.pattern }))\r\n  |> map(fn: (r) => ({ r with _field: if r._field == \"influxd\" then \"influxdb\" else if r._field == \"micro_ros_agent\" then \"uros_agent\" else r._field }))\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> group()\r\n  |> yield(name: \"containers\")\r\n\r\nfrom(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"available\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _field: \"Free\" }))\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"free\")\r\n\r\ntotal = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"total\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nfreeval = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"available\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nraw_sum = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"grafana\" or r[\"pattern\"] == \"influxd\" or r[\"pattern\"] == \"telegraf\" or r[\"pattern\"] == \"micro_ros_agent\" or r[\"pattern\"] == \"ros2_influx_bridge\" or r[\"pattern\"] == \"mosquitto\")\r\n  |> keep(columns: [\"_value\"])\r\n  |> last()\r\n  |> group()\r\n  |> sum()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nfrom(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"total\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _field: \"Others\", _value: float(v: total[0]) - float(v: freeval[0]) - float(v: raw_sum[0]) }))\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"others\")"
         }
       ],
       "title": "Pi5 RAM (MB)",
@@ -2958,78 +2884,6 @@
                 }
               }
             ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "grafana"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "grafana"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "influxdb"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "influxdb"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "telegraf"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "telegraf"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "uros_agent"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "uros_agent"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "ros2_influx_bridge"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "ros2_influx_bridge"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "mosquitto"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "mosquitto"
-              }
-            ]
           }
         ]
       },
@@ -3044,13 +2898,11 @@
         "pieType": "donut",
         "reduceOptions": {
           "values": false,
-          "calcs": [
-            "lastNotNull"
-          ]
+          "calcs": []
         },
         "displayLabels": [
           "name",
-          "percent"
+          "value"
         ],
         "tooltip": {
           "mode": "single",
@@ -3072,7 +2924,7 @@
             "uid": "P951FEA4DE68E13C5"
           },
           "refId": "A",
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"grafana\" or r[\"pattern\"] == \"influxd\" or r[\"pattern\"] == \"telegraf\" or r[\"pattern\"] == \"micro_ros_agent\" or r[\"pattern\"] == \"ros2_influx_bridge\" or r[\"pattern\"] == \"mosquitto\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _field: if r.pattern == \"influxd\" then \"influxdb\" else if r.pattern == \"micro_ros_agent\" then \"uros_agent\" else r.pattern }))\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"containers\")\r\n\r\nfrom(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"available\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _field: \"Free\" }))\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"free\")\r\n\r\ntotal = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"total\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nfreeval = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"available\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nraw_sum = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"grafana\" or r[\"pattern\"] == \"influxd\" or r[\"pattern\"] == \"telegraf\" or r[\"pattern\"] == \"micro_ros_agent\" or r[\"pattern\"] == \"ros2_influx_bridge\" or r[\"pattern\"] == \"mosquitto\")\r\n  |> keep(columns: [\"_value\"])\r\n  |> last()\r\n  |> group()\r\n  |> sum()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nfrom(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"total\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _field: \"Others\", _value: float(v: total[0]) - float(v: freeval[0]) - float(v: raw_sum[0]) }))\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"others\")"
+          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"grafana\" or r[\"pattern\"] == \"influxd\" or r[\"pattern\"] == \"telegraf\" or r[\"pattern\"] == \"micro_ros_agent\" or r[\"pattern\"] == \"ros2_influx_bridge\" or r[\"pattern\"] == \"mosquitto\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _field: r.pattern }))\r\n  |> map(fn: (r) => ({ r with _field: if r._field == \"influxd\" then \"influxdb\" else if r._field == \"micro_ros_agent\" then \"uros_agent\" else r._field }))\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> group()\r\n  |> yield(name: \"containers\")\r\n\r\nfrom(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"available\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _field: \"Free\" }))\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"free\")\r\n\r\ntotal = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"total\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nfreeval = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"available\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nraw_sum = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> filter(fn: (r) => r[\"pattern\"] == \"grafana\" or r[\"pattern\"] == \"influxd\" or r[\"pattern\"] == \"telegraf\" or r[\"pattern\"] == \"micro_ros_agent\" or r[\"pattern\"] == \"ros2_influx_bridge\" or r[\"pattern\"] == \"mosquitto\")\r\n  |> keep(columns: [\"_value\"])\r\n  |> last()\r\n  |> group()\r\n  |> sum()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nfrom(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"total\")\r\n  |> last()\r\n  |> map(fn: (r) => ({ r with _field: \"Others\", _value: float(v: total[0]) - float(v: freeval[0]) - float(v: raw_sum[0]) }))\r\n  |> keep(columns: [\"_field\", \"_value\"])\r\n  |> yield(name: \"others\")"
         }
       ],
       "title": "Docker RAM (MB)",
