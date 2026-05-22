@@ -2743,8 +2743,8 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
-          "decimals": 1,
+          "decimals": 0,
+          "unit": "none",
           "color": {
             "mode": "palette-classic"
           }
@@ -2753,32 +2753,9 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "used_percent"
+              "options": "Free"
             },
             "properties": [
-              {
-                "id": "displayName",
-                "value": "Used"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "available_percent"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Free"
-              },
               {
                 "id": "color",
                 "value": {
@@ -2787,39 +2764,53 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Others"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "semi-dark-orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
           }
         ]
       },
       "gridPos": {
-        "h": 6,
-        "w": 4,
+        "h": 8,
+        "w": 6,
         "x": 0,
         "y": 47
       },
       "id": 51,
       "options": {
+        "pieType": "donut",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "displayLabels": [
           "name",
           "value"
         ],
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
-        },
-        "pieType": "donut",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "sort": "desc",
         "tooltip": {
-          "hideZeros": false,
           "mode": "single",
           "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "placement": "right",
+          "values": [
+            "value"
+          ]
         }
       },
       "pluginVersion": "12.4.2",
@@ -2829,10 +2820,10 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"used_percent\" or r[\"_field\"] == \"available_percent\")\r\n  |> last()"
+          "query": "import \"array\"\r\n\r\ntotal = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"total\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\nfreeval = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"mem\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"available\")\r\n  |> last()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\ncontainers_sum = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> keep(columns: [\"_value\"])\r\n  |> group()\r\n  |> mean()\r\n  |> findColumn(fn: (key) => true, column: \"_value\")\r\n\r\ncontainers = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> keep(columns: [\"_value\", \"pattern\"])\r\n  |> group(columns: [\"pattern\"])\r\n  |> mean()\r\n  |> map(fn: (r) => ({ r with _value: r._value / 1048576.0,\r\n     pattern: if r.pattern == \"influxd\" then \"influxdb\"\r\n              else if r.pattern == \"micro_ros_agent\" then \"uros_agent\"\r\n              else r.pattern }))\r\n  |> rename(columns: {pattern: \"container\"})\r\n  |> group()\r\n\r\nothers_val = (float(v: total[0]) - float(v: freeval[0]) - float(v: containers_sum[0])) / 1048576.0\r\nextra = array.from(rows: [\r\n  {container: \"Free\", _value: float(v: freeval[0]) / 1048576.0},\r\n  {container: \"Others\", _value: others_val}\r\n])\r\n\r\nunion(tables: [containers, extra])\r\n  |> group()\r\n  |> sort(columns: [\"_value\"], desc: true)"
         }
       ],
-      "title": "Pi5 RAM",
+      "title": "Pi5 RAM (MB)",
       "type": "piechart"
     },
     {
@@ -2848,13 +2839,44 @@
             "mode": "palette-classic"
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Free"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Others"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "semi-dark-orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
-        "w": 7,
-        "x": 10,
-        "y": 53
+        "w": 6,
+        "x": 6,
+        "y": 47
       },
       "id": 56,
       "options": {
@@ -2928,9 +2950,9 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 10,
+        "w": 12,
         "x": 0,
-        "y": 53
+        "y": 55
       },
       "id": 55,
       "options": {
@@ -2976,9 +2998,9 @@
       "type": "piechart",
       "title": "SD Card",
       "gridPos": {
-        "h": 6,
+        "h": 4,
         "w": 4,
-        "x": 5,
+        "x": 12,
         "y": 47
       },
       "targets": [
