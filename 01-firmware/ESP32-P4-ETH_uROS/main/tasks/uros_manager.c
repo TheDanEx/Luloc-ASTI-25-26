@@ -238,11 +238,17 @@ static void telemetry_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
         (unsigned)shm->sensors.line_max[6], (unsigned)shm->sensors.line_max[7]);
     sensors_msg.data.size = strlen(sensors_msg.data.data);
 
-    // Pack motors as JSON
+    // Pack motors as JSON (target/actual speeds + per-motor PID voltage breakdown)
     snprintf(motors_msg.data.data, motors_msg.data.capacity,
-        "{\"tl\":%.4f,\"tr\":%.4f,\"al\":%.4f,\"ar\":%.4f}",
+        "{\"tl\":%.4f,\"tr\":%.4f,\"al\":%.4f,\"ar\":%.4f,"
+        "\"ffl\":%.3f,\"pl\":%.3f,\"il\":%.3f,\"dl\":%.3f,"
+        "\"ffr\":%.3f,\"pr\":%.3f,\"ir\":%.3f,\"dr\":%.3f}",
         shm->teleop.target_speed_left, shm->teleop.target_speed_right,
-        shm->sensors.motor_speed_left, -shm->sensors.motor_speed_right);
+        shm->sensors.motor_speed_left, -shm->sensors.motor_speed_right,
+        shm->sensors.motor_pid_ff_l, shm->sensors.motor_pid_p_l,
+        shm->sensors.motor_pid_i_l, shm->sensors.motor_pid_d_l,
+        shm->sensors.motor_pid_ff_r, shm->sensors.motor_pid_p_r,
+        shm->sensors.motor_pid_i_r, shm->sensors.motor_pid_d_r);
     motors_msg.data.size = strlen(motors_msg.data.data);
 
     xSemaphoreGive(shm->mutex);

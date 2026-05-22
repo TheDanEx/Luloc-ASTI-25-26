@@ -939,10 +939,23 @@ static void execute(motor_driver_mcpwm_t* motors,
     motor_velocity_input_t motor_r = { .target_speed = vR, .current_speed = cur_r, .battery_mv = bat_mv };
 
     float pwm_l, pwm_r;
-    motor_velocity_ctrl_update(ctrl_left,  &motor_l, dt_s, &pwm_l, NULL);
-    motor_velocity_ctrl_update(ctrl_right, &motor_r, dt_s, &pwm_r, NULL);
+    motor_velocity_diag_t diag_l = {0}, diag_r = {0};
+    motor_velocity_ctrl_update(ctrl_left,  &motor_l, dt_s, &pwm_l, &diag_l);
+    motor_velocity_ctrl_update(ctrl_right, &motor_r, dt_s, &pwm_r, &diag_r);
 
     motor_mcpwm_set(motors, (int16_t)(pwm_l * 10.0f), (int16_t)(pwm_r * 10.0f));
+
+    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+        shm->sensors.motor_pid_ff_l = diag_l.feed_forward_v;
+        shm->sensors.motor_pid_p_l  = diag_l.p_v;
+        shm->sensors.motor_pid_i_l  = diag_l.i_v;
+        shm->sensors.motor_pid_d_l  = diag_l.d_v;
+        shm->sensors.motor_pid_ff_r = diag_r.feed_forward_v;
+        shm->sensors.motor_pid_p_r  = diag_r.p_v;
+        shm->sensors.motor_pid_i_r  = diag_r.i_v;
+        shm->sensors.motor_pid_d_r  = diag_r.d_v;
+        xSemaphoreGive(shm->mutex);
+    }
 }
 
 static void exit_mode(motor_driver_mcpwm_t* motors)

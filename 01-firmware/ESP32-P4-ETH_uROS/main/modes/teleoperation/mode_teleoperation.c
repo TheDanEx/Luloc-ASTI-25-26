@@ -80,38 +80,18 @@ static void execute(motor_driver_mcpwm_t* motors,
         motor_mcpwm_stop(motors);
         return;
     }
-    static int log_div = 0;
 
-    if (++log_div >= 50) {
-        log_div = 0;
-        if(print){
-
-            ESP_LOGI(TAG,
-                "L tgt=%.3f enc=%.3f err=%.3f ff=%.2f p=%.2f i=%.2f d=%.2f pwm=%.1f | "
-                "R tgt=%.3f enc=%.3f err=%.3f ff=%.2f p=%.2f i=%.2f d=%.2f pwm=%.1f | "
-                "bat=%.0f dt=%.4f",
-                diag_l.target_ramped,
-                cur_l,
-                diag_l.error,
-                diag_l.feed_forward_v,
-                diag_l.p_v,
-                diag_l.i_v,
-                diag_l.d_v,
-                pwm_l,
-                
-                diag_r.target_ramped,
-                cur_r,
-                diag_r.error,
-                diag_r.feed_forward_v,
-                diag_r.p_v,
-                diag_r.i_v,
-                diag_r.d_v,
-                pwm_r,
-                
-                bat_mv,
-                dt_s);
-            }
-        }
+    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+        shm->sensors.motor_pid_ff_l = diag_l.feed_forward_v;
+        shm->sensors.motor_pid_p_l  = diag_l.p_v;
+        shm->sensors.motor_pid_i_l  = diag_l.i_v;
+        shm->sensors.motor_pid_d_l  = diag_l.d_v;
+        shm->sensors.motor_pid_ff_r = diag_r.feed_forward_v;
+        shm->sensors.motor_pid_p_r  = diag_r.p_v;
+        shm->sensors.motor_pid_i_r  = diag_r.i_v;
+        shm->sensors.motor_pid_d_r  = diag_r.d_v;
+        xSemaphoreGive(shm->mutex);
+    }
     motor_mcpwm_set(motors, (int16_t)(pwm_l * 10.0f), (int16_t)(pwm_r * 10.0f));
 }
 

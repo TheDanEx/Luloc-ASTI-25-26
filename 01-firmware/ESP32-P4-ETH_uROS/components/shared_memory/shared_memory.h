@@ -37,6 +37,16 @@ typedef struct {
     int32_t encoder_count_left;  // Ticks
     int32_t encoder_count_right; // Ticks
     uint32_t timestamp_ms;       // Local timestamp
+
+    // Per-motor velocity PID voltage breakdown (V)
+    float motor_pid_ff_l;
+    float motor_pid_p_l;
+    float motor_pid_i_l;
+    float motor_pid_d_l;
+    float motor_pid_ff_r;
+    float motor_pid_p_r;
+    float motor_pid_i_r;
+    float motor_pid_d_r;
 } robot_sensor_data_t;
 
 

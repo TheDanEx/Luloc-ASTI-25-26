@@ -37,7 +37,9 @@ class TelemetryBridge(Node):
         d = json.loads(msg.data)
         ts = int(time.time() * 1e9)
         r = self.robot
-        self.send(f'motor_cal,robot={r} target_l={d["tl"]},target_r={d["tr"]},actual_l={d["al"]},actual_r={d["ar"]} {ts}')
+        self.send(f'motor_cal,robot={r} target_l={d["tl"]},target_r={d["tr"]},actual_l={d["al"]},actual_r={d["ar"]},'
+                  f'ff_l={d["ffl"]},p_l={d["pl"]},i_l={d["il"]},d_l={d["dl"]},'
+                  f'ff_r={d["ffr"]},p_r={d["pr"]},i_r={d["ir"]},d_r={d["dr"]} {ts}')
 
     def cb_status(self, msg):
         d = json.loads(msg.data)
