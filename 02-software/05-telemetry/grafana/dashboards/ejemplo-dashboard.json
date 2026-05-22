@@ -2841,7 +2841,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "cpu = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_cpu\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> group(columns: [\"container_name\"])\r\n  |> last()\r\n  |> set(key: \"_field\", value: \"CPU %\")\r\n  |> keep(columns: [\"_value\", \"_field\", \"container_name\"])\r\n\r\nram = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> keep(columns: [\"_value\", \"pattern\"])\r\n  |> group(columns: [\"pattern\"])\r\n  |> mean()\r\n  |> map(fn: (r) => ({ r with _value: r._value / 1048576.0 }))\r\n  |> set(key: \"_field\", value: \"RAM MB\")\r\n  |> keep(columns: [\"_value\", \"_field\", \"pattern\"])\r\n  |> rename(columns: {pattern: \"container_name\"})\r\n\r\nunion(tables: [cpu, ram])\r\n  |> pivot(rowKey: [\"container_name\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> group()\r\n  |> sort(columns: [\"CPU %\"], desc: true)"
+          "query": "cpu = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_cpu\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"usage_percent\")\r\n  |> group(columns: [\"container_name\"])\r\n  |> last()\r\n  |> set(key: \"_field\", value: \"CPU %\")\r\n  |> keep(columns: [\"_value\", \"_field\", \"container_name\"])\r\n  |> rename(columns: {container_name: \"name\"})\r\n\r\nram = from(bucket: \"local_system\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"procstat\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"memory_rss\")\r\n  |> keep(columns: [\"_value\", \"pattern\"])\r\n  |> group(columns: [\"pattern\"])\r\n  |> mean()\r\n  |> map(fn: (r) => ({ r with _value: r._value / 1048576.0 }))\r\n  |> rename(columns: {pattern: \"name\"})\r\n  |> map(fn: (r) => ({ r with name: if r.name == \"influxd\" then \"influxdb\" else if r.name == \"micro_ros_agent\" then \"uros_agent\" else r.name }))\r\n  |> set(key: \"_field\", value: \"RAM MB\")\r\n  |> keep(columns: [\"_value\", \"_field\", \"name\"])\r\n\r\nunion(tables: [cpu, ram])\r\n  |> pivot(rowKey: [\"name\"], columnKey: [\"_field\"], valueColumn: \"_value\")\r\n  |> group()\r\n  |> sort(columns: [\"CPU %\"], desc: true)"
         }
       ],
       "fieldConfig": {
@@ -2855,7 +2855,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "container_name"
+              "options": "name"
             },
             "properties": [
               {
@@ -2891,12 +2891,12 @@
             },
             "properties": [
               {
-                "id": "unit",
-                "value": "decbytes"
-              },
-              {
                 "id": "decimals",
                 "value": 0
+              },
+              {
+                "id": "unit",
+                "value": "none"
               }
             ]
           }
