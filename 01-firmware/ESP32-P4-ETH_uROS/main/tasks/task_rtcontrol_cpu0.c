@@ -204,6 +204,17 @@ static void task_rtcontrol_cpu0(void *arg)
         // 2. Execute Mode (Router Pattern / Dispatcher)
         modes_execute(&motors, ctrl_left, ctrl_right, dt);
 
+        // Zero out PID voltages in idle mode (prevent frozen stale values)
+        if (current_mode == MODE_NONE) {
+            if (shm != NULL && xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+                shm->sensors.motor_pid_ff_l = 0; shm->sensors.motor_pid_p_l = 0;
+                shm->sensors.motor_pid_i_l = 0; shm->sensors.motor_pid_d_l = 0;
+                shm->sensors.motor_pid_ff_r = 0; shm->sensors.motor_pid_p_r = 0;
+                shm->sensors.motor_pid_i_r = 0; shm->sensors.motor_pid_d_r = 0;
+                xSemaphoreGive(shm->mutex);
+            }
+        }
+
         vTaskDelay(poll_rate);
         
     }

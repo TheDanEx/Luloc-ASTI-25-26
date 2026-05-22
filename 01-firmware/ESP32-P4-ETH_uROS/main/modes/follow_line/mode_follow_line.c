@@ -123,7 +123,6 @@ static void execute(motor_driver_mcpwm_t* motors,
                     float dt_s) 
 {
     if (s_mode_mutex == NULL) return;
-    // 1. Bloqueo preventivo: Si s_logic es NULL, salimos rápido sin esperar mucho
     if (s_logic == NULL) return;
 
     // 2. Intentar tomar el mutex para asegurar que el objeto no se borre mientras lo usamos

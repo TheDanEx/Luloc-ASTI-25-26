@@ -64,6 +64,13 @@ static void execute(motor_driver_mcpwm_t* motors,
     motor_velocity_ctrl_reset(ctrl_left);
     motor_velocity_ctrl_reset(ctrl_right);
     motor_mcpwm_stop(motors);
+    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+        shm->sensors.motor_pid_ff_l = 0; shm->sensors.motor_pid_p_l = 0;
+        shm->sensors.motor_pid_i_l = 0; shm->sensors.motor_pid_d_l = 0;
+        shm->sensors.motor_pid_ff_r = 0; shm->sensors.motor_pid_p_r = 0;
+        shm->sensors.motor_pid_i_r = 0; shm->sensors.motor_pid_d_r = 0;
+        xSemaphoreGive(shm->mutex);
+    }
     return;
 }
 
