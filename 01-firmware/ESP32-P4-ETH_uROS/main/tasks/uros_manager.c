@@ -298,6 +298,7 @@ static void micro_ros_task(void *arg)
     (void)arg;
 
     rcl_allocator_t allocator = rcl_get_default_allocator();
+    uint32_t reconnect_delay_ms = 2000;
 
     while (1) {
         rclc_support_t support;
@@ -310,7 +311,7 @@ static void micro_ros_task(void *arg)
         ESP_LOGI(TAG, "calling rcl_init_options_init");
         if (rcl_init_options_init(&init_options, allocator) != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED init_options_init");
-            return;
+            goto cleanup_reconnect;
         }
         ESP_LOGI(TAG, "OK init_options_init");
 
@@ -318,7 +319,7 @@ static void micro_ros_task(void *arg)
         rmw_init_options_t *rmw_options = rcl_init_options_get_rmw_init_options(&init_options);
         if (rmw_options == NULL) {
             ESP_LOGE(TAG, "FAILED get_rmw_init_options (NULL)");
-            return;
+            goto cleanup_reconnect;
         }
         ESP_LOGI(TAG, "set udp addr %s:%s", CONFIG_MICRO_ROS_AGENT_IP, CONFIG_MICRO_ROS_AGENT_PORT);
         rmw_uros_options_set_udp_address(
@@ -340,7 +341,7 @@ static void micro_ros_task(void *arg)
         node = rcl_get_zero_initialized_node();
         if (rclc_node_init_default(&node, "esp32_p4_robot", "", &support) != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED node init");
-            return;
+            goto cleanup_reconnect;
         }
         ESP_LOGI(TAG, "OK node init");
 
@@ -352,11 +353,8 @@ static void micro_ros_task(void *arg)
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
             "/microROS/esp_diag_time");
         if (rc_pub != RCL_RET_OK) {
-            ESP_LOGE(TAG, "FAILED diag pub: ret=%d, node_ok=%d, ts_ok=%d",
-                (int)rc_pub,
-                (int)rcl_node_is_valid(&node),
-                (int)(ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String) != NULL));
-            return;
+            ESP_LOGE(TAG, "FAILED diag pub: ret=%d", (int)rc_pub);
+            goto cleanup_reconnect;
         }
         ESP_LOGI(TAG, "OK diag pub");
 
@@ -364,7 +362,7 @@ static void micro_ros_task(void *arg)
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
             "/robot/voltage") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED voltage pub");
-            return;
+            goto cleanup_reconnect;
         }
         ESP_LOGI(TAG, "OK voltage pub");
 
@@ -373,7 +371,7 @@ static void micro_ros_task(void *arg)
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
             "/sensors") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED sensors pub");
-            return;
+            goto cleanup_reconnect;
         }
         ESP_LOGI(TAG, "OK sensors pub");
 
@@ -382,7 +380,7 @@ static void micro_ros_task(void *arg)
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
             "/motors") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED motors pub");
-            return;
+            goto cleanup_reconnect;
         }
         ESP_LOGI(TAG, "OK motors pub");
 
@@ -391,30 +389,33 @@ static void micro_ros_task(void *arg)
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
             "/status") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED status pub");
-            return;
+            goto cleanup_reconnect;
         }
         ESP_LOGI(TAG, "OK status pub");
 
         // === 5 SUBSCRIPTIONS ===
 
         // 1. cmd_vel (Twist)
-        RCCHECK(rclc_subscription_init_default(
+        rcl_ret_t rc_sub;
+        rc_sub = rclc_subscription_init_default(
             &velocity_subscriber, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
-            "/cmd_vel"));
+            "/cmd_vel");
+        if (rc_sub != RCL_RET_OK) { ESP_LOGE(TAG, "FAILED cmd_vel sub"); goto cleanup_reconnect; }
 
         // 2. mode_cmd (Int8)
-        RCCHECK(rclc_subscription_init_default(
+        rc_sub = rclc_subscription_init_default(
             &mode_subscriber, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
-            "/robot/mode_cmd"));
+            "/robot/mode_cmd");
+        if (rc_sub != RCL_RET_OK) { ESP_LOGE(TAG, "FAILED mode sub"); goto cleanup_reconnect; }
 
         // 3. config (String - JSON)
         if (rclc_subscription_init_default(&config_subscriber, &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
             "/config") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED config sub");
-            return;
+            goto cleanup_reconnect;
         }
         ESP_LOGI(TAG, "OK config sub");
 
@@ -423,7 +424,7 @@ static void micro_ros_task(void *arg)
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
             "/curvature") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED curvature sub");
-            return;
+            goto cleanup_reconnect;
         }
         ESP_LOGI(TAG, "OK curvature sub");
 
@@ -432,27 +433,30 @@ static void micro_ros_task(void *arg)
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
             "/pid_motors") != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED pid sub");
-            return;
+            goto cleanup_reconnect;
         }
         ESP_LOGI(TAG, "OK pid sub");
 
         // === 2 TIMERS ===
 
-        RCCHECK(rclc_timer_init_default2(
+        rcl_ret_t rc_timer;
+        rc_timer = rclc_timer_init_default2(
             &diag_timer, &support,
             RCL_MS_TO_NS(5000),
-            diag_timer_callback, true));
+            diag_timer_callback, true);
+        if (rc_timer != RCL_RET_OK) { ESP_LOGE(TAG, "FAILED diag timer"); goto cleanup_reconnect; }
 
-        RCCHECK(rclc_timer_init_default2(
+        rc_timer = rclc_timer_init_default2(
             &telemetry_timer, &support,
             RCL_MS_TO_NS(50),
-            telemetry_timer_callback, true));
+            telemetry_timer_callback, true);
+        if (rc_timer != RCL_RET_OK) { ESP_LOGE(TAG, "FAILED telemetry timer"); goto cleanup_reconnect; }
 
         // === EXECUTOR (7 handles: 2 timers + 5 subscriptions) ===
 
         if (rclc_executor_init(&executor, &support.context, 7, &allocator) != RCL_RET_OK) {
             ESP_LOGE(TAG, "FAILED executor init");
-            return;
+            goto cleanup_reconnect;
         }
         ESP_LOGI(TAG, "OK executor init (7 handles)");
 
@@ -514,8 +518,9 @@ static void micro_ros_task(void *arg)
         curvature_msg.data = 0.0f;
 
         int64_t last_sync_time = 0;
+        int spin_errors = 0;
 
-        while (1) {
+        while (spin_errors < 5) {
             int64_t now = esp_timer_get_time();
 
             if ((now - last_sync_time) > (SYNC_INTERVAL_MS * 1000)) {
@@ -548,12 +553,20 @@ static void micro_ros_task(void *arg)
             }
 
             rcl_ret_t spin_ret = rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100));
-            if (spin_ret != RCL_RET_OK && spin_ret != RCL_RET_TIMEOUT) {
-                ESP_LOGW(TAG, "spin_some error %d, continuing", (int)spin_ret);
+            if (spin_ret == RCL_RET_OK || spin_ret == RCL_RET_TIMEOUT) {
+                spin_errors = 0;
+            } else {
+                spin_errors++;
+                if (spin_errors == 1) {
+                    ESP_LOGW(TAG, "uROS spin error %d, monitoring...", (int)spin_ret);
+                }
             }
             vTaskDelay(pdMS_TO_TICKS(10));
         }
 
+        ESP_LOGE(TAG, "uROS agent lost, reconnecting in %lums...", (unsigned long)reconnect_delay_ms);
+
+cleanup_reconnect:
         // Cleanup
         { rcl_ret_t _r = rcl_publisher_fini(&diag_publisher, &node); (void)_r; }
         { rcl_ret_t _r = rcl_publisher_fini(&voltage_publisher, &node); (void)_r; }
@@ -574,7 +587,8 @@ static void micro_ros_task(void *arg)
         { rcl_ret_t _r = rclc_support_fini(&support); (void)_r; }
         { rcl_ret_t _r = rcl_init_options_fini(&init_options); (void)_r; }
 
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        vTaskDelay(pdMS_TO_TICKS(reconnect_delay_ms));
+        if (reconnect_delay_ms < 30000) reconnect_delay_ms *= 2;
     }
 }
 
