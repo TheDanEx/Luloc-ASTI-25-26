@@ -1143,13 +1143,13 @@
       },
       "id": 5,
       "options": {
-        "dedupStrategy": "none",
+        "dedupStrategy": "numbers",
         "detailsMode": "inline",
         "enableInfiniteScrolling": true,
         "enableLogDetails": false,
         "fontSize": "small",
         "showControls": false,
-        "showTime": false,
+        "showTime": true,
         "sortOrder": "Ascending",
         "unwrappedColumns": false,
         "wrapLogMessage": false
@@ -1161,6 +1161,7 @@
           "refId": "A"
         }
       ],
+      "timeFrom": "now-15m",
       "title": "Logs",
       "type": "logs"
     },
