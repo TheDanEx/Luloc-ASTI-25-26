@@ -43,6 +43,7 @@ typedef struct {
     char *batch_buffer;
     int batch_offset;
     SemaphoreHandle_t mutex;
+    SemaphoreHandle_t death_sem;
     TaskHandle_t task_handle;
     bool running;
 } telemetry_obj_t;
@@ -104,6 +105,8 @@ static void telemetry_task(void *arg)
         xSemaphoreGive(obj->mutex);
     }
 
+    xSemaphoreGive(obj->death_sem);
+    vTaskDelete(NULL);
 }
 
 // =============================================================================
@@ -122,6 +125,7 @@ telemetry_handle_t telemetry_create(const char *topic, const char *measurement, 
     obj->measurement = strdup(measurement);
     obj->interval_ms = interval_ms;
     obj->mutex = xSemaphoreCreateMutex();
+    obj->death_sem = xSemaphoreCreateBinary();
     obj->running = true;
 
     obj->batch_buffer = calloc(1, MAX_BUFFER_SIZE);
@@ -159,13 +163,15 @@ void telemetry_destroy(telemetry_handle_t handle)
     // 2. Wake task from vTaskDelay so it sees running=false immediately
     if (obj->task_handle != NULL) {
         xTaskAbortDelay(obj->task_handle);
-        vTaskDelay(pdMS_TO_TICKS(20));  // let task finish current publish cycle
+        // Wait for task to signal death (after exiting its loop)
+        xSemaphoreTake(obj->death_sem, pdMS_TO_TICKS(500));
     }
 
     // 3. Take semaphore to confirm task released it (safe barrier)
     xSemaphoreTake(obj->mutex, pdMS_TO_TICKS(200));
     xSemaphoreGive(obj->mutex);
     vSemaphoreDelete(obj->mutex);
+    vSemaphoreDelete(obj->death_sem);
 
     if (obj->topic) free(obj->topic);
     if (obj->measurement) free(obj->measurement);
