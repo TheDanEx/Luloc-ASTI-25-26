@@ -131,6 +131,7 @@ services:
     volumes:
       - ./05-telemetry/grafana/provisioning:/etc/grafana/provisioning
       - ./05-telemetry/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./05-telemetry/grafana/config/grafana.ini:/etc/grafana/grafana.ini:ro
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
