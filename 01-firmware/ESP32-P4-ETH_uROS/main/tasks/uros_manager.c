@@ -93,7 +93,6 @@ static void mode_callback(const void *msvin)
 {
     const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msvin;
     int8_t mode_id = msg->data;
-    ESP_LOGI(TAG, "mode_callback RECEIVED: %d", mode_id);
     if (mode_id == 10) {
         audio_player_play(INTHEEND);
         ESP_LOGI(TAG, "Playing fight sound");
