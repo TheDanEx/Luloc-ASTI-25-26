@@ -901,7 +901,7 @@ static void execute(motor_driver_mcpwm_t* motors,
     }
     bool detected = shm->sensors.line_detected;
     float cur_l = shm->sensors.motor_speed_left;
-    float cur_r = shm->sensors.motor_speed_right;
+    float cur_r = -shm->sensors.motor_speed_right;
     float bat_mv = shm->sensors.battery_voltage;
 
     xSemaphoreGive(shm->mutex);

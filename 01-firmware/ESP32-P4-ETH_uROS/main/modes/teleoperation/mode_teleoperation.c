@@ -46,7 +46,7 @@ static void execute(motor_driver_mcpwm_t* motors,
     float bat_mv   = shm->sensors.battery_voltage;
     uint32_t last_update_ms = shm->teleop.last_update_ms;
     float cur_l    = shm->sensors.motor_speed_left;
-    float cur_r = shm->sensors.motor_speed_right;
+    float cur_r = -shm->sensors.motor_speed_right;
     xSemaphoreGive(shm->mutex);
 
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
