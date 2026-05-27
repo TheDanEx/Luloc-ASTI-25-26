@@ -302,11 +302,11 @@ static void task_rtcontrol_cpu0(void *arg)
         }
 
         // Mode-dependent pacing: relax CPU in idle, full speed in active modes
-        // Yield to uROS agent: idle=100Hz, active=1ms min keeps ~250Hz loop
+        // Mode-dependent pacing: idle=100Hz, teleop=500Hz, rest=full speed
         if (current_mode == MODE_NONE) {
             vTaskDelay(pdMS_TO_TICKS(10));
-        } else {
-            vTaskDelay(pdMS_TO_TICKS(1));
+        } else if (current_mode == MODE_REMOTE_DRIVE) {
+            vTaskDelay(pdMS_TO_TICKS(2));
         }
 
     }
