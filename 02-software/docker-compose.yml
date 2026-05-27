@@ -73,6 +73,22 @@ services:
       - dialout
     command: ["ros2", "launch", "ldlidar_stl_ros2", "ld06.launch.py"]
 
+    # ===============================
+    # SERVO LAUNCHER
+    # ===============================
+  servo_node:
+    image: ros2_luloc:servo
+    network_mode: host
+    restart: unless-stopped
+    ipc: host
+    privileged: true
+    devices:
+      - /dev/gpiochip4:/dev/gpiochip4 # En la Pi 5, el chip de las GPIO de 40 pines suele ser el 4 (RP1)
+      - /dev/gpiochip0:/dev/gpiochip0
+    # group_add:
+    #   - gpio  # Descomenta si tu usuario del contenedor no es root (en tu caso eres root, así que no es obligatorio)
+    command: ["ros2", "run", "luloc_pkg_py", "servo_suscriber"]
+
   # ===============================
   # MQTT BROKER
   # ===============================
