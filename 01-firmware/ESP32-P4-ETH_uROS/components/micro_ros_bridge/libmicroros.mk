@@ -13,6 +13,10 @@ endif
 CFLAGS_INTERNAL := $(X_CFLAGS) -ffunction-sections -fdata-sections
 CXXFLAGS_INTERNAL := $(X_CXXFLAGS) -ffunction-sections -fdata-sections
 
+ifneq ("$(wildcard $(EXTENSIONS_DIR)/libmicroros.a)","")
+all:
+	@true
+else
 all: $(EXTENSIONS_DIR)/libmicroros.a
 
 clean:
@@ -166,3 +170,5 @@ $(EXTENSIONS_DIR)/libmicroros.a: $(EXTENSIONS_DIR)/micro_ros_src/install patch_a
 	$(X_AR) rc -s libmicroros.a *.obj; cp libmicroros.a $(EXTENSIONS_DIR); \
 	cd ..; rm -rf libmicroros; \
 	cp -R $(UROS_DIR)/install/include $(EXTENSIONS_DIR)/include;
+
+endif

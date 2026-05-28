@@ -43,7 +43,7 @@ services:
     # LiDAR LAUNCHER
     # ===============================
   lidar:
-    image: ros2_luloc:lidar
+    image: ros2_luloc:cam
     entrypoint: ["/ros_entrypoint.sh"]
     network_mode: host
     restart: unless-stopped
@@ -58,7 +58,8 @@ services:
   # SERVO LAUNCHER
   # ===============================
   servo_node:
-    image: ros2_luloc:servo
+    image: ros2_luloc:cam
+    container_name: 02-software-servo-1
     network_mode: host
     restart: unless-stopped
     ipc: host
@@ -69,6 +70,29 @@ services:
     # group_add:
     #   - gpio  # Descomenta si tu usuario del contenedor no es root (en tu caso eres root, así que no es obligatorio)
     command: ["ros2", "run", "luloc_pkg_py", "servo_suscriber"]
+
+  # ===============================
+  # CAMERA LAUNCHER
+  # ===============================
+  camera_control:
+    image: ros2_luloc:cam
+    container_name: 02-software-camera-1
+    network_mode: host
+    ipc: host
+    restart: unless-stopped
+    privileged: true # Da acceso directo a los drivers de hardware V4L2
+    devices:
+      - /dev/video0:/dev/video0 # Mapeo de la cámara principal
+      - /dev/video11:/dev/video11 # Buffers de vídeo específicos de Raspberry Pi
+      - /dev/video12:/dev/video12
+      - /dev/video19:/dev/video19 # Multi-plane post-processing (necesario en Pi 5)
+      - /dev/vchiq:/dev/vchiq # Interfaz de servicios del firmware de la Pi
+    volumes:
+      - /dev/shm:/dev/shm # Memoria compartida para agilizar el paso de frames
+    environment:
+      - PYTHONPATH=/root/ros2_ws_luloc/install/luloc_pkg_py/lib/python3.10/site-packages:/usr/local/lib/python3/dist-packages:$PYTHONPATH
+      - LD_LIBRARY_PATH=/usr/local/lib/aarch64-linux-gnu:$LD_LIBRARY_PATH
+    command: ["ros2", "run", "luloc_pkg_py", "cam_control"]
 
   # ===============================
   # MQTT BROKER

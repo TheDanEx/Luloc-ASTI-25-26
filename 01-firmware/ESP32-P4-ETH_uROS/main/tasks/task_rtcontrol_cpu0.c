@@ -10,6 +10,7 @@
 #include "modes.h"
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 #include "encoder_sensor.h"
 #include "line_sensor.h"
 #include "driver/temp_sensor.h"
