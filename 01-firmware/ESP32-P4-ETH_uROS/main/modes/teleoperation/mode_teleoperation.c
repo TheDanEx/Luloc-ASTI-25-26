@@ -39,7 +39,7 @@ static void execute(motor_driver_mcpwm_t* motors,
 
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
 
-    if ((now_ms - last_update_ms) > 500) {
+    if ((now_ms - last_update_ms) > 150) {
         target_l = 0.0f;
         target_r = 0.0f;
     }

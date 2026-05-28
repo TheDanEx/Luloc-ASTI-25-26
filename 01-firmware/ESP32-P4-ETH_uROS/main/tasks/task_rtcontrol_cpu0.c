@@ -183,7 +183,7 @@ static void task_rtcontrol_cpu0(void *arg)
                 g_cmd_speed_right = cmd.speed_right;
             }
             uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
-            if (now_ms - g_last_cmd_vel_ms > 500) {
+            if (now_ms - g_last_cmd_vel_ms > ((state_machine_get_context()->current_mode == MODE_REMOTE_DRIVE) ? 150 : 500)) {
                 g_cmd_speed_left  = 0.0f;
                 g_cmd_speed_right = 0.0f;
             }
@@ -332,7 +332,7 @@ static void task_rtcontrol_cpu0(void *arg)
         // Mode-dependent pacing: idle=100Hz, teleop=500Hz, rest=full speed
         if (current_mode == MODE_NONE) {
             vTaskDelay(pdMS_TO_TICKS(10));
-        } else if (current_mode == MODE_REMOTE_DRIVE) {
+        } else if (state_machine_get_context()->current_mode == MODE_REMOTE_DRIVE) {
             vTaskDelay(pdMS_TO_TICKS(2));
         }else{
             vTaskDelay(pdMS_TO_TICKS(1));
