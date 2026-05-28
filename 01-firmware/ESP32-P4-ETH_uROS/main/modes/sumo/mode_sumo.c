@@ -828,7 +828,11 @@ void sumo(float* vL, float* vR){
         v=s_current_config.max_v;
         dif_centro=1;
     }else{
-        w = s_current_config.base_w + s_current_config.kp_w*dif_centro; //no hace falta mirar si es izquierda o derecha porque ya lo dice el signo
+        float base_w = s_current_config.base_w;
+        if(dif_centro<0){
+            base_w=-base_w;
+        }
+        w = base_w + s_current_config.kp_w*dif_centro; //no hace falta mirar si es izquierda o derecha porque ya lo dice el signo
         if (w > s_current_config.max_w) {
             w = s_current_config.max_w;
         } else if (w < -s_current_config.max_w) {
