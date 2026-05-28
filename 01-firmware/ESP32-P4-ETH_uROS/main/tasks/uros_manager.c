@@ -93,26 +93,39 @@ static void mode_callback(const void *msvin)
 {
     const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msvin;
     int8_t mode_id = msg->data;
-    if (mode_id == 10) {
+    if ( mode_id == 10){
         audio_player_play(INTHEEND);
         ESP_LOGI(TAG, "Playing fight sound");
         return;
-    } else if (mode_id == 11) {
+    }else if ( mode_id == 11){
         audio_player_play(TOKYO);
         ESP_LOGI(TAG, "Playing drift sound");
         return;
-    } else if (mode_id == 12) {
+    }else if ( mode_id == 12){
         audio_player_play(HOLA);
         ESP_LOGI(TAG, "Playing hola sound");
         return;
-    } else if (mode_id == 13) {
+    }else if ( mode_id == 13){
         audio_player_play(DEMACIA);
         ESP_LOGI(TAG, "Playing demacia sound");
         return;
-    } else if (mode_id < 0 || mode_id >= MODE_COUNT) {
+    }else if ( mode_id == 14){
+        audio_player_play(ROUND_1);
+        ESP_LOGI(TAG, "Playing round 1 sound");
+        mode_id = 7;
+    }else if ( mode_id == 15){
+        audio_player_play(ROUND_2);
+        ESP_LOGI(TAG, "Playing round 2 sound");
+        mode_id = 7;
+    }else if ( mode_id == 16){
+        audio_player_play(ROUND_3);
+        ESP_LOGI(TAG, "Playing round 3 sound");
+        mode_id = 7;
+    }else if (mode_id < 0 || mode_id >= MODE_COUNT) {
         ESP_LOGW(TAG, "Ignoring invalid mode id: %d", mode_id);
         return;
     }
+    
     bool accepted = state_machine_request_mode((robot_mode_t)mode_id, true);
     ESP_LOGI(TAG, "Mode change request -> %d (%s)", mode_id, accepted ? "accepted" : "rejected");
 }

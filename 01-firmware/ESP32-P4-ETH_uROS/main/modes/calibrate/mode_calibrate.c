@@ -95,14 +95,14 @@ static void execute(motor_driver_mcpwm_t* motors,
 
     if (bat_mv < 5000.0f) { bat_mv = 16800.0f; }
 
-    float target_left = 0.0f;
-    float target_right = 0.0f;
+    float target_left = 0.1f;
+    float target_right = -0.1f;
 
-    if (ctx->current_mode == MODE_CALIBRATE_MOTORS) {
-        float sweep_target = get_sweep_target();
-        if (motor_mask & 0x01) target_left = sweep_target;
-        if (motor_mask & 0x02) target_right = sweep_target;
-    }
+    // if (ctx->current_mode == MODE_CALIBRATE_MOTORS) {
+    //     float sweep_target = get_sweep_target();
+    //     if (motor_mask & 0x01) target_left = sweep_target;
+    //     if (motor_mask & 0x02) target_right = sweep_target;
+    // }
 
     motor_velocity_input_t input_l = { .target_speed = target_left, .current_speed = cur_spd_left, .battery_mv = bat_mv };
     motor_velocity_input_t input_r = { .target_speed = target_right, .current_speed = cur_spd_right, .battery_mv = bat_mv };

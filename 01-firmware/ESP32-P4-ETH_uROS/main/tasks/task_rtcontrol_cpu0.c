@@ -308,6 +308,8 @@ static void task_rtcontrol_cpu0(void *arg)
             vTaskDelay(pdMS_TO_TICKS(10));
         } else if (current_mode == MODE_REMOTE_DRIVE) {
             vTaskDelay(pdMS_TO_TICKS(2));
+        }else{
+            vTaskDelay(pdMS_TO_TICKS(1));
         }
 
     }

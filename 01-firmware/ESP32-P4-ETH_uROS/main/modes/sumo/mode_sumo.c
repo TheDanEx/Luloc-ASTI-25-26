@@ -134,16 +134,15 @@ typedef struct {
 } sumo_logic_config_t;
 
 static sumo_logic_config_t s_current_config = {
-    .kp_v = 0.01f, 
-    .kp_w = 0.01f, 
-    .max_v = 1.2f,
+    .kp_v = 0.05f, 
+    .kp_w = 0.05f, 
+    .max_v = 0.3f,
     .max_w = 3.0f,
     .base_v = 0.3f,
-    .base_w = 0.5f,
-    .tiempo_giro_180_ms = 3000,
-    .umbral_centro = 15
+    .base_w = 0.6f,
+    .tiempo_giro_180_ms = 1800,
+    .umbral_centro = 50
 };
-
 
 
 static void mqtt_config_callback(const char *topic, int topic_len, const char *data, int data_len) {
@@ -823,15 +822,22 @@ void sumo(float* vL, float* vR){
             }
         }
     }
+    float base_w = s_current_config.base_w;
+    if(dif_centro<0){
+        base_w=-base_w;
+    }
     if(dif_centro>-s_current_config.umbral_centro&&dif_centro<s_current_config.umbral_centro){
        
         v=s_current_config.max_v;
-        dif_centro=1;
-    }else{
-        float base_w = s_current_config.base_w;
-        if(dif_centro<0){
-            base_w=-base_w;
+        w = base_w + s_current_config.kp_v*dif_centro; //no hace falta mirar si es izquierda o derecha porque ya lo dice el signo
+        if (w > s_current_config.max_w) {
+            w = s_current_config.max_w;
+        } else if (w < -s_current_config.max_w) {
+            w = -s_current_config.max_w;
         }
+
+    }else{
+        
         w = base_w + s_current_config.kp_w*dif_centro; //no hace falta mirar si es izquierda o derecha porque ya lo dice el signo
         if (w > s_current_config.max_w) {
             w = s_current_config.max_w;

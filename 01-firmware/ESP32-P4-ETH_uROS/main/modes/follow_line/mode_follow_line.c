@@ -53,9 +53,9 @@ static void mqtt_config_callback(const char *topic, int topic_len, const char *d
     if (kff) s_current_config.kff = kff->valuedouble;
     if (max) s_current_config.max_speed = max->valuedouble;
     if (nom) s_current_config.nominal_speed = nom->valuedouble;
-    if (ffw) { s_current_config.kff = ffw->valuedouble; s_ff_weight = ffw->valuedouble; }
+    if (ffw) s_ff_weight = ffw->valuedouble;
     if (wb) s_current_config.wheelbase_m = wb->valuedouble;
-    if (base) { s_current_config.nominal_speed = base->valuedouble; s_base_speed_nominal = base->valuedouble; }
+    if (base) s_base_speed_nominal = base->valuedouble;
 
     if (s_logic) {
         follow_line_logic_set_config(s_logic, &s_current_config);
