@@ -8,6 +8,9 @@ static const char *TAG = "shrd_mem";
 static shared_memory_t g_shared_memory = {0};
 static bool g_initialized = false;
 
+// ── Canal lock-free para cmd_vel ──
+QueueHandle_t g_cmd_vel_queue = NULL;
+
 // =============================================================================
 // Public API: Lifecycle
 // =============================================================================
@@ -27,6 +30,10 @@ void shared_memory_init(void)
         ESP_LOGE(TAG, "Failed to create mutex");
         return;
     }
+
+    // ── Canal lock-free cmd_vel (CPU1 → CPU0) ──
+    g_cmd_vel_queue = xQueueCreate(1, sizeof(cmd_vel_item_t));
+    configASSERT(g_cmd_vel_queue != NULL);
 
     // Default zero-state
     

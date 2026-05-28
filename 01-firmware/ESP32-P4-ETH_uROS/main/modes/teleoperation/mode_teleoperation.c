@@ -9,20 +9,9 @@ static const char *TAG = "MODE_TELEOP";
 
 static void enter(void) {
     ESP_LOGI(TAG, "Entering TELEOPERATION mode");
-    
-    // Initialize targets to 0
-    shared_memory_t* shm = shared_memory_get();
-    if (shm == NULL) {
-        ESP_LOGE(TAG, "Shared memory unavailable on teleop enter");
-        return;
-    }
 
-    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        shm->teleop.target_speed_left = 0;
-        shm->teleop.target_speed_right = 0;
-        xSemaphoreGive(shm->mutex);
-    }
-
+    cmd_vel_item_t zero = {0, 0, 0};
+    xQueueOverwrite(g_cmd_vel_queue, &zero);
 }
 
 static void execute(motor_driver_mcpwm_t* motors, 
@@ -30,7 +19,6 @@ static void execute(motor_driver_mcpwm_t* motors,
                     motor_velocity_ctrl_handle_t ctrl_right, 
                     float dt_s) 
 {
-    static bool print = false;
     shared_memory_t* shm = shared_memory_get();
     if (shm == NULL) {
         motor_mcpwm_stop(motors);
@@ -41,12 +29,12 @@ static void execute(motor_driver_mcpwm_t* motors,
         return;
     }
 
-    float target_l = shm->teleop.target_speed_left;
-    float target_r = shm->teleop.target_speed_right;
+    float target_l = shm->sensors.target_speed_left;
+    float target_r = shm->sensors.target_speed_right;
     float bat_mv   = shm->sensors.battery_voltage;
-    uint32_t last_update_ms = shm->teleop.last_update_ms;
+    uint32_t last_update_ms = shm->sensors.timestamp_ms;
     float cur_l    = shm->sensors.motor_speed_left;
-    float cur_r = shm->sensors.motor_speed_right;
+    float cur_r    = shm->sensors.motor_speed_right;
     xSemaphoreGive(shm->mutex);
 
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
@@ -54,25 +42,21 @@ static void execute(motor_driver_mcpwm_t* motors,
     if ((now_ms - last_update_ms) > 500) {
         target_l = 0.0f;
         target_r = 0.0f;
-        // print=false;
-    }else{
-        // print=true;
     }
-    // Fallback battery
     if (bat_mv < 5000) bat_mv = 16800;
     if (fabsf(target_l) < 0.001f && fabsf(target_r) < 0.001f) {
-    motor_velocity_ctrl_reset(ctrl_left);
-    motor_velocity_ctrl_reset(ctrl_right);
-    motor_mcpwm_stop(motors);
-    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
-        shm->sensors.motor_pid_ff_l = 0; shm->sensors.motor_pid_p_l = 0;
-        shm->sensors.motor_pid_i_l = 0; shm->sensors.motor_pid_d_l = 0;
-        shm->sensors.motor_pid_ff_r = 0; shm->sensors.motor_pid_p_r = 0;
-        shm->sensors.motor_pid_i_r = 0; shm->sensors.motor_pid_d_r = 0;
-        xSemaphoreGive(shm->mutex);
+        motor_velocity_ctrl_reset(ctrl_left);
+        motor_velocity_ctrl_reset(ctrl_right);
+        motor_mcpwm_stop(motors);
+        if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+            shm->sensors.motor_pid_ff_l = 0; shm->sensors.motor_pid_p_l = 0;
+            shm->sensors.motor_pid_i_l = 0; shm->sensors.motor_pid_d_l = 0;
+            shm->sensors.motor_pid_ff_r = 0; shm->sensors.motor_pid_p_r = 0;
+            shm->sensors.motor_pid_i_r = 0; shm->sensors.motor_pid_d_r = 0;
+            xSemaphoreGive(shm->mutex);
+        }
+        return;
     }
-    return;
-}
 
     motor_velocity_input_t input_l = { .target_speed = target_l, .current_speed = cur_l, .battery_mv = bat_mv };
     motor_velocity_input_t input_r = { .target_speed = target_r, .current_speed = cur_r, .battery_mv = bat_mv };

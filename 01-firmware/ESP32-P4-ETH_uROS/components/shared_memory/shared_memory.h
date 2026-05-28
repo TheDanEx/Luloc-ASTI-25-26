@@ -2,6 +2,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/queue.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -11,6 +12,17 @@
  * CPU1: Reads for telemetry packing and publishing
  */
 
+// ── Canal lock-free cmd_vel (CPU1 → CPU0) ──
+// Cola de profundidad 1 con sobreescritura: nunca bloquea ni descarta mensajes.
+// Último comando siempre disponible. No usa shm->mutex.
+typedef struct {
+    float speed_left;
+    float speed_right;
+    uint32_t timestamp_ms;
+} cmd_vel_item_t;
+
+extern QueueHandle_t g_cmd_vel_queue;
+
 typedef struct {
     // Sensor data (motor, encoder, etc.)
     float motor_speed_left;      // m/s
@@ -18,8 +30,8 @@ typedef struct {
     float motor_distance_left;   // m
     float motor_distance_right;  // m
     
-    float target_speed_left;     // m/s (PID Output)
-    float target_speed_right;    // m/s (PID Output)
+    float target_speed_left;     // m/s — cmd_vel target (reutilizado de PID Output)
+    float target_speed_right;    // m/s — cmd_vel target (reutilizado de PID Output)
     
     float robot_current;         // mA
     float battery_voltage;       // mV
@@ -36,7 +48,7 @@ typedef struct {
     
     int32_t encoder_count_left;  // Ticks
     int32_t encoder_count_right; // Ticks
-    uint32_t timestamp_ms;       // Local timestamp
+    uint32_t timestamp_ms;       // Last cmd_vel timestamp (para safety timeout)
 
     // Per-motor velocity PID voltage breakdown (V)
     float motor_pid_ff_l;
@@ -72,12 +84,6 @@ typedef struct {
 } robot_command_t;
 
 typedef struct {
-    float target_speed_left;
-    float target_speed_right;
-    uint32_t last_update_ms;
-} shared_teleop_config_t;
-
-typedef struct {
     float kp;
     float ki;
     float kd;
@@ -89,7 +95,6 @@ typedef struct {
     robot_sensor_data_t sensors;
     robot_command_t last_command;
     
-    shared_teleop_config_t teleop; 
     shared_pid_config_t motor_pids[2]; // 0=Left, 1=Right
     shared_pid_config_t line_pid;      // Line following PD/PID
     uint8_t calibration_motor_mask;    // bitmask: 1=Left, 2=Right, 3=Both

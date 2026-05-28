@@ -141,24 +141,15 @@ static void subscription_vel_callback(const void *msvin)
         (const geometry_msgs__msg__Twist *)msvin;
     float v = msg->linear.x;
     float w = msg->angular.z;
-    float target_l = v - ((w * WHEEL_BASE_M) / 2.0f);
-    float target_r = v + ((w * WHEEL_BASE_M) / 2.0f);
-    uint32_t now = millis_now();
 
-    shared_memory_t *shm = shared_memory_get();
-    if (shm == NULL) {
-        ESP_LOGW(TAG, "Shared memory unavailable, dropping cmd_vel");
-        return;
-    }
-    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-        shm->teleop.target_speed_left = target_l;
-        shm->teleop.target_speed_right = target_r;
-        shm->teleop.last_update_ms = now;
-        xSemaphoreGive(shm->mutex);
-    } else {
-        ESP_LOGW(TAG, "Shared memory busy, dropping cmd_vel");
-    }
-    ESP_LOGI(TAG, "cmd_vel -> lin.x: %.2f, ang.z: %.2f", (float)msg->linear.x, (float)msg->angular.z);
+    cmd_vel_item_t item = {
+        .speed_left   = v - ((w * WHEEL_BASE_M) / 2.0f),
+        .speed_right  = v + ((w * WHEEL_BASE_M) / 2.0f),
+        .timestamp_ms = millis_now()
+    };
+
+    xQueueOverwrite(g_cmd_vel_queue, &item);
+    ESP_LOGI(TAG, "cmd_vel -> lin.x: %.2f, ang.z: %.2f", (double)v, (double)w);
 }
 
 static void config_callback(const void *msvin)
@@ -218,7 +209,10 @@ static void telemetry_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
     shared_memory_t *shm = shared_memory_get();
     if (shm == NULL) return;
 
+    robot_sensor_data_t snap;
     if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
+    memcpy(&snap, &shm->sensors, sizeof(snap));
+    xSemaphoreGive(shm->mutex);
 
     // Pack sensors as JSON
     snprintf(sensors_msg.data.data, sensors_msg.data.capacity,
@@ -229,28 +223,28 @@ static void telemetry_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
         "\"min0\":%u,\"min1\":%u,\"min2\":%u,\"min3\":%u,\"min4\":%u,\"min5\":%u,\"min6\":%u,\"min7\":%u,"
         "\"max0\":%u,\"max1\":%u,\"max2\":%u,\"max3\":%u,\"max4\":%u,\"max5\":%u,\"max6\":%u,\"max7\":%u,"
         "\"tmp\":%.1f}",
-        shm->sensors.motor_speed_left, shm->sensors.motor_speed_right,
-        shm->sensors.motor_distance_left, shm->sensors.motor_distance_right,
-        shm->sensors.battery_voltage, shm->sensors.robot_current,
-        shm->sensors.line_position_m, shm->sensors.line_detected ? 1 : 0,
-        shm->sensors.line_is_calibrated ? 1 : 0,
-        shm->sensors.line_norm[0], shm->sensors.line_norm[1],
-        shm->sensors.line_norm[2], shm->sensors.line_norm[3],
-        shm->sensors.line_norm[4], shm->sensors.line_norm[5],
-        shm->sensors.line_norm[6], shm->sensors.line_norm[7],
-        (unsigned)shm->sensors.line_raw[0], (unsigned)shm->sensors.line_raw[1],
-        (unsigned)shm->sensors.line_raw[2], (unsigned)shm->sensors.line_raw[3],
-        (unsigned)shm->sensors.line_raw[4], (unsigned)shm->sensors.line_raw[5],
-        (unsigned)shm->sensors.line_raw[6], (unsigned)shm->sensors.line_raw[7],
-        (unsigned)shm->sensors.line_min[0], (unsigned)shm->sensors.line_min[1],
-        (unsigned)shm->sensors.line_min[2], (unsigned)shm->sensors.line_min[3],
-        (unsigned)shm->sensors.line_min[4], (unsigned)shm->sensors.line_min[5],
-        (unsigned)shm->sensors.line_min[6], (unsigned)shm->sensors.line_min[7],
-        (unsigned)shm->sensors.line_max[0], (unsigned)shm->sensors.line_max[1],
-        (unsigned)shm->sensors.line_max[2], (unsigned)shm->sensors.line_max[3],
-        (unsigned)shm->sensors.line_max[4], (unsigned)shm->sensors.line_max[5],
-        (unsigned)shm->sensors.line_max[6], (unsigned)shm->sensors.line_max[7],
-        shm->sensors.temperature);
+        snap.motor_speed_left, snap.motor_speed_right,
+        snap.motor_distance_left, snap.motor_distance_right,
+        snap.battery_voltage, snap.robot_current,
+        snap.line_position_m, snap.line_detected ? 1 : 0,
+        snap.line_is_calibrated ? 1 : 0,
+        snap.line_norm[0], snap.line_norm[1],
+        snap.line_norm[2], snap.line_norm[3],
+        snap.line_norm[4], snap.line_norm[5],
+        snap.line_norm[6], snap.line_norm[7],
+        (unsigned)snap.line_raw[0], (unsigned)snap.line_raw[1],
+        (unsigned)snap.line_raw[2], (unsigned)snap.line_raw[3],
+        (unsigned)snap.line_raw[4], (unsigned)snap.line_raw[5],
+        (unsigned)snap.line_raw[6], (unsigned)snap.line_raw[7],
+        (unsigned)snap.line_min[0], (unsigned)snap.line_min[1],
+        (unsigned)snap.line_min[2], (unsigned)snap.line_min[3],
+        (unsigned)snap.line_min[4], (unsigned)snap.line_min[5],
+        (unsigned)snap.line_min[6], (unsigned)snap.line_min[7],
+        (unsigned)snap.line_max[0], (unsigned)snap.line_max[1],
+        (unsigned)snap.line_max[2], (unsigned)snap.line_max[3],
+        (unsigned)snap.line_max[4], (unsigned)snap.line_max[5],
+        (unsigned)snap.line_max[6], (unsigned)snap.line_max[7],
+        snap.temperature);
     sensors_msg.data.size = strlen(sensors_msg.data.data);
 
     // Pack motors as JSON (target/actual speeds + per-motor PID voltage breakdown)
@@ -258,26 +252,24 @@ static void telemetry_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
         "{\"tl\":%.4f,\"tr\":%.4f,\"al\":%.4f,\"ar\":%.4f,"
         "\"ffl\":%.3f,\"pl\":%.3f,\"il\":%.3f,\"dl\":%.3f,"
         "\"ffr\":%.3f,\"pr\":%.3f,\"ir\":%.3f,\"dr\":%.3f}",
-        shm->teleop.target_speed_left, shm->teleop.target_speed_right,
-        shm->sensors.motor_speed_left, shm->sensors.motor_speed_right,
-        shm->sensors.motor_pid_ff_l, shm->sensors.motor_pid_p_l,
-        shm->sensors.motor_pid_i_l, shm->sensors.motor_pid_d_l,
-        shm->sensors.motor_pid_ff_r, shm->sensors.motor_pid_p_r,
-        shm->sensors.motor_pid_i_r, shm->sensors.motor_pid_d_r);
+        snap.target_speed_left, snap.target_speed_right,
+        snap.motor_speed_left, snap.motor_speed_right,
+        snap.motor_pid_ff_l, snap.motor_pid_p_l,
+        snap.motor_pid_i_l, snap.motor_pid_d_l,
+        snap.motor_pid_ff_r, snap.motor_pid_p_r,
+        snap.motor_pid_i_r, snap.motor_pid_d_r);
     motors_msg.data.size = strlen(motors_msg.data.data);
 
     // Snapshot cycle timing while holding mutex
-    float cyc_mean = shm->sensors.cycle_mean_us;
-    float cyc_min  = shm->sensors.cycle_min_us;
-    float cyc_max  = shm->sensors.cycle_max_us;
-    float cyc_p95  = shm->sensors.cycle_p95_us;
-    uint32_t cyc_over = shm->sensors.cycle_overruns;
-    float busy_mean = shm->sensors.busy_mean_us;
-    float busy_min  = shm->sensors.busy_min_us;
-    float busy_max  = shm->sensors.busy_max_us;
-    float busy_p95  = shm->sensors.busy_p95_us;
-
-    xSemaphoreGive(shm->mutex);
+    float cyc_mean = snap.cycle_mean_us;
+    float cyc_min  = snap.cycle_min_us;
+    float cyc_max  = snap.cycle_max_us;
+    float cyc_p95  = snap.cycle_p95_us;
+    uint32_t cyc_over = snap.cycle_overruns;
+    float busy_mean = snap.busy_mean_us;
+    float busy_min  = snap.busy_min_us;
+    float busy_max  = snap.busy_max_us;
+    float busy_p95  = snap.busy_p95_us;
 
     float cyc_hz = (cyc_mean > 0.0f) ? 1000000.0f / cyc_mean : 0.0f;
     float busy_hz = (busy_mean > 0.0f) ? 1000000.0f / busy_mean : 0.0f;

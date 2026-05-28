@@ -17,6 +17,11 @@
 
 static const char *TAG = "rt_cntrl";
 
+// ── cmd_vel channel (CPU1 → CPU0, lock-free via g_cmd_vel_queue) ──
+static uint32_t g_last_cmd_vel_ms = 0;
+static float    g_cmd_speed_left  = 0.0f;
+static float    g_cmd_speed_right = 0.0f;
+
 // =============================================================================
 // Hardware Constraints
 // =============================================================================
@@ -169,6 +174,21 @@ static void task_rtcontrol_cpu0(void *arg)
     while(1) {
         int64_t cycle_start_us = esp_timer_get_time();
 
+        // ── cmd_vel: lectura lock-free desde CPU1 ──
+        {
+            cmd_vel_item_t cmd;
+            if (xQueueReceive(g_cmd_vel_queue, &cmd, 0) == pdTRUE) {
+                g_last_cmd_vel_ms = cmd.timestamp_ms;
+                g_cmd_speed_left  = cmd.speed_left;
+                g_cmd_speed_right = cmd.speed_right;
+            }
+            uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+            if (now_ms - g_last_cmd_vel_ms > 500) {
+                g_cmd_speed_left  = 0.0f;
+                g_cmd_speed_right = 0.0f;
+            }
+        }
+
         if (s_prev_cycle_us != 0) {
             int64_t delta_us = cycle_start_us - s_prev_cycle_us;
             if (delta_us < s_cycle_min_us) s_cycle_min_us = delta_us;
@@ -219,8 +239,14 @@ static void task_rtcontrol_cpu0(void *arg)
             float chip_temp_c;
             if (temp_sensor_read_celsius(&chip_temp_c) == ESP_OK) {
                 shm->sensors.temperature = chip_temp_c;
+
             }
-            
+
+            // ── cmd_vel targets → shared memory ──
+            shm->sensors.target_speed_left  = g_cmd_speed_left;
+            shm->sensors.target_speed_right = g_cmd_speed_right;
+            shm->sensors.timestamp_ms       = g_last_cmd_vel_ms;
+
             // Update Line Sensor SHM (only if mode needs it)
             if (need_line) {
                 shm->sensors.line_detected = line_data.line_detected;
