@@ -149,7 +149,6 @@ static void subscription_vel_callback(const void *msvin)
     };
 
     xQueueOverwrite(g_cmd_vel_queue, &item);
-    ESP_LOGI(TAG, "cmd_vel -> lin.x: %.2f, ang.z: %.2f", (double)v, (double)w);
 }
 
 static void config_callback(const void *msvin)

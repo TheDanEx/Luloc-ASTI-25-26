@@ -873,9 +873,7 @@ static void enter(void)
 {
     ESP_LOGI(TAG, "Entering SUMO LiDAR test mode");
     for(int i=0; i<LIDAR_SCAN_SIZE; i++){
-        int angle_i = angle_to_centered_index(i);
-        s_lidar_angles_valids[i] = angle_i;
-        ESP_LOGW(TAG, "Ángulo válido %d: %d", i, angle_i);
+        s_lidar_angles_valids[i] = angle_to_centered_index(i);
     }
 
     
