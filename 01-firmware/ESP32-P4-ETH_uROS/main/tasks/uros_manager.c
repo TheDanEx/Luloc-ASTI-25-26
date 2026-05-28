@@ -85,6 +85,7 @@ static float g_offset_ms = 0.0f;
 static float g_jitter_ms = 0.0f;
 static float g_last_latency_ms = -1.0f;
 static uint32_t s_cmd_vel_rx_count = 0;
+static uint32_t s_spin_err_total = 0;
 
 // ============================================================
 // CALLBACKS
@@ -277,12 +278,13 @@ static void telemetry_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 
     // Pack status as JSON
     snprintf(status_msg.data.data, status_msg.data.capacity,
-        "{\"up\":%lu,\"mode\":%d,\"cmd_rx\":%lu,\"cyc_m\":%.0f,\"cyc_x\":%.0f,\"cyc_n\":%.0f,\"cyc_p\":%.0f,\"cyc_o\":%lu,"
+        "{\"up\":%lu,\"mode\":%d,\"cmd_rx\":%lu,\"spin_err\":%lu,\"cyc_m\":%.0f,\"cyc_x\":%.0f,\"cyc_n\":%.0f,\"cyc_p\":%.0f,\"cyc_o\":%lu,"
         "\"busy_m\":%.0f,\"busy_x\":%.0f,\"busy_n\":%.0f,\"busy_p\":%.0f,"
         "\"cyc_h\":%.0f,\"busy_h\":%.0f}",
         (unsigned long)(esp_timer_get_time() / 1000000),
         (int)state_machine_get_context()->current_mode,
         (unsigned long)s_cmd_vel_rx_count,
+        (unsigned long)s_spin_err_total,
         cyc_mean, cyc_max, cyc_min, cyc_p95,
         (unsigned long)cyc_over,
         busy_mean, busy_max, busy_min, busy_p95,
@@ -559,16 +561,17 @@ static void micro_ros_task(void *arg)
 #endif
             }
 
-            rcl_ret_t spin_ret = rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100));
+            rcl_ret_t spin_ret = rclc_executor_spin_some(&executor, RCL_MS_TO_NS(20));
             if (spin_ret == RCL_RET_OK || spin_ret == RCL_RET_TIMEOUT) {
                 spin_errors = 0;
             } else {
                 spin_errors++;
+                s_spin_err_total++;
                 if (spin_errors == 1) {
                     ESP_LOGW(TAG, "uROS spin error %d, monitoring...", (int)spin_ret);
                 }
             }
-            vTaskDelay(pdMS_TO_TICKS(10));
+            vTaskDelay(pdMS_TO_TICKS(1));
         }
 
         ESP_LOGE(TAG, "uROS agent lost, reconnecting in %lums...", (unsigned long)reconnect_delay_ms);
