@@ -137,21 +137,51 @@ static uint32_t millis_now(void)
     return (uint32_t)(esp_timer_get_time() / 1000);
 }
 
+// static void subscription_vel_callback(const void *msvin)
+// {
+//     const geometry_msgs__msg__Twist *msg =
+//         (const geometry_msgs__msg__Twist *)msvin;
+//     float v = msg->linear.x;
+//     float w = msg->angular.z;
+
+//     cmd_vel_item_t item = {
+//         .speed_left   = v - ((w * WHEEL_BASE_M) / 2.0f),
+//         .speed_right  = v + ((w * WHEEL_BASE_M) / 2.0f),
+//         .timestamp_ms = millis_now()
+//     };
+
+//     xQueueOverwrite(g_cmd_vel_queue, &item);
+//     s_cmd_vel_rx_count++;
+// }
 static void subscription_vel_callback(const void *msvin)
 {
     const geometry_msgs__msg__Twist *msg =
         (const geometry_msgs__msg__Twist *)msvin;
+
     float v = msg->linear.x;
     float w = msg->angular.z;
+    float target_l = v - ((w*WHEEL_BASE_M)/2.0f);
+    float target_r = v + ((w*WHEEL_BASE_M)/2.0f);
 
-    cmd_vel_item_t item = {
-        .speed_left   = v - ((w * WHEEL_BASE_M) / 2.0f),
-        .speed_right  = v + ((w * WHEEL_BASE_M) / 2.0f),
-        .timestamp_ms = millis_now()
-    };
+    uint32_t now = millis_now();
 
-    xQueueOverwrite(g_cmd_vel_queue, &item);
-    s_cmd_vel_rx_count++;
+    shared_memory_t* shm = shared_memory_get();
+    if (shm == NULL) {
+        ESP_LOGW(TAG, "Shared memory unavailable, dropping cmd_vel");
+        return;
+    }
+
+    if (xSemaphoreTake(shm->mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        shm->teleop.target_speed_left = target_l;
+        shm->teleop.target_speed_right = target_r;
+        shm->teleop.last_update_ms = now;
+        xSemaphoreGive(shm->mutex);
+    } else {
+        ESP_LOGW(TAG, "Shared memory busy, dropping cmd_vel");
+    }
+    ESP_LOGI(TAG, "cmd_vel ->\n lin.x: %.2f, ang.z: %.2f\n target_l: %.4f, target_r: %.4f", (float)msg->linear.x, (float)msg->angular.z,(float)target_l,(float)target_r);
+
+    
 }
 
 static void config_callback(const void *msvin)
@@ -162,8 +192,9 @@ static void config_callback(const void *msvin)
 
 static void curvature_callback(const void *msvin)
 {
+
     const std_msgs__msg__Float32 *msg = (const std_msgs__msg__Float32 *)msvin;
-    ESP_LOGI(TAG, "Curvature received: %.3f", (float)msg->data);
+    //ESP_LOGI(TAG, "Curvature received: %.3f", (float)msg->data);
 }
 
 static void pid_callback(const void *msvin)

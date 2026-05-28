@@ -123,8 +123,8 @@ uint32_t t_debug_w= 0;
 // =============================================================================
 
 typedef struct {
-    float kp_v;
-    float kp_w;
+    float kp_w_ataco;
+    float kp_w_centro;
     float max_v;
     float max_w;
     float base_v;
@@ -134,14 +134,14 @@ typedef struct {
 } sumo_logic_config_t;
 
 static sumo_logic_config_t s_current_config = {
-    .kp_v = 0.05f, 
-    .kp_w = 0.05f, 
-    .max_v = 0.3f,
+    .kp_w_ataco = 0.02f, 
+    .kp_w_centro = 0.05f, 
+    .max_v = 0.6f,
     .max_w = 3.0f,
-    .base_v = 0.3f,
-    .base_w = 0.6f,
-    .tiempo_giro_180_ms = 1800,
-    .umbral_centro = 50
+    .base_v = 0.5f,
+    .base_w = 0.8f,
+    .tiempo_giro_180_ms = 1500,
+    .umbral_centro = 60
 };
 
 
@@ -152,8 +152,8 @@ static void mqtt_config_callback(const char *topic, int topic_len, const char *d
     cJSON *root = cJSON_ParseWithLength(data, data_len);
     if (root == NULL) return;
 
-    cJSON *kp_v = cJSON_GetObjectItem(root, "kp_v");
-    cJSON *kp_w = cJSON_GetObjectItem(root, "kp_w");
+    cJSON *kp_w_ataco = cJSON_GetObjectItem(root, "kp_w_ataco");
+    cJSON *kp_w_centro = cJSON_GetObjectItem(root, "kp_w_centro");
     cJSON *max_v = cJSON_GetObjectItem(root, "max_v");
     cJSON *max_w = cJSON_GetObjectItem(root, "max_w");
     cJSON *base_v = cJSON_GetObjectItem(root, "base_v");
@@ -161,8 +161,8 @@ static void mqtt_config_callback(const char *topic, int topic_len, const char *d
     cJSON *tiempo_giro_180_ms = cJSON_GetObjectItem(root, "tiempo_giro_180_ms");
     cJSON *umbral_centro = cJSON_GetObjectItem(root, "umbral_centro");
 
-    if (kp_v) s_current_config.kp_v = kp_v->valuedouble;
-    if (kp_w) s_current_config.kp_w = kp_w->valuedouble;
+    if (kp_w_ataco) s_current_config.kp_w_ataco = kp_w_ataco->valuedouble;
+    if (kp_w_centro) s_current_config.kp_w_centro = kp_w_centro->valuedouble;
     if (max_v) s_current_config.max_v = max_v->valuedouble;
     if (max_w) s_current_config.max_w = max_w->valuedouble;
     if (base_v) s_current_config.base_v = base_v->valuedouble;
@@ -172,9 +172,9 @@ static void mqtt_config_callback(const char *topic, int topic_len, const char *d
     }
     if (umbral_centro) s_current_config.umbral_centro = (uint8_t)umbral_centro->valueint;
     ESP_LOGI(TAG,
-         "Dynamic Config Updated: kp_v=%.3f kp_w=%.3f max_v=%.3f max_w=%.3f base_v=%.3f base_w=%.3f umbral_centro=%d tiempo_giro_180_ms=%" PRIu32 ,
-         s_current_config.kp_v,
-         s_current_config.kp_w,
+         "Dynamic Config Updated: kp_w_ataco=%.3f kp_w_centro=%.3f max_v=%.3f max_w=%.3f base_v=%.3f base_w=%.3f umbral_centro=%d tiempo_giro_180_ms=%" PRIu32 ,
+         s_current_config.kp_w_ataco,
+         s_current_config.kp_w_centro,
          s_current_config.max_v,
          s_current_config.max_w,
          s_current_config.base_v,
@@ -798,10 +798,10 @@ void sumo(float* vL, float* vR){
             ESP_LOGI(TAG, "No se detecta objetivo, buscando...");
         }
         v = 0.0f;
-        w = s_current_config.base_w;
-        if (w == 0.0f) {
-            w = s_current_config.base_w > 0.0f ? s_current_config.base_w : 0.5f;
-        }
+        w = s_current_config.max_w;
+        // if (w == 0.0f) {
+        //     w = s_current_config.base_w > 0.0f ? s_current_config.base_w : 0.5f;
+        // }
 
         *vL = -w * WHEEL_BASE_M / 2.0f;
         *vR =  w * WHEEL_BASE_M / 2.0f;
@@ -827,9 +827,9 @@ void sumo(float* vL, float* vR){
         base_w=-base_w;
     }
     if(dif_centro>-s_current_config.umbral_centro&&dif_centro<s_current_config.umbral_centro){
-       
-        v=s_current_config.max_v;
-        w = base_w + s_current_config.kp_v*dif_centro; //no hace falta mirar si es izquierda o derecha porque ya lo dice el signo
+        //ataco
+        v=s_current_config.base_v;
+        w = base_w + s_current_config.kp_w_ataco*dif_centro; //no hace falta mirar si es izquierda o derecha porque ya lo dice el signo
         if (w > s_current_config.max_w) {
             w = s_current_config.max_w;
         } else if (w < -s_current_config.max_w) {
@@ -837,17 +837,14 @@ void sumo(float* vL, float* vR){
         }
 
     }else{
-        
-        w = base_w + s_current_config.kp_w*dif_centro; //no hace falta mirar si es izquierda o derecha porque ya lo dice el signo
+        //busco
+        w = base_w + s_current_config.kp_w_centro*dif_centro; //no hace falta mirar si es izquierda o derecha porque ya lo dice el signo
         if (w > s_current_config.max_w) {
             w = s_current_config.max_w;
         } else if (w < -s_current_config.max_w) {
             w = -s_current_config.max_w;
         }
-        // v = s_current_config.base_v+ s_current_config.kp_v*dist_object*(1.0f/(abs(dif_centro)));
-        // if(v>s_current_config.max_v){
-        //     v=s_current_config.max_v;
-        // }
+
         v=0;
     }
 
@@ -928,9 +925,9 @@ static void execute(motor_driver_mcpwm_t* motors,
             giro_180 = false;
             vL = 0.0f;
             vR = 0.0f;
-        } else if (elapsed < 400) {
-            vL = -s_current_config.base_v;
-            vR = -s_current_config.base_v;
+        } else if (elapsed < 800) {
+            vL = -s_current_config.max_v;
+            vR = -s_current_config.max_v;
         } else {
             float w = s_current_config.max_w;
             if (w == 0.0f) {
